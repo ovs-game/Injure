@@ -4,5 +4,5 @@ using System;
 
 namespace Injure.Assets;
 
-public sealed class AssetLeaseExpiredException(string? message) : Exception(message) {
+public sealed class AssetLeaseExpiredException(string? message = null) : Exception(message) {
 }

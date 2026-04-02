@@ -10,8 +10,8 @@ using System.Threading.Tasks;
 namespace Injure.Assets;
 
 // this one's just async for api consistency, there's no real reason here honestly
-public sealed class DirectoryAssetSource(AssetNamespace matchNamespace, string root) : IAssetSourceAsync {
-	private readonly AssetNamespace matchNamespace = matchNamespace;
+public sealed class DirectoryAssetSource(string matchNamespace, string root) : IAssetSourceAsync {
+	private readonly string matchNamespace = matchNamespace;
 	private readonly string root = !string.IsNullOrWhiteSpace(root) ? root : throw new ArgumentException("root must be non-null/empty/whitespace");
 
 	public Task<AssetSourceResult> TrySourceAsync(AssetSourceInfo info, IAssetDependencyCollector coll, CancellationToken ct = default) {

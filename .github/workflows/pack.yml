@@ -4,6 +4,7 @@ on:
   push:
     branches: ['main']
     tags: ['v*']
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -18,7 +19,28 @@ env:
   DOTNET_VERSION: 10.0.x
 
 jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test --no-build -c Release
+
   build-native:
+    needs: test
     strategy:
       fail-fast: false
       matrix:
@@ -62,7 +84,8 @@ jobs:
           path: Injure.Native/Native/out/${{ matrix.rid }}/${{ matrix.out_name }}
 
   pack-and-push:
-    needs: build-native
+    if: github.event_name != 'pull_request'
+    needs: [test, build-native]
     runs-on: ubuntu-24.04
 
     steps:

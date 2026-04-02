@@ -7,29 +7,11 @@ using System.Text.Json.Serialization;
 namespace Injure.Assets;
 
 /// <summary>
-/// Object representing an asset namespace, used to partition asset IDs.
-/// </summary>
-public readonly struct AssetNamespace(string value) : IEquatable<AssetNamespace> {
-	public readonly string Value = value;
-
-	public bool Equals(AssetNamespace other) => Value == other.Value;
-	public override bool Equals(object? obj) => obj is AssetNamespace other && Equals(other);
-	public override int GetHashCode() => Value.GetHashCode();
-	public static bool operator ==(AssetNamespace left, AssetNamespace right) => left.Equals(right);
-	public static bool operator !=(AssetNamespace left, AssetNamespace right) => !left.Equals(right);
-
-	/// <summary>
-	/// Returns the namespace string.
-	/// </summary>
-	public override string ToString() => Value;
-}
-
-/// <summary>
 /// Unique asset identifier, consisting of a namespace and path.
 /// </summary>
 [JsonConverter(typeof(AssetIDJsonConverter))]
-public readonly struct AssetID(AssetNamespace ns, string path) : IEquatable<AssetID>, ISpanParsable<AssetID> {
-	public readonly AssetNamespace Namespace = ns;
+public readonly struct AssetID(string ns, string path) : IEquatable<AssetID>, ISpanParsable<AssetID> {
+	public readonly string Namespace = ns;
 	public readonly string Path = path;
 
 	public bool Equals(AssetID other) => Namespace == other.Namespace && Path == other.Path;
@@ -60,7 +42,7 @@ public readonly struct AssetID(AssetNamespace ns, string path) : IEquatable<Asse
 		int i = s.IndexOf("::", StringComparison.Ordinal);
 		if (i < 0 || s.IndexOf("::", i + 2, StringComparison.Ordinal) >= 0)
 			return false;
-		val = new AssetID(new AssetNamespace(s[..i]), s[(i + 2)..]);
+		val = new AssetID(s[..i], s[(i + 2)..]);
 		return true;
 	}
 	/// <inheritdoc cref="TryParse(string, out AssetID)"/>
@@ -85,7 +67,7 @@ public readonly struct AssetID(AssetNamespace ns, string path) : IEquatable<Asse
 		int i = s.IndexOf("::", StringComparison.Ordinal);
 		if (i < 0 || s.IndexOf("::", i + 2, StringComparison.Ordinal) >= 0)
 			throw new FormatException("string must contain exactly one occurrence of ::");
-		return new AssetID(new AssetNamespace(s[..i]), s[(i + 2)..]);
+		return new AssetID(s[..i], s[(i + 2)..]);
 	}
 	/// <inheritdoc cref="Parse(string)"/>
 	/// <remarks>
@@ -109,7 +91,7 @@ public readonly struct AssetID(AssetNamespace ns, string path) : IEquatable<Asse
 			val = default;
 			return false;
 		}
-		val = new AssetID(new AssetNamespace(new string(span[..i])), new string(span[(i + 2)..]));
+		val = new AssetID(new string(span[..i]), new string(span[(i + 2)..]));
 		return true;
 	}
 	/// <inheritdoc cref="TryParse(ReadOnlySpan{char}, out AssetID)"/>
@@ -133,7 +115,7 @@ public readonly struct AssetID(AssetNamespace ns, string path) : IEquatable<Asse
 		int i = span.IndexOf("::");
 		if (i < 0 || span[(i + 2)..].IndexOf("::") >= 0)
 			throw new FormatException("string must contain exactly one occurrence of ::");
-		return new AssetID(new AssetNamespace(new string(span[..i])), new string(span[(i + 2)..]));
+		return new AssetID(new string(span[..i]), new string(span[(i + 2)..]));
 	}
 	/// <inheritdoc cref="Parse(ReadOnlySpan{char})"/>
 	/// <remarks>

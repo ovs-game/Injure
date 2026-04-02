@@ -12,7 +12,6 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 ----------
 TODO:
 
-- [active] xunit tests for the asset system
 - [Idk when but this should be done] stop having the todo here and use github issues
 - [next-up] asset file watchers (FOR REAL THIS TIME (
 - [temporarily on the backburner] the text renderer
@@ -31,7 +30,7 @@ TODO:
 - [priority] windows builds
 - [priority] layers system
 - [priority] clocks, clock filtering, etc.
-- xunit tests for Other things
+- [priority] more tests, like a Lot more
 - `.tex.json` should be the primary way to load textures, add more stuff there
 - blend state params on canvas
 - replace `InvalidOperationException`s in `Core/` and `SDL/` with a proper `SDLException` and the ones in `Timing/` with uhh idk something

@@ -1,0 +1,199 @@
+// SPDX-License-Identifier: MIT
+
+using System;
+using System.Collections.Generic;
+using Silk.NET.WebGPU;
+using FreeTypeSharp;
+using static FreeTypeSharp.FT;
+
+using Buffer = System.Buffer;
+
+using Injure.Rendering;
+
+namespace Injure.Graphics.Text;
+
+internal sealed class GlyphAtlasPage : IDisposable {
+	public required Texture2D Texture;
+	public required int Width;
+	public required int Height;
+
+	public int WriteX;
+	public int WriteY;
+	public int RowHeight;
+
+	public void Dispose() => Texture.Dispose();
+}
+
+internal readonly record struct GlyphAtlasEntry(
+	GlyphAtlasPage Page,
+	RectI SrcPixels,
+	int BitmapLeft,
+	int BitmapTop,
+	int Width,
+	int Height
+);
+
+internal sealed unsafe class GlyphAtlas(WebGPURenderer renderer, int pageWidth = 1024, int pageHeight = 1024, int padding = 1) : IDisposable {
+	private readonly record struct Key(FontCacheToken FontCacheToken, uint GlyphID);
+
+	private readonly WebGPURenderer renderer = renderer;
+	private readonly Dictionary<Key, GlyphAtlasEntry> entries = new Dictionary<Key, GlyphAtlasEntry>();
+	private readonly List<GlyphAtlasPage> pages = new List<GlyphAtlasPage>();
+
+	private readonly int pageWidth = pageWidth;
+	private readonly int pageHeight = pageHeight;
+	private readonly int padding = padding;
+
+	private bool disposed = false;
+
+	private void clear() {
+		for (int i = 0; i < pages.Count; i++)
+			pages[i].Dispose();
+		pages.Clear();
+		entries.Clear();
+	}
+
+	public void ClearGlyphs() {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		clear();
+	}
+
+	public bool TryGetOrCreate(IResolvedFont font, uint glyphID, out GlyphAtlasEntry entry) {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		Key key = new Key(
+			FontCacheToken: font.GetCacheToken(),
+			GlyphID: glyphID
+		);
+		if (entries.TryGetValue(key, out entry))
+			return true;
+		if (tryRasterize(font, glyphID, out entry)) {
+			entries.Add(key, entry);
+			return true;
+		}
+		return false;
+	}
+
+	private bool tryRasterize(IResolvedFont font, uint glyphID, out GlyphAtlasEntry entry) {
+		ResolvedFontState st = font.GetState();
+		FTException.Check(FT_Load_Glyph(st.FtFace, glyphID, st.Options.LoadFlags));
+		FTException.Check(FT_Render_Glyph(st.FtFace->glyph, st.Options.RenderMode));
+		FT_GlyphSlotRec_ *slot = st.FtFace->glyph;
+		int bitmapLeft = slot->bitmap_left;
+		int bitmapTop = slot->bitmap_top;
+		int w = checked((int)slot->bitmap.width);
+		int h = checked((int)slot->bitmap.rows);
+		if (slot->bitmap.width == 0 || slot->bitmap.rows == 0) {
+			entry = default;
+			return false;
+		}
+
+		byte[] pixels = readbitmap(slot->bitmap);
+		GlyphAtlasPage page = alloc(w, h, out int x, out int y);
+		renderer.WriteToTexture(
+			page.Texture.Texture,
+			new GPUTextureRegion(X: (uint)x, Y: (uint)y, Z: 0, Width: slot->bitmap.width, Height: slot->bitmap.rows),
+			pixels,
+			new GPUTextureLayout(Offset: 0, BytesPerRow: slot->bitmap.width, RowsPerImage: slot->bitmap.rows)
+		);
+
+		entry = new GlyphAtlasEntry(
+			Page: page,
+			SrcPixels: new RectI(x, y, w, h),
+			BitmapLeft: bitmapLeft,
+			BitmapTop: bitmapTop,
+			Width: w,
+			Height: h
+		);
+		return true;
+	}
+
+	private static byte[] readbitmap(FT_Bitmap_ bitmap) {
+		int w = (int)bitmap.width;
+		int h = (int)bitmap.rows;
+		int pitch = bitmap.pitch;
+		if (bitmap.pixel_mode != FT_Pixel_Mode_.FT_PIXEL_MODE_GRAY)
+			throw new NotSupportedException($"unsupported FreeType pixel mode {bitmap.pixel_mode}");
+		byte[] buf = new byte[checked(w * h)];
+		if (bitmap.buffer is null || w == 0 || h == 0)
+			return buf;
+		fixed (byte *dst = buf) {
+			if (pitch == w) {
+				ulong sz = (ulong)(w * h);
+				Buffer.MemoryCopy(bitmap.buffer, dst, sz, sz);
+			} else {
+				// negative pitch = rows are bottom-up
+				int absPitch = Math.Abs(pitch);
+				for (int y = 0; y < h; y++) {
+					byte *srcRow = (pitch >= 0) ? (bitmap.buffer + y * absPitch) : (bitmap.buffer + (h - 1 - y) * absPitch);
+					byte *dstRow = dst + y * w;
+					Buffer.MemoryCopy(srcRow, dstRow, (ulong)w, (ulong)w);
+				}
+			}
+		}
+		return buf;
+	}
+
+	private GlyphAtlasPage alloc(int width, int height, out int x, out int y) {
+		int w = width + padding * 2;
+		int h = height + padding * 2;
+		int px, py;
+		for (int i = 0; i < pages.Count; i++) {
+			if (tryAllocOnPage(pages[i], w, h, out px, out py)) {
+				x = px + padding;
+				y = py + padding;
+				return pages[i];
+			}
+		}
+		GlyphAtlasPage page = newpage();
+		if (!tryAllocOnPage(page, w, h, out px, out py))
+			throw new InvalidOperationException("glyph is larger than atlas page");
+		x = px + padding;
+		y = py + padding;
+		return page;
+	}
+
+	private GlyphAtlasPage newpage() {
+		GPUTexture tex = renderer.CreateTexture(new GPUTextureCreateParams(
+			Width: (uint)pageWidth,
+			Height: (uint)pageHeight,
+			Format: TextureFormat.R8Unorm,
+			Usage: TextureUsage.TextureBinding | TextureUsage.CopyDst
+		));
+		GPUSampler sampler = renderer.CreateSampler(SamplerStates.LinearClamp);
+		GlyphAtlasPage page = new GlyphAtlasPage {
+			Texture = new Texture2D(renderer, tex, sampler),
+			Width = pageWidth,
+			Height = pageHeight,
+			WriteX = 0,
+			WriteY = 0,
+			RowHeight = 0
+		};
+		pages.Add(page);
+		return page;
+	}
+
+	private static bool tryAllocOnPage(GlyphAtlasPage page, int width, int height, out int x, out int y) {
+		if (page.WriteX + width > page.Width) {
+			page.WriteX = 0;
+			page.WriteY += page.RowHeight;
+			page.RowHeight = 0;
+		}
+		if (page.WriteY + height > page.Height) {
+			x = 0;
+			y = 0;
+			return false;
+		}
+		x = page.WriteX;
+		y = page.WriteY;
+		page.WriteX += width;
+		page.RowHeight = Math.Max(page.RowHeight, height);
+		return true;
+	}
+
+	public void Dispose() {
+		if (disposed)
+			return;
+		disposed = true;
+		clear();
+	}
+}

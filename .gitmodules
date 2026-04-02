@@ -1,0 +1,3 @@
+[submodule "Injure.Native/Native/extern/libunibreak"]
+	path = Injure.Native/Native/extern/libunibreak
+	url = https://github.com/adah1972/libunibreak

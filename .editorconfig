@@ -1,0 +1,29 @@
+root = true
+
+[*.cs]
+indent_style = tab
+indent_size = tab
+
+# explicit types over var
+csharp_style_var_for_built_in_types = false:warning
+csharp_style_var_when_type_is_apparent = false:warning
+csharp_style_var_elsewhere = false:warning
+
+# explicit type over `new()`
+csharp_style_implicit_object_creation_when_type_is_apparent = false:warning
+
+# explicitly typed lambda over implicitly typed
+csharp_style_prefer_implicitly_typed_lambda_expression = false:warning
+
+# "collection expression could be simplified"
+dotnet_style_prefer_collection_expression = false
+
+# more lax naming rules
+dotnet_diagnostic.IDE0130.severity = none
+dotnet_diagnostic.IDE1006.severity = none
+
+# less "X can be simplified"
+dotnet_diagnostic.IDE0063.severity = none
+
+# braces on same line
+csharp_new_line_before_open_brace = false

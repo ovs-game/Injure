@@ -1,0 +1,123 @@
+name: pack-and-publish
+
+on:
+  push:
+    branches: ['main']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: pack-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: 10.0.x
+
+jobs:
+  build-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runs_on: ubuntu-24.04
+            out_name: libinjurenative.so
+          - rid: linux-arm64
+            runs_on: ubuntu-24.04-arm
+            out_name: libinjurenative.so
+          - rid: osx-arm64
+            runs_on: macos-14
+            out_name: libinjurenative.dylib
+          # TODO:
+          # - rid: osx-x64
+          #   runs_on: macos-15-intel
+          #   out_name: libinjurenative.dylib
+          # - rid: win-x64
+          #   runs_on: windows-2025
+          #   out_name: injurenative.dll
+
+    runs-on: ${{ matrix.runs_on }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build native
+        working-directory: Injure.Native/Native
+        run: make RID=${{ matrix.rid }}
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.rid }}
+          path: Injure.Native/Native/out/${{ matrix.rid }}/${{ matrix.out_name }}
+
+  pack-and-push:
+    needs: build-native
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Fetch artifact for linux-x64
+        uses: actions/download-artifact@v5
+        with:
+          name: native-linux-x64
+          path: Injure.Native/Native/out/linux-x64
+
+      - name: Fetch artifact for linux-arm64
+        uses: actions/download-artifact@v5
+        with:
+          name: native-linux-arm64
+          path: Injure.Native/Native/out/linux-arm64
+
+      - name: Fetch artifact for osx-arm64
+        uses: actions/download-artifact@v5
+        with:
+          name: native-osx-arm64
+          path: Injure.Native/Native/out/osx-arm64
+
+      - name: Get package version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            ver="${GITHUB_REF_NAME#v}"
+          else
+            ver="0.1.0-ci.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Pack Injure.Native
+        run: >
+          dotnet pack Injure.Native/Injure.Native.csproj -c Release -o artifacts/nuget -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Pack Injure
+        run: >
+          dotnet pack Injure/Injure.csproj -c Release -o artifacts/nuget -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Add GitHub Packages source
+        run: >
+          dotnet nuget add source --username ${{ github.repository_owner }} --password ${{ secrets.GITHUB_TOKEN }}
+          --store-password-in-clear-text --name github "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+
+      - name: Push packages
+        run: >
+          dotnet nuget push "artifacts/nuget/*.nupkg" --source github --skip-duplicate
+
+# vim: sw=2 ts=2 sts=2 et

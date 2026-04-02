@@ -1,0 +1,10 @@
+.DS_Store
+*/.DS_Store
+Injure/bin
+Injure/obj
+Injure.Native/bin
+Injure.Native/obj
+Injure.Native/Native/obj
+Injure.Native/Native/out
+Injure.SourceGen/bin
+Injure.SourceGen/obj

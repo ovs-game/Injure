@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using Silk.NET.SDL;
+using Hexa.NET.SDL2;
 
 using Injure.DataStructures;
 using Injure.Timing;
@@ -45,15 +45,15 @@ public static class InputSystem {
 
 	// ====================
 	// the dogshit zone
-	private static readonly Dictionary<Scancode, ActionID> placeholderMapDict = new Dictionary<Scancode, ActionID>();
+	private static readonly Dictionary<SDLScancode, ActionID> placeholderMapDict = new Dictionary<SDLScancode, ActionID>();
 
-	public static void ThisMethodIsAPlaceholder_RegisterKeybind(Scancode scancode, ActionID actid) {
+	public static void ThisMethodIsAPlaceholder_RegisterKeybind(SDLScancode scancode, ActionID actid) {
 		placeholderMapDict.Add(scancode, actid);
 	}
 
 	internal static bool TryMapToAction(RawInputEvent r, out InputActionEvent ev) {
 		// placeholder implementation
-		if (placeholderMapDict.TryGetValue((Scancode)r.ID.Code, out ActionID actid)) {
+		if (placeholderMapDict.TryGetValue((SDLScancode)r.ID.Code, out ActionID actid)) {
 			ev = new InputActionEvent(actid, r.Edge, r.PerfTimestamp);
 			return true;
 		}

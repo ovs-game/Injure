@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
-using Silk.NET.SDL;
+using Hexa.NET.SDL2;
 
 using Injure.Assets;
 using Injure.Assets.Builtin;
@@ -14,7 +14,7 @@ using Injure.Graphics;
 using Injure.Graphics.Text;
 using Injure.Input;
 using Injure.Rendering;
-using Injure.SDL;
+using Injure.SDLUtil;
 using Injure.Timing;
 
 using Thread = System.Threading.Thread;
@@ -36,44 +36,44 @@ public static unsafe class Runner {
 	[AllowNull] private static Queue<RawInputEvent> inputQueue;
 	private static bool running = false;
 
-	private static void handleEvent(Event *ev, IGame game, ref bool cont) {
-		switch ((EventType)ev->Type) {
-		case EventType.Quit:
+	private static void handleEvent(SDLEvent *ev, IGame game, ref bool cont) {
+		switch ((SDLEventType)ev->Type) {
+		case SDLEventType.Quit:
 			cont = false;
 			break;
-		case EventType.Windowevent:
-			switch ((WindowEventID)ev->Window.Event) {
-			case WindowEventID.SizeChanged:
+		case SDLEventType.Windowevent:
+			switch ((SDLWindowEventID)ev->Window.Event) {
+			case SDLWindowEventID.SizeChanged:
 				// hand over logical window size, not px-drawable size to the game
 				// since that's probably more fitting here, the renderer gets
 				// px-drawable size internally
 				renderer.Resized();
 				game.OnHostEvent(new HostEvent(HostEventKind.Resized, (uint)ev->Window.Data1, (uint)ev->Window.Data2));
 				break;
-			case WindowEventID.Minimized:
+			case SDLWindowEventID.Minimized:
 				game.OnHostEvent(new HostEvent(HostEventKind.Minimized));
 				break;
-			case WindowEventID.Maximized:
+			case SDLWindowEventID.Maximized:
 				game.OnHostEvent(new HostEvent(HostEventKind.Maximized));
 				break;
-			case WindowEventID.Restored:
+			case SDLWindowEventID.Restored:
 				game.OnHostEvent(new HostEvent(HostEventKind.Restored));
 				break;
-			case WindowEventID.FocusGained:
+			case SDLWindowEventID.FocusGained:
 				game.OnHostEvent(new HostEvent(HostEventKind.FocusGained));
 				break;
-			case WindowEventID.FocusLost:
+			case SDLWindowEventID.FocusLost:
 				game.OnHostEvent(new HostEvent(HostEventKind.FocusLost));
 				break;
 			}
 			break;
-		case EventType.Keydown:
-		case EventType.Keyup:
+		case SDLEventType.Keydown:
+		case SDLEventType.Keyup:
 			if (ev->Key.Repeat == 1)
 				break;
 			PerfTick timestamp = PerfTick.GetCurrent();
 			RawInputID id = new RawInputID(InputDeviceType.Keyboard, -1, (int)ev->Key.Keysym.Scancode);
-			inputQueue.Enqueue(new RawInputEvent(id, (EventType)ev->Type == EventType.Keydown ? EdgeType.Press : EdgeType.Release, timestamp));
+			inputQueue.Enqueue(new RawInputEvent(id, (SDLEventType)ev->Type == SDLEventType.Keydown ? EdgeType.Press : EdgeType.Release, timestamp));
 			break;
 		}
 	}
@@ -89,23 +89,23 @@ public static unsafe class Runner {
 	}
 
 	private static void initSDLFrom(in GameWindowConfig conf) {
-		WindowFlags flags = 0;
-		if (!conf.StartVisible) flags |= WindowFlags.Hidden;
-		if (conf.Resizable) flags |= WindowFlags.Resizable;
-		if (conf.Borderless) flags |= WindowFlags.Borderless;
-		if (conf.AllowHighDPI) flags |= WindowFlags.AllowHighdpi;
+		SDLWindowFlags flags = 0;
+		if (!conf.StartVisible) flags |= SDLWindowFlags.Hidden;
+		if (conf.Resizable) flags |= SDLWindowFlags.Resizable;
+		if (conf.Borderless) flags |= SDLWindowFlags.Borderless;
+		if (conf.AllowHighDPI) flags |= SDLWindowFlags.AllowHighdpi;
 		switch (conf.Mode) {
-		case WindowMode.BorderlessFullscreen: flags |= WindowFlags.Borderless | WindowFlags.FullscreenDesktop; break;
-		case WindowMode.ExclusiveFullscreen: flags |= WindowFlags.Fullscreen; break;
+		case WindowMode.BorderlessFullscreen: flags |= SDLWindowFlags.Borderless | SDLWindowFlags.FullscreenDesktop; break;
+		case WindowMode.ExclusiveFullscreen: flags |= SDLWindowFlags.Fullscreen; break;
 		}
 		switch (conf.StartState) {
-		case WindowState.Minimized: flags |= WindowFlags.Minimized; break;
-		case WindowState.Maximized: flags |= WindowFlags.Maximized; break;
+		case WindowState.Minimized: flags |= SDLWindowFlags.Minimized; break;
+		case WindowState.Maximized: flags |= SDLWindowFlags.Maximized; break;
 		}
 		int x, y;
 		switch (conf.StartPositioning) {
-		case WindowPositioning.Undefined: x = y = Sdl.WindowposUndefined; break;
-		case WindowPositioning.Centered: x = y = Sdl.WindowposCentered; break;
+		case WindowPositioning.Undefined: x = y = unchecked((int)SDL.SDL_WINDOWPOS_UNDEFINED_MASK); break;
+		case WindowPositioning.Centered: x = y = unchecked((int)SDL.SDL_WINDOWPOS_CENTERED_MASK); break;
 		case WindowPositioning.Explicit: x = conf.StartX; y = conf.StartY; break;
 		default: throw new UnreachableException(); // silence "use of unassigned local"
 		}
@@ -149,19 +149,19 @@ public static unsafe class Runner {
 		bootstrap.Start(SDLOwner.RenderSurfaceSource!);
 
 		// basic loading-time event loop
-		Event ev;
+		SDLEvent ev;
 		double elapsed;
 		bool cancelled = false;
 		while (bootstrap.CurrentState == WebGPUBootstrap.State.Running) {
 			if (!cancelled) {
-				while (SDLOwner.SDL.PollEvent(&ev) == 1) {
-					switch ((EventType)ev.Type) {
-					case EventType.Quit:
-						SDLOwner.SDL.HideWindow(SDLOwner.Window);
+				while (SDL.PollEvent(&ev) == 1) {
+					switch ((SDLEventType)ev.Type) {
+					case SDLEventType.Quit:
+						SDL.HideWindow(SDLOwner.Window);
 						bootstrap.Cancel();
 						cancelled = true;
 						goto bootstrapCancelled;
-					case EventType.Windowevent:
+					case SDLEventType.Windowevent:
 						elapsed = (double)(PerfTick.GetCurrent() - loadingStartTick) / (double)PerfTick.Frequency;
 						game.Loading(new LoadingContext(LoadingPhase.Tick, elapsed, redrawRequested: true));
 						break;
@@ -171,7 +171,7 @@ public static unsafe class Runner {
 				game.Loading(new LoadingContext(LoadingPhase.Tick, elapsed));
 			}
 bootstrapCancelled:
-			SDLOwner.SDL.Delay(10);
+			SDL.Delay(10);
 		}
 		if (bootstrap.CurrentState == WebGPUBootstrap.State.Cancelled)
 			goto earlyquit;
@@ -232,7 +232,7 @@ bootstrapCancelled:
 
 		bool cont = true;
 		while (cont) {
-			while (SDLOwner.SDL.PollEvent(&ev) == 1)
+			while (SDL.PollEvent(&ev) == 1)
 				handleEvent(&ev, game, ref cont);
 			if (!cont)
 				break;
@@ -247,7 +247,7 @@ bootstrapCancelled:
 			sched.ApplyPending();
 			sched.RunDueTickers();
 
-			while (SDLOwner.SDL.PollEvent(&ev) == 1)
+			while (SDL.PollEvent(&ev) == 1)
 				handleEvent(&ev, game, ref cont);
 			if (!cont)
 				break;
@@ -287,9 +287,9 @@ bootstrapCancelled:
 					if (remaining > t1_5ms) { // n > 1.5ms
 						PerfTick n = remaining - t0_5ms; // 0.5ms of safety
 						int ms = (int)(((UInt128)n.Value * 1000) / (UInt128)PerfTick.Frequency.Value);
-						if (ms > 0 && SDLOwner.SDL.WaitEventTimeout(&ev, ms) == 1) {
+						if (ms > 0 && SDL.WaitEventTimeout(&ev, ms) == 1) {
 							handleEvent(&ev, game, ref cont);
-							while (SDLOwner.SDL.PollEvent(&ev) == 1)
+							while (SDL.PollEvent(&ev) == 1)
 								handleEvent(&ev, game, ref cont);
 							if (!cont)
 								break;

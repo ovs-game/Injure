@@ -1,6 +1,6 @@
 # rendering/triangle-tutorial.md
 
-# **This is currently out of date. I'll fix this soon.**
+# **This is currently like, two levels of out of date. I'll fix this soon.**
 
 This document is, well, a tutorial on how to draw a triangle directly with `Rendering`, if you haven't guessed that yet. But the goal isn't the triangle, it's to familiarize the low-level rendering workflow and leave you off with enough knowledge to be able to do more complex rendering on your own and read through `Graphics` source code.
 

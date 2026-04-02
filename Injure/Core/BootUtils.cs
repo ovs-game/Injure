@@ -3,9 +3,9 @@
 using System;
 using System.Buffers.Binary;
 using System.IO;
-using Silk.NET.SDL;
+using Hexa.NET.SDL2;
 
-using Injure.SDL;
+using Injure.SDLUtil;
 
 namespace Injure.Core;
 
@@ -187,30 +187,30 @@ public sealed unsafe class BootDraw {
 	}
 
 	private static void sdlpresent(Color32[] buffer, int width, int height) {
-		Surface *dst = SDLOwner.SDL.GetWindowSurface(SDLOwner.Window);
+		SDLSurface *dst = SDL.GetWindowSurface(SDLOwner.Window);
 		if (dst is null)
-			throw new InvalidOperationException($"SDL_GetWindowSurface: {SDLOwner.SDL.GetErrorS()}");
+			throw new InvalidOperationException($"SDL_GetWindowSurface: {SDL.GetErrorS()}");
 		fixed (Color32 *p = buffer) {
-			Surface *src = SDLOwner.SDL.CreateRGBSurfaceWithFormatFrom(p, width, height, 32, width * sizeof(Color32), (uint)PixelFormatEnum.Rgba32);
+			SDLSurface *src = SDL.CreateRGBSurfaceWithFormatFrom(p, width, height, 32, width * sizeof(Color32), (uint)SDLPixelFormatEnum.Rgba32);
 			if (src is null)
-				throw new InvalidOperationException($"SDL_CreateRGBSurfaceWithFormatFrom: {SDLOwner.SDL.GetErrorS()}");
-			uint black = SDLOwner.SDL.MapRGBA(dst->Format, 0, 0, 0, 255);
-			if (SDLOwner.SDL.FillRect(dst, null, black) < 0) {
-				SDLOwner.SDL.FreeSurface(src);
-				throw new InvalidOperationException($"SDL_FillRect: {SDLOwner.SDL.GetErrorS()}");
+				throw new InvalidOperationException($"SDL_CreateRGBSurfaceWithFormatFrom: {SDL.GetErrorS()}");
+			uint black = SDL.MapRGBA(dst->Format, 0, 0, 0, 255);
+			if (SDL.FillRect(dst, null, black) < 0) {
+				SDL.FreeSurface(src);
+				throw new InvalidOperationException($"SDL_FillRect: {SDL.GetErrorS()}");
 			}
-			Silk.NET.Maths.Rectangle<int> dstRect = fit(width, height, dst->W, dst->H);
-			if (SDLOwner.SDL.UpperBlitScaled(src, null, dst, &dstRect) < 0) {
-				SDLOwner.SDL.FreeSurface(src);
-				throw new InvalidOperationException($"SDL_UpperBlitScaled: {SDLOwner.SDL.GetErrorS()}");
+			SDLRect dstRect = fit(width, height, dst->W, dst->H);
+			if (SDL.UpperBlitScaled(src, null, dst, &dstRect) < 0) {
+				SDL.FreeSurface(src);
+				throw new InvalidOperationException($"SDL_UpperBlitScaled: {SDL.GetErrorS()}");
 			}
-			SDLOwner.SDL.FreeSurface(src);
+			SDL.FreeSurface(src);
 		}
-		if (SDLOwner.SDL.UpdateWindowSurface(SDLOwner.Window) < 0)
-			throw new InvalidOperationException($"SDL_UpdateWindowSurface: {SDLOwner.SDL.GetErrorS()}");
+		if (SDL.UpdateWindowSurface(SDLOwner.Window) < 0)
+			throw new InvalidOperationException($"SDL_UpdateWindowSurface: {SDL.GetErrorS()}");
 	}
 
-	private static Silk.NET.Maths.Rectangle<int> fit(int srcW, int srcH, int dstW, int dstH) {
+	private static SDLRect fit(int srcW, int srcH, int dstW, int dstH) {
 		int w, h;
 		if ((long)dstW * srcH <= (long)dstH * srcW) {
 			w = dstW;
@@ -221,6 +221,6 @@ public sealed unsafe class BootDraw {
 		}
 		int x = (dstW - w) / 2;
 		int y = (dstH - h) / 2;
-		return new Silk.NET.Maths.Rectangle<int>(x, y, w, h);
+		return new SDLRect(x, y, w, h);
 	}
 }

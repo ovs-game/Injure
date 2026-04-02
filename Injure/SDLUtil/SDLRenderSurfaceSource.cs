@@ -1,63 +1,56 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using System.Runtime.InteropServices;
-using Silk.NET.SDL;
+using Hexa.NET.SDL2;
 using Silk.NET.WebGPU;
 
 using Injure.Rendering;
 
-using Version = Silk.NET.SDL.Version;
+namespace Injure.SDLUtil;
 
-namespace Injure.SDL;
-
-public sealed unsafe partial class SDLRenderSurfaceSource(Window *win, void *metalLayer) : IRenderSurfaceSource {
-	[LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
-	private static partial IntPtr GetModuleHandleW(string? lpModuleName);
-
-	private readonly Window *win = win;
+public sealed unsafe partial class SDLRenderSurfaceSource(SDLWindow *win, void *metalLayer) : IRenderSurfaceSource {
+	private readonly SDLWindow *win = win;
 	private readonly void *metalLayer = metalLayer;
 
 	public void CreateSurfaceDesc(SurfaceDescriptorContainer *container) {
 		if (win is null)
 			throw new InternalStateException("this SDLRenderSurfaceSource's Window is null");
 
-		Version ver;
-		SDLOwner.SDL.GetVersion(&ver);
-		SysWMInfo wm = new SysWMInfo { Version = ver };
-		if (!SDLOwner.SDL.GetWindowWMInfo(win, &wm))
-			throw new InvalidOperationException($"SDL_GetWindowWMInfo failed: {SDLOwner.SDL.GetErrorS()}");
+		SDLSysWMInfo wm = default;
+		SDL.GetVersion(&wm.Version);
+		if (SDL.GetWindowWMInfo(win, &wm) != (SDLBool)1)
+			throw new InvalidOperationException($"SDL_GetWindowWMInfo failed: {SDL.GetErrorS()}");
 
-		if (wm.Subsystem == SysWMType.Cocoa && metalLayer is null)
+		if (wm.Subsystem == SdlSyswmType.Cocoa && metalLayer is null)
 			throw new InternalStateException("this SDLRenderSurfaceSource's Metal layer is null and we need it");
 		switch (wm.Subsystem) {
-		case SysWMType.Windows: getWindows(&wm, container); break;
-		case SysWMType.Cocoa: getCocoa(metalLayer, container); break;
-		case SysWMType.X11: getX11(&wm, container); break;
-		case SysWMType.Wayland: getWayland(&wm, container); break;
+		case SdlSyswmType.Windows: getWindows(&wm, container); break;
+		case SdlSyswmType.Cocoa: getCocoa(metalLayer, container); break;
+		case SdlSyswmType.X11: getX11(&wm, container); break;
+		case SdlSyswmType.Wayland: getWayland(&wm, container); break;
 		default: throw new PlatformNotSupportedException($"unsupported SDL WM subsystem '{wm.Subsystem}'");
 		};
 	}
 
 	public (uint Width, uint Height) GetDrawableSize() {
 		int w, h;
-		SDLOwner.SDL.GetWindowSizeInPixels(win, &w, &h);
+		SDL.GetWindowSizeInPixels(win, &w, &h);
 		if (w < 0 || h < 0)
 			throw new InvalidOperationException("SDL_GetWindowSizeInPixels returned negative size");
 		return ((uint)w, (uint)h);
 	}
 
-	private static void getWindows(SysWMInfo *wm, SurfaceDescriptorContainer *container) {
-		IntPtr hwnd = wm->Info.Win.Hwnd;
-		IntPtr hinstance = GetModuleHandleW(null);
+	private static void getWindows(SDLSysWMInfo *wm, SurfaceDescriptorContainer *container) {
+		void *hwnd = (void *)wm->Info.Win.Window;
+		void *hinstance = (void *)wm->Info.Win.HInstance;
 
 		container->WindowsHWND = new SurfaceDescriptorFromWindowsHWND {
 			Chain = new ChainedStruct {
 				SType = SType.SurfaceDescriptorFromWindowsHwnd,
 				Next = null
 			},
-			Hwnd = (void *)hwnd,
-			Hinstance = (void *)hinstance
+			Hwnd = hwnd,
+			Hinstance = hinstance
 		};
 		container->Desc = new SurfaceDescriptor {
 			NextInChain = (ChainedStruct *)&container->WindowsHWND
@@ -77,9 +70,9 @@ public sealed unsafe partial class SDLRenderSurfaceSource(Window *win, void *met
 		};
 	}
 
-	private static void getX11(SysWMInfo *wm, SurfaceDescriptorContainer *container) {
-		void *dpy = wm->Info.X11.Display;
-		void *win = wm->Info.X11.Window;
+	private static void getX11(SDLSysWMInfo *wm, SurfaceDescriptorContainer *container) {
+		void *dpy = (void *)wm->Info.X11.Display;
+		void *win = (void *)wm->Info.X11.Window;
 
 		container->XlibWindow = new SurfaceDescriptorFromXlibWindow {
 			Chain = new ChainedStruct {
@@ -87,16 +80,16 @@ public sealed unsafe partial class SDLRenderSurfaceSource(Window *win, void *met
 				Next = null
 			},
 			Display = dpy,
-			Window = (UIntPtr)win // i have No fucking clue why this needs the cast when everything else takes void *
+			Window = (ulong)win // i have No fucking clue why this needs the cast when everything else takes void *
 		};
 		container->Desc = new SurfaceDescriptor {
 			NextInChain = (ChainedStruct *)&container->XlibWindow
 		};
 	}
 
-	private static void getWayland(SysWMInfo *wm, SurfaceDescriptorContainer *container) {
-		void *wl_display = wm->Info.Wayland.Display;
-		void *wl_surface = wm->Info.Wayland.Surface;
+	private static void getWayland(SDLSysWMInfo *wm, SurfaceDescriptorContainer *container) {
+		void *wl_display = (void *)wm->Info.Wayland.Display;
+		void *wl_surface = (void *)wm->Info.Wayland.Surface;
 
 		container->WaylandSurface = new SurfaceDescriptorFromWaylandSurface {
 			Chain = new ChainedStruct {

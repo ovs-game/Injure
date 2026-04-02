@@ -2,7 +2,7 @@
 
 using System;
 
-using Injure.SDL;
+using Injure.SDLUtil;
 using Injure.SourceGen;
 
 namespace Injure.Timing;

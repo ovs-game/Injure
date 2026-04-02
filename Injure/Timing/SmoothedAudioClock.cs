@@ -3,7 +3,7 @@
 using System;
 
 using Injure.Audio;
-using Injure.SDL;
+using Injure.SDLUtil;
 
 namespace Injure.Timing;
 

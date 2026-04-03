@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+using System;
 using System.Numerics;
 using HarfBuzzSharp;
 
@@ -61,8 +62,8 @@ internal readonly record struct LogicalLine(
 	int Limit
 );
 
-public readonly record struct TextGlyph(
-	Texture2D Atlas,
+internal readonly record struct TextGlyph(
+	GlyphAtlasPage Page,
 	RectI SrcPixels,
 	RectF DstPixels,
 	Color32 Color,
@@ -70,25 +71,48 @@ public readonly record struct TextGlyph(
 	uint Cluster
 );
 
-public readonly record struct TextLine(
+internal readonly record struct TextLine(
 	int GlyphStart,
 	int GlyphCount,
 	float Width,
 	float BaselineY
 );
 
-public sealed class TextLayout {
-	public required TextGlyph[] Glyphs { get; init; }
-	public required TextLine[] Lines { get; init; }
-	public required float Width { get; init; }
-	public required float Height { get; init; }
+public sealed class TextLayout : IDisposable {
+	internal TextGlyph[] Glyphs { get; }
+	internal TextLine[] Lines { get; }
+	public float Width { get; }
+	public float Height { get; }
+
+	private GlyphAtlasPage[] retainedPages;
+	private bool disposed = false;
+
+	internal TextLayout(TextGlyph[] glyphs, TextLine[] lines, float width, float height, GlyphAtlasPage[] retainedPages) {
+		Glyphs = glyphs;
+		Lines = lines;
+		Width = width;
+		Height = height;
+		this.retainedPages = retainedPages;
+		foreach (GlyphAtlasPage p in retainedPages)
+			p.Retain();
+	}
 
 	public void Render(Canvas cv, Vector2 at = default) {
+		ObjectDisposedException.ThrowIf(disposed, this);
 		foreach (TextGlyph glyph in Glyphs) {
 			RectF dst = new RectF(glyph.DstPixels.X + at.X, glyph.DstPixels.Y + at.Y, glyph.DstPixels.Width, glyph.DstPixels.Height);
 			RectF src = new RectF(glyph.SrcPixels.X, glyph.SrcPixels.Y, glyph.SrcPixels.Width, glyph.SrcPixels.Height);
 			using (cv.PushParams(Material: CanvasMaterials.RMask))
-				cv.TexWithSourceRect(glyph.Atlas, dst, src, glyph.Color);
+				cv.TexWithSourceRect(glyph.Page.Texture, dst, src, glyph.Color);
 		}
+	}
+
+	public void Dispose() {
+		if (disposed)
+			return;
+		disposed = true;
+		foreach (GlyphAtlasPage p in retainedPages)
+			p.Release();
+		retainedPages = Array.Empty<GlyphAtlasPage>();
 	}
 }

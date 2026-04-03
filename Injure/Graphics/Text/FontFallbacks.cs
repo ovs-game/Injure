@@ -136,11 +136,70 @@ internal readonly record struct FallbackProbeKey(
 	string? LanguageBCP47
 );
 
-internal sealed class FallbackProbeCache {
-	private readonly Dictionary<FallbackProbeKey, int> cache = new Dictionary<FallbackProbeKey, int>();
-	public void Clear() => cache.Clear();
-	public bool TryGet(FallbackProbeKey key, out int fontIndex) => cache.TryGetValue(key, out fontIndex);
-	public void Set(FallbackProbeKey key, int fontIndex) => cache[key] = fontIndex;
+internal sealed class FallbackProbeCache(TextSystem text, int maxEntries, int maxEstimatedCost) {
+	private sealed class Entry {
+		public required int FontIndex;
+		public required ulong LastUseStamp;
+		public required int EstimatedCost;
+	}
+
+	private readonly TextSystem text = text;
+	private readonly int maxEntries = maxEntries;
+	private readonly int maxEstimatedCost = maxEstimatedCost;
+	private readonly Dictionary<FallbackProbeKey, Entry> cache = new Dictionary<FallbackProbeKey, Entry>();
+	private ulong nextUseStamp = 0; // first will be 1 since this gets incremented upfront
+	private int totalEstimatedCost = 0;
+
+	public void Clear() {
+		cache.Clear();
+		totalEstimatedCost = 0;
+	}
+
+	public bool TryGet(FallbackProbeKey key, out int fontIndex) {
+		if (cache.TryGetValue(key, out Entry? ent)) {
+			ent.LastUseStamp = ++nextUseStamp;
+			fontIndex = ent.FontIndex;
+			return true;
+		}
+		fontIndex = default;
+		return false;
+	}
+
+	public void Set(FallbackProbeKey key, int fontIndex) {
+		if (cache.Remove(key, out Entry? ent))
+			totalEstimatedCost -= ent.EstimatedCost;
+		int est = estimate(key);
+		cache[key] = new Entry {
+			FontIndex = fontIndex,
+			LastUseStamp = ++nextUseStamp,
+			EstimatedCost = est
+		};
+		totalEstimatedCost += est;
+		text.OnCacheActivity();
+		Trim();
+	}
+
+	public void Trim() {
+		if (cache.Count <= maxEntries && totalEstimatedCost <= maxEstimatedCost)
+			return;
+		foreach (FallbackProbeKey key in cache
+			.OrderBy(static kvp => kvp.Value.LastUseStamp)
+			.ThenByDescending(static kvp => kvp.Value.EstimatedCost)
+			.Select(static kvp => kvp.Key)) {
+			if (cache.Count <= maxEntries && totalEstimatedCost <= maxEstimatedCost)
+				break;
+			totalEstimatedCost -= cache[key].EstimatedCost;
+			cache.Remove(key);
+		}
+	}
+
+	private static int estimate(FallbackProbeKey key) {
+		int cost = 0;
+		cost += key.Text.Length * sizeof(char);
+
+		cost += 32; // extra weight for object/etc overhead to avoid pretending small entries are free
+		return cost;
+	}
 }
 
 internal readonly record struct ResolvedItem(

@@ -2,8 +2,10 @@
 
 using System;
 using System.Collections.Generic;
-using Silk.NET.WebGPU;
+using System.Linq;
+using System.Threading;
 using FreeTypeSharp;
+using Silk.NET.WebGPU;
 using static FreeTypeSharp.FT;
 
 using Buffer = System.Buffer;
@@ -21,8 +23,29 @@ internal sealed class GlyphAtlasPage : IDisposable {
 	public int WriteY;
 	public int RowHeight;
 
+	public ulong LastUseStamp;
+	public readonly HashSet<GlyphAtlasKey> Keys = new HashSet<GlyphAtlasKey>();
+
+	private int refcount;
+	public int RefCount => Volatile.Read(ref refcount);
+
+	public void Retain() {
+		if (Interlocked.Increment(ref refcount) <= 0)
+			throw new InternalStateException("refcount overflow/corruption");
+	}
+
+	public void Release() {
+		if (Interlocked.Decrement(ref refcount) < 0)
+			throw new InternalStateException("refcount went negative");
+	}
+
 	public void Dispose() => Texture.Dispose();
 }
+
+internal readonly record struct GlyphAtlasKey(
+	FontCacheToken FontCacheToken,
+	uint GlyphID
+);
 
 internal readonly record struct GlyphAtlasEntry(
 	GlyphAtlasPage Page,
@@ -33,17 +56,18 @@ internal readonly record struct GlyphAtlasEntry(
 	int Height
 );
 
-internal sealed unsafe class GlyphAtlas(WebGPURenderer renderer, int pageWidth = 1024, int pageHeight = 1024, int padding = 1) : IDisposable {
-	private readonly record struct Key(FontCacheToken FontCacheToken, uint GlyphID);
-
+internal sealed unsafe class GlyphAtlas(WebGPURenderer renderer, TextSystem text, int pageWidth = 1024, int pageHeight = 1024, int padding = 1, int maxPages = 16) : IDisposable {
 	private readonly WebGPURenderer renderer = renderer;
-	private readonly Dictionary<Key, GlyphAtlasEntry> entries = new Dictionary<Key, GlyphAtlasEntry>();
+	private readonly TextSystem text = text;
+	private readonly Dictionary<GlyphAtlasKey, GlyphAtlasEntry> entries = new Dictionary<GlyphAtlasKey, GlyphAtlasEntry>();
 	private readonly List<GlyphAtlasPage> pages = new List<GlyphAtlasPage>();
 
 	private readonly int pageWidth = pageWidth;
 	private readonly int pageHeight = pageHeight;
 	private readonly int padding = padding;
+	private readonly int maxPages = maxPages;
 
+	private ulong nextUseStamp = 0; // first will be 1 since this gets incremented upfront
 	private bool disposed = false;
 
 	private void clear() {
@@ -53,21 +77,27 @@ internal sealed unsafe class GlyphAtlas(WebGPURenderer renderer, int pageWidth =
 		entries.Clear();
 	}
 
-	public void ClearGlyphs() {
+	public void Clear() {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		clear();
 	}
 
 	public bool TryGetOrCreate(IResolvedFont font, uint glyphID, out GlyphAtlasEntry entry) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		Key key = new Key(
+		GlyphAtlasKey key = new GlyphAtlasKey(
 			FontCacheToken: font.GetCacheToken(),
 			GlyphID: glyphID
 		);
-		if (entries.TryGetValue(key, out entry))
+		if (entries.TryGetValue(key, out entry)) {
+			entry.Page.LastUseStamp = ++nextUseStamp;
 			return true;
+		}
 		if (tryRasterize(font, glyphID, out entry)) {
+			entry.Page.Keys.Add(key);
+			entry.Page.LastUseStamp = +nextUseStamp;
 			entries.Add(key, entry);
+			text.OnCacheActivity();
+			Trim();
 			return true;
 		}
 		return false;
@@ -188,6 +218,21 @@ internal sealed unsafe class GlyphAtlas(WebGPURenderer renderer, int pageWidth =
 		page.WriteX += width;
 		page.RowHeight = Math.Max(page.RowHeight, height);
 		return true;
+	}
+
+	public void Trim() {
+		if (pages.Count <= maxPages)
+			return;
+		foreach (GlyphAtlasPage page in pages
+			.Where(static p => p.RefCount == 0)
+			.OrderBy(static p => p.LastUseStamp)
+			.Take(pages.Count - maxPages)) {
+			foreach (GlyphAtlasKey key in page.Keys)
+				entries.Remove(key);
+			page.Keys.Clear();
+			pages.Remove(page);
+			page.Dispose();
+		}
 	}
 
 	public void Dispose() {

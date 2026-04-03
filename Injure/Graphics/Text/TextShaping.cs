@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using HarfBuzzSharp;
 
 namespace Injure.Graphics.Text;
@@ -27,7 +28,9 @@ internal readonly record struct ShapedGlyph(
 	float YOffset,
 	float XAdvance,
 	float YAdvance
-);
+) {
+	public static readonly int Size = Unsafe.SizeOf<ShapedGlyph>();
+}
 
 internal readonly record struct ShapedCluster(
 	int GlyphStart,
@@ -36,6 +39,7 @@ internal readonly record struct ShapedCluster(
 	int SourceLength,
 	float Width,
 	bool IsWhitespaceOnly) {
+	public static readonly int Size = Unsafe.SizeOf<ShapedCluster>();
 	public int SourceLimit => SourceStart + SourceLength;
 }
 
@@ -58,16 +62,26 @@ internal sealed class DefaultTextItemizer : ITextItemizer {
 		TextAnalysis.ItemizeByScript(text, sourceStart, direction, languageBCP47);
 }
 
-internal sealed class ShapeCache : IDisposable {
+internal sealed class ShapeCache(TextSystem text, int maxEntries, int maxEstimatedCost) : IDisposable {
 	private readonly record struct Key(
 		FontCacheToken FontCacheToken,
 		string Text,
 		TextSegmentProperties Properties,
 		bool GuessSegmentProperties
 	);
+	private sealed class Entry {
+		public required ShapedRun Shaped;
+		public required ulong LastUseStamp;
+		public required int EstimatedCost;
+	}
 
-	private readonly Dictionary<Key, ShapedRun> cache = new Dictionary<Key, ShapedRun>();
+	private readonly TextSystem text = text;
+	private readonly int maxEntries = maxEntries;
+	private readonly int maxEstimatedCost = maxEstimatedCost;
+	private readonly Dictionary<Key, Entry> cache = new Dictionary<Key, Entry>();
 	private readonly Dictionary<string, Language> langs = new Dictionary<string, Language>(StringComparer.OrdinalIgnoreCase);
+	private ulong nextUseStamp = 0; // first will be 1 since this gets incremented upfront
+	private int totalEstimatedCost = 0;
 
 	public void Clear() => cache.Clear();
 
@@ -78,11 +92,21 @@ internal sealed class ShapeCache : IDisposable {
 			Properties: item.Properties,
 			GuessSegmentProperties: item.GuessSegmentProperties
 		);
-		if (!cache.TryGetValue(key, out ShapedRun? r)) {
-			r = shape(font, item);
-			cache.Add(key, r);
+		if (cache.TryGetValue(key, out Entry? ent)) {
+			ent.LastUseStamp = ++nextUseStamp;
+			return ent.Shaped;
 		}
-		return r;
+		ShapedRun shaped = shape(font, in item);
+		int est = estimate(shaped, in item);
+		cache.Add(key, new Entry {
+			Shaped = shaped,
+			LastUseStamp = ++nextUseStamp,
+			EstimatedCost = est
+		});
+		totalEstimatedCost += est;
+		text.OnCacheActivity();
+		Trim();
+		return shaped;
 	}
 
 	private ShapedRun shape(IResolvedFont font, in TextItem item) {
@@ -190,6 +214,31 @@ internal sealed class ShapeCache : IDisposable {
 			if (!char.IsWhiteSpace(text[i]))
 				return false;
 		return true;
+	}
+
+	private static int estimate(ShapedRun shaped, in TextItem item) {
+		int cost = 0;
+		cost += item.Text.Length * sizeof(char);
+		cost += shaped.Glyphs.Length * ShapedGlyph.Size;
+		cost += shaped.SourceOrderClusters.Length * ShapedCluster.Size;
+		cost += shaped.GlyphOrderClusters.Length * ShapedCluster.Size;
+
+		cost += 64; // extra weight for object/etc overhead to avoid pretending small entries are free
+		return cost;
+	}
+
+	public void Trim() {
+		if (cache.Count <= maxEntries && totalEstimatedCost <= maxEstimatedCost)
+			return;
+		foreach (Key key in cache
+			.OrderBy(static kvp => kvp.Value.LastUseStamp)
+			.ThenByDescending(static kvp => kvp.Value.EstimatedCost)
+			.Select(static kvp => kvp.Key)) {
+			if (cache.Count <= maxEntries && totalEstimatedCost <= maxEstimatedCost)
+				break;
+			totalEstimatedCost -= cache[key].EstimatedCost;
+			cache.Remove(key);
+		}
 	}
 
 	public void Dispose() {

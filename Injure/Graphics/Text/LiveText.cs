@@ -6,19 +6,21 @@ using System.Numerics;
 
 namespace Injure.Graphics.Text;
 
-public sealed class LiveText {
+public sealed class LiveText : IDisposable {
 	private readonly record struct Request(FontFallbackChain Fonts, string Text, TextStyle Style);
 
 	private readonly TextSystem owner;
 	private Request req;
 	private TextLayout layout;
 	private ulong chainHash;
+	private bool disposed = false;
 
-	public FontFallbackChain Fonts => req.Fonts;
-	public string Text => req.Text;
-	public TextStyle Style => req.Style;
+	public FontFallbackChain Fonts { get { ObjectDisposedException.ThrowIf(disposed, this); return req.Fonts; } }
+	public string Text { get { ObjectDisposedException.ThrowIf(disposed, this); return req.Text; } }
+	public TextStyle Style { get { ObjectDisposedException.ThrowIf(disposed, this); return req.Style; } }
 	public TextLayout Layout {
 		get {
+			ObjectDisposedException.ThrowIf(disposed, this);
 			refreshIfNeeded();
 			return layout;
 		}
@@ -31,11 +33,13 @@ public sealed class LiveText {
 	}
 
 	public void Render(Canvas cv, Vector2 at = default) {
+		ObjectDisposedException.ThrowIf(disposed, this);
 		refreshIfNeeded();
 		layout.Render(cv, at);
 	}
 
 	public void SetText(ReadOnlySpan<char> text) {
+		ObjectDisposedException.ThrowIf(disposed, this);
 		string s = new string(text);
 		if (req.Text == s)
 			return;
@@ -44,6 +48,7 @@ public sealed class LiveText {
 	}
 
 	public void SetParams(FontFallbackChain? fonts = null, string? text = null, TextStyle? style = null) {
+		ObjectDisposedException.ThrowIf(disposed, this);
 		if (fonts is null && text is null && style is null)
 			return;
 		req = req with {
@@ -58,13 +63,22 @@ public sealed class LiveText {
 		ulong h = req.Fonts.Hash();
 		if (h == chainHash)
 			return;
+		layout?.Dispose();
 		layout = owner.Layout(req.Fonts, req.Text, req.Style);
 		chainHash = h;
 	}
 
 	[MemberNotNull(nameof(layout))]
 	private void rebuild() {
+		layout?.Dispose();
 		layout = owner.Layout(req.Fonts, req.Text, req.Style);
 		chainHash = req.Fonts.Hash();
+	}
+
+	public void Dispose() {
+		if (disposed)
+			return;
+		disposed = true;
+		layout.Dispose();
 	}
 }

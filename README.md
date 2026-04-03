@@ -13,20 +13,32 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 TODO:
 
 - [Idk when but this should be done] stop having the todo here and use github issues
-- [next-up] asset file watchers (FOR REAL THIS TIME (
-- [temporarily on the backburner] the text renderer
-  - [priority] clear cache when a font is reloaded
-  - [priority] refcounting on pages / caches for less blunt cache invalidation when a font is reloaded than dropping literally everything
-  - [priority] way to scale/etc text post-make
-  - maybe untangle some of the indirection spaghetti
-  - move the HarfBuzzSharp native assets package ref out of OVS.csproj
-  - less allocation spam
-  - cache break iterators keyed by locale
-  - better caching in general
-  - SDF/MSDF rasterization
-  - color fonts / BGRA
+- [active] the text renderer
+  - [active] write tests for like everything that can be automatically tested
+  - way to scale/etc text post-make
+  - more ways to tweak the layout
+    - alignment, at least basic left/center/right
+    - justify
+    - consistent vertical metrics across fallbacks
+    - adjustable trim/ws handling at line boundaries
+    - max length / max lines / truncation with ellipsis
+    - overflow mode
+    - line/para spacing
+  - some optimizations
+    - less allocation spam
+    - cache break iterators keyed by locale
+    - per-glyph atlas eviction, this sounds simple but it's probably gonna need a small custom allocator
+    - better caching in general
+    - maybe untangle some of the indirection spaghetti
+  - fancier features
+    - color fonts / BGRA
+    - knuth-plass linebreaking
+    - SDF/MSDF rasterization
+    - text effects, outlines, etc.
+    - per-glyph effects
 - [next-up] dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
 - [next-up] fix paragraphs in doc comments (i found out it doesn't work like markdown and you need explicit `<para>`)
+- [next-up] asset file watchers (FOR REAL THIS TIME (
 - [priority] windows builds
 - [priority] layers system
 - [priority] clocks, clock filtering, etc.

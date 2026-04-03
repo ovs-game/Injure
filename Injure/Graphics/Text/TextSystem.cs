@@ -22,6 +22,21 @@ public readonly record struct TextStyle(
 	string? LanguageBCP47 = null
 );
 
+public sealed class TextCacheOptions {
+	public int MaxShapeEntries { get; init; } = 4096;
+	public int MaxShapeEstimatedCost { get; init; } = 8 * 1024 * 1024;
+
+	public int MaxFallbackProbeEntries { get; init; } = 4096;
+	public int MaxFallbackProbeEstimatedCost { get; init; } = 1 * 1024 * 1024;
+
+	public int GlyphAtlasPageWidth { get; init; } = 1024;
+	public int GlyphAtlasPageHeight { get; init; } = 1024;
+	public int GlyphAtlasPadding { get; init; } = 1;
+	public int MaxGlyphAtlasPages { get; init; } = 16;
+
+	public int TrimEveryNOperations { get; init; } = 128;
+}
+
 public sealed unsafe class TextSystem : IDisposable {
 	private readonly record struct LoadedFaceKey(FontSourceKind SourceKind, ulong SourceID, ulong Version, int FaceIndex);
 
@@ -30,22 +45,32 @@ public sealed unsafe class TextSystem : IDisposable {
 	private readonly Dictionary<LoadedFaceKey, LoadedFontFace> loadedFaces = new Dictionary<LoadedFaceKey, LoadedFontFace>();
 
 	private readonly ITextItemizer itemizer;
+	private readonly TextCacheOptions cacheOptions;
 	private readonly ShapeCache shapeCache;
 	private readonly FallbackProbeCache fallbackProbeCache;
 	private readonly FallbackResolver fallbackResolver;
 	private readonly GlyphAtlas atlas;
+	private int opCounter = 0;
 	private bool disposed = false;
 
 	internal FT_LibraryRec_ *FtLibrary { get { ObjectDisposedException.ThrowIf(disposed, this); return ftLibrary; } }
 
-	internal TextSystem(WebGPURenderer renderer, ITextItemizer? itemizer = null, int atlasPageWidth = 1024, int atlasPageHeight = 1024) {
+	internal TextSystem(WebGPURenderer renderer, ITextItemizer? itemizer = null, TextCacheOptions? cacheOptions = null) {
 		fixed (FT_LibraryRec_ **l = &ftLibrary)
 			FTException.Check(FT_Init_FreeType(l));
 		this.itemizer = itemizer ?? new DefaultTextItemizer();
-		shapeCache = new ShapeCache();
-		fallbackProbeCache = new FallbackProbeCache();
+		this.cacheOptions = cacheOptions ?? new TextCacheOptions();
+		shapeCache = new ShapeCache(this, this.cacheOptions.MaxShapeEntries, this.cacheOptions.MaxShapeEstimatedCost);
+		fallbackProbeCache = new FallbackProbeCache(this, this.cacheOptions.MaxFallbackProbeEntries, this.cacheOptions.MaxFallbackProbeEstimatedCost);
 		fallbackResolver = new FallbackResolver(shapeCache, fallbackProbeCache);
-		atlas = new GlyphAtlas(renderer, atlasPageWidth, atlasPageHeight);
+		atlas = new GlyphAtlas(
+			renderer,
+			this,
+			this.cacheOptions.GlyphAtlasPageWidth,
+			this.cacheOptions.GlyphAtlasPageHeight,
+			this.cacheOptions.GlyphAtlasPadding,
+			this.cacheOptions.MaxGlyphAtlasPages
+		);
 	}
 
 	internal IResolvedFont ResolveFont(Font font, int faceIndex, FontOptions opts) {
@@ -138,12 +163,14 @@ public sealed unsafe class TextSystem : IDisposable {
 			}
 			paraStart = i + 1;
 		}
-		return new TextLayout {
-			Glyphs = glyphs.ToArray(),
-			Lines = lines.ToArray(),
-			Width = maxLineWidth,
-			Height = lineTopY
-		};
+
+		return new TextLayout(
+			glyphs: glyphs.ToArray(),
+			lines: lines.ToArray(),
+			width: maxLineWidth,
+			height: lineTopY,
+			retainedPages: glyphs.Select(static g => g.Page).Distinct().ToArray()
+		);
 	}
 
 	public Font LoadFont(byte[] data, string? debugName = null) {
@@ -377,7 +404,7 @@ public sealed unsafe class TextSystem : IDisposable {
 					float x = penX + shaped.XOffset + atlasEntry.BitmapLeft;
 					float y = baselineY - shaped.YOffset - atlasEntry.BitmapTop;
 					dst.Add(new TextGlyph(
-						Atlas: atlasEntry.Page.Texture,
+						Page: atlasEntry.Page,
 						SrcPixels: atlasEntry.SrcPixels,
 						DstPixels: new RectF(x, y, atlasEntry.Width, atlasEntry.Height),
 						Color: color,
@@ -396,21 +423,33 @@ public sealed unsafe class TextSystem : IDisposable {
 	private static bool overlaps(ParagraphRun paraRun, int start, int limit) =>
 		paraRun.SourceStart < limit && paraRun.SourceLimit > start;
 
+	internal void OnCacheActivity() {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		if (++opCounter < cacheOptions.TrimEveryNOperations)
+			return;
+		opCounter = 0;
+		TrimCache();
+	}
+
 	public void ClearCache() {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		shapeCache.Clear();
 		fallbackProbeCache.Clear();
+		atlas.Clear();
 	}
 
-	public void ClearGlyphAtlas() {
+	public void TrimCache() {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		atlas.ClearGlyphs();
+		shapeCache.Trim();
+		fallbackProbeCache.Trim();
+		atlas.Trim();
 	}
 
 	public void Dispose() {
 		if (disposed)
 			return;
 		disposed = true;
+		shapeCache.Dispose();
 		atlas.Dispose();
 	}
 }

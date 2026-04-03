@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 
@@ -194,13 +195,16 @@ public static class OwnerOrderedSorter {
 	}
 }
 
+// TODO: document better that the model is single-writer multiple-reader and that
+// registry/unregistry needs to be externally mutexed
 public sealed class OwnerOrderedRegistry<T> {
-	private readonly List<OwnerOrderedEntry<T>> entries = new List<OwnerOrderedEntry<T>>();
+	private readonly Dictionary<ulong, OwnerOrderedEntry<T>> entries = new Dictionary<ulong, OwnerOrderedEntry<T>>();
 	private readonly Dictionary<string, HashSet<string>> localIDsByOwner =
 		new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+	private ulong nextID = 0; // first ID will be 1 since this gets incremented upfront
 	private T[] snapshot = Array.Empty<T>();
 
-	public void Register(OwnerOrderedEntry<T> entry) {
+	public ulong Register(OwnerOrderedEntry<T> entry) {
 		ArgumentNullException.ThrowIfNull(entry);
 		bool createdLocalIDSet = false;
 		if (!localIDsByOwner.TryGetValue(entry.OwnerID, out HashSet<string>? localIDs)) {
@@ -210,17 +214,32 @@ public sealed class OwnerOrderedRegistry<T> {
 		}
 		if (!localIDs.Add(entry.LocalID))
 			throw new OwnerOrderingException($"duplicate LocalID '{entry.LocalID}' for owner '{entry.OwnerID}'");
-		entries.Add(entry);
+		ulong id = nextID + 1;
+		entries.Add(id, entry);
 		try {
-			T[] s = OwnerOrderedSorter.Sort(entries);
+			T[] s = OwnerOrderedSorter.Sort(entries.Values.ToArray());
 			Volatile.Write(ref snapshot, s);
 		} catch {
-			entries.RemoveAt(entries.Count - 1);
+			entries.Remove(id);
 			localIDs.Remove(entry.LocalID);
 			if (createdLocalIDSet)
 				localIDsByOwner.Remove(entry.OwnerID);
 			throw;
 		}
+		nextID = id; // do you understand yet why this isn't thread safe
+		return id;
+	}
+
+	public bool Unregister(ulong id, [NotNullWhen(true)] out OwnerOrderedEntry<T>? removed) {
+		if (!entries.Remove(id, out removed))
+			return false;
+		HashSet<string> localIDs = localIDsByOwner[removed.OwnerID];
+		localIDs.Remove(removed.LocalID);
+		if (localIDs.Count == 0)
+			localIDsByOwner.Remove(removed.OwnerID);
+		T[] s = OwnerOrderedSorter.Sort(entries.Values.ToArray());
+		Volatile.Write(ref snapshot, s);
+		return true;
 	}
 
 	public IReadOnlyList<T> ReadSnapshot() => Volatile.Read(ref snapshot);

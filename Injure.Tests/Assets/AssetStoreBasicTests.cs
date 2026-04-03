@@ -13,8 +13,8 @@ public class AssetStoreBasicTests {
 		TestDependencyWatcher watcher = new TestDependencyWatcher();
 		store.RegisterSource(ownerID, new TestSource(new TestDependency("dep")), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, new TestCreator(), "creator");
-		store.RegisterDependencyWatcher(ownerID, watcher, "watcher");
+		AssetCreatorHandle ch = store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		AssetDependencyWatcherHandle wh = store.RegisterDependencyWatcher(ownerID, watcher, "watcher");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		Assert.False(asset.IsLoaded);
@@ -30,6 +30,13 @@ public class AssetStoreBasicTests {
 
 		watcher.Raise(new TestDependency("dep"));
 		Assert.True(asset.HasQueuedReload);
+
+		store.UnregisterCreator(ch);
+		AssetRef<TestAsset> asset2 = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset2"));
+		Assert.Throws<AssetUnhandledException>(() => _ = asset2.Borrow());
+
+		store.UnregisterDependencyWatcher(wh);
+		Assert.True(watcher.Disposed);
 	}
 
 	[Fact]

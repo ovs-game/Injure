@@ -89,7 +89,7 @@ public class AssetStoreConcurrencyTests {
 		AssetID b = new AssetID(ownerID, "b");
 
 		AssetStore store = new AssetStore();
-		CountingCheckpoint ckp = new CountingCheckpoint(target: 2);
+		CountingTaskCheckpoint ckp = new CountingTaskCheckpoint(target: 2);
 		DictionarySource source = new DictionarySource();
 		source.Set(a, "A");
 		source.Set(b, "B");
@@ -115,7 +115,7 @@ public class AssetStoreConcurrencyTests {
 	[Fact]
 	public async Task CancelledWarmDoesntCancelSharedWork() {
 		AssetStore store = new AssetStore();
-		Checkpoint ckp = new Checkpoint();
+		TaskCheckpoint ckp = new TaskCheckpoint();
 		TestCreator creator = new TestCreator(onPrepareAsync: (_, ct) => ckp.WaitAsync(ct));
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");

@@ -16,6 +16,50 @@ using Injure.ModUtils;
 namespace Injure.Assets;
 
 /// <summary>
+/// Opaque handle to a registered asset source, used for unregistration.
+/// </summary>
+public readonly struct AssetSourceHandle {
+	internal readonly ulong ID;
+	internal AssetSourceHandle(ulong id) {
+		ID = id;
+	}
+}
+
+/// <summary>
+/// Opaque handle to a registered asset resolver, used for unregistration.
+/// </summary>
+public readonly struct AssetResolverHandle {
+	internal readonly ulong ID;
+	internal AssetResolverHandle(ulong id) {
+		ID = id;
+	}
+}
+
+/// <summary>
+/// Opaque handle to a registered asset creator, used for unregistration.
+/// </summary>
+public readonly struct AssetCreatorHandle {
+	internal readonly Type AssetType;
+	internal readonly ulong ID;
+	internal AssetCreatorHandle(Type assetType, ulong id) {
+		AssetType = assetType;
+		ID = id;
+	}
+}
+
+/// <summary>
+/// Opaque handle to a registered asset dependency watcher, used for unregistration.
+/// </summary>
+public readonly struct AssetDependencyWatcherHandle {
+	internal readonly Type AssetType;
+	internal readonly ulong ID;
+	internal AssetDependencyWatcherHandle(Type assetType, ulong id) {
+		AssetType = assetType;
+		ID = id;
+	}
+}
+
+/// <summary>
 /// Central manager of assets, as well as their sources, resolvers, and creators,
 /// live versions, and queued reload publication.
 /// </summary>
@@ -468,244 +512,6 @@ public sealed class AssetStore {
 	// public api
 
 	/// <summary>
-	/// Registers a non-async asset source.
-	/// </summary>
-	/// <param name="ownerID">Owner ID to register the source under.</param>
-	/// <param name="source">Source to register.</param>
-	/// <param name="localID">Local ID for the source, used for deterministic ordering and tie-breaking.</param>
-	/// <param name="localPriority">Owner-local priority; higher-priority sources within the same owner are tried first.</param>
-	/// <param name="beforeOwners">
-	/// If not <see langword="null"/>, this source will be tried before any sources registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <param name="afterOwners">
-	/// If not <see langword="null"/>, this source will only be tried after all sources registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <exception cref="OwnerOrderingException">
-	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
-	/// </exception>
-	public void RegisterSource(string ownerID, IAssetSource source, string localID,
-		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
-		ArgumentNullException.ThrowIfNull(source);
-		lock (registryLock) {
-			sources.Register(new OwnerOrderedEntry<ISourceEntry>(
-				new SyncSourceEntry(source),
-				ownerID, localID, localPriority, beforeOwners, afterOwners
-			));
-		}
-	}
-
-	/// <summary>
-	/// Registers an async asset source.
-	/// </summary>
-	/// <param name="ownerID">Owner ID to register the source under.</param>
-	/// <param name="source">Source to register.</param>
-	/// <param name="localID">Local ID for the source, used for deterministic ordering and tie-breaking.</param>
-	/// <param name="localPriority">Owner-local priority; higher-priority sources within the same owner are tried first.</param>
-	/// <param name="beforeOwners">
-	/// If not <see langword="null"/>, this source will be tried before any sources registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <param name="afterOwners">
-	/// If not <see langword="null"/>, this source will only be tried after all sources registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <remarks>
-	/// <paramref name="localID"/> must be unique among all other sources registered in
-	/// this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
-	/// </remarks>
-	/// <exception cref="OwnerOrderingException">
-	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
-	/// </exception>
-	public void RegisterSource(string ownerID, IAssetSourceAsync source, string localID,
-		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
-		ArgumentNullException.ThrowIfNull(source);
-		lock (registryLock) {
-			sources.Register(new OwnerOrderedEntry<ISourceEntry>(
-				new AsyncSourceEntry(source),
-				ownerID, localID, localPriority, beforeOwners, afterOwners
-			));
-		}
-	}
-
-	/// <summary>
-	/// Registers a non-async asset resolver.
-	/// </summary>
-	/// <param name="ownerID">Owner ID to register the resolver under.</param>
-	/// <param name="resolver">Resolver to register.</param>
-	/// <param name="localID">Local ID for the resolver, used for deterministic ordering and tie-breaking.</param>
-	/// <param name="localPriority">Owner-local priority; higher-priority resolvers within the same owner are tried first.</param>
-	/// <param name="beforeOwners">
-	/// If not <see langword="null"/>, this resolver will be tried before any resolvers registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <param name="afterOwners">
-	/// If not <see langword="null"/>, this resolver will only be tried after all resolvers registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <remarks>
-	/// <paramref name="localID"/> must be unique among all other resolvers registered in
-	/// this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
-	/// </remarks>
-	/// <exception cref="OwnerOrderingException">
-	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
-	/// </exception>
-	public void RegisterResolver(string ownerID, IAssetResolver resolver, string localID,
-		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
-		ArgumentNullException.ThrowIfNull(resolver);
-		lock (registryLock) {
-			resolvers.Register(new OwnerOrderedEntry<IResolverEntry>(
-				new SyncResolverEntry(resolver),
-				ownerID, localID, localPriority, beforeOwners, afterOwners
-			));
-		}
-	}
-
-	/// <summary>
-	/// Registers an async asset resolver.
-	/// </summary>
-	/// <param name="ownerID">Owner ID to register the resolver under.</param>
-	/// <param name="resolver">Resolver to register.</param>
-	/// <param name="localID">Local ID for the resolver, used for deterministic ordering and tie-breaking.</param>
-	/// <param name="localPriority">Owner-local priority; higher-priority resolvers within the same owner are tried first.</param>
-	/// <param name="beforeOwners">
-	/// If not <see langword="null"/>, this resolver will be tried before any resolvers registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <param name="afterOwners">
-	/// If not <see langword="null"/>, this resolver will only be tried after all resolvers registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <remarks>
-	/// <paramref name="localID"/> must be unique among all other resolvers registered in
-	/// this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
-	/// </remarks>
-	/// <exception cref="OwnerOrderingException">
-	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
-	/// </exception>
-	public void RegisterResolver(string ownerID, IAssetResolverAsync resolver, string localID,
-		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
-		ArgumentNullException.ThrowIfNull(resolver);
-		lock (registryLock) {
-			resolvers.Register(new OwnerOrderedEntry<IResolverEntry>(
-				new AsyncResolverEntry(resolver),
-				ownerID, localID, localPriority, beforeOwners, afterOwners
-			));
-		}
-	}
-
-	/// <summary>
-	/// Registers an asset creator of a specific asset type.
-	/// </summary>
-	/// <typeparam name="T">Asset type produced by the creator.</typeparam>
-	/// <param name="ownerID">Owner ID to register the creator under.</param>
-	/// <param name="creator">Creator to register.</param>
-	/// <param name="localID">Local ID for the creator, used for deterministic ordering and tie-breaking.</param>
-	/// <param name="localPriority">Owner-local priority; higher-priority creators within the same owner are tried first.</param>
-	/// <param name="beforeOwners">
-	/// If not <see langword="null"/>, this creator will be tried before any creators registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <param name="afterOwners">
-	/// If not <see langword="null"/>, this creator will only be tried after all creators registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <remarks>
-	/// <para>
-	/// <paramref name="localID"/> must be unique among all other creators for the type <typeparamref name="T"/>
-	/// registered in this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
-	/// </para>
-	/// <para>
-	/// Non-async creators are not supported.
-	/// </para>
-	/// </remarks>
-	/// <exception cref="OwnerOrderingException">
-	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
-	/// </exception>
-	public void RegisterCreator<T>(string ownerID, IAssetCreatorAsync<T> creator, string localID,
-		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null)
-		where T : class {
-		ArgumentNullException.ThrowIfNull(creator);
-		lock (registryLock) {
-			OwnerOrderedEntry<IUntypedAssetCreator> ent = new OwnerOrderedEntry<IUntypedAssetCreator>(
-				new UntypedAssetCreator<T>(creator),
-				ownerID, localID, localPriority, beforeOwners, afterOwners
-			);
-			ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>> old = creators;
-			if (old.TryGetValue(typeof(T), out OwnerOrderedRegistry<IUntypedAssetCreator>? reg)) {
-				reg.Register(ent);
-				return;
-			}
-			reg = new OwnerOrderedRegistry<IUntypedAssetCreator>();
-			reg.Register(ent);
-			Volatile.Write(ref creators, old.Add(typeof(T), reg));
-		}
-	}
-
-	/// <summary>
-	/// Registers a watcher for a specific dependency type.
-	/// </summary>
-	/// <typeparam name="T">Dependency type handled by the watcher.</typeparam>
-	/// <param name="ownerID">Owner ID to register the watcher under.</param>
-	/// <param name="watcher">Watcher to register.</param>
-	/// <param name="localID">Local ID for the watcher, used for deterministic ordering and tie-breaking.</param>
-	/// <param name="localPriority">
-	/// Owner-local priority; higher-priority watchers within the same owner will be subscribed to new
-	/// dependencies first.
-	/// </param>
-	/// <param name="beforeOwners">
-	/// If not <see langword="null"/>, this watcher will be subscribed to new dependencies before
-	/// any of the watchers registered under one of the specified owner IDs (also see remarks on
-	/// unsubscribe order).
-	/// </param>
-	/// <param name="afterOwners">
-	/// If not <see langword="null"/>, this watcher will be subscribed to new dependencies only after
-	/// all of the watchers registered under one of the specified owner IDs (also see remarks on
-	/// unsubscribe order).
-	/// </param>
-	/// <remarks>
-	/// <para>
-	/// Newly registered watchers are immediately subscribed to all currently published
-	/// dependencies of the matching type that are already known to this store.
-	/// </para>
-	/// <para>
-	/// Unsubscription is done in reverse order; the last-ordered watcher, i.e the last one to have
-	/// been subscribed to a new dependency, will also be the first to be unsubscribed from it.
-	/// </para>
-	/// </remarks>
-	/// <exception cref="OwnerOrderingException">
-	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
-	/// </exception>
-	public void RegisterDependencyWatcher<T>(string ownerID, IAssetDependencyWatcher<T> watcher, string localID,
-		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null)
-		where T : IAssetDependency {
-		ArgumentNullException.ThrowIfNull(watcher);
-		UntypedAssetDependencyWatcher<T> untyped = new UntypedAssetDependencyWatcher<T>(watcher);
-		lock (dependencyLock) {
-			OwnerOrderedEntry<IUntypedAssetDependencyWatcher> ent = new OwnerOrderedEntry<IUntypedAssetDependencyWatcher>(
-				untyped,
-				ownerID, localID, localPriority, beforeOwners, afterOwners
-			);
-			Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>> old = watchers;
-			if (old.TryGetValue(typeof(T), out OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>? reg)) {
-				reg.Register(ent);
-				return;
-			}
-			reg = new OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>();
-			reg.Register(ent);
-			Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>> @new = new Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>>(old) {
-				[typeof(T)] = reg
-			};
-			Volatile.Write(ref watchers, @new);
-			untyped.Changed += onDependencyChanged;
-			foreach ((IAssetDependency dep, _) in slotsByDependency)
-				if (dep is T d)
-					watcher.Watch(d);
-		}
-	}
-
-	/// <summary>
 	/// Gets a stable handle for the specified asset.
 	/// </summary>
 	/// <typeparam name="T">Expected asset type. Determines what creators are tried.</typeparam>
@@ -759,7 +565,7 @@ public sealed class AssetStore {
 	/// </exception>
 	public void AtSafeBoundary() {
 		if (tlsContexts is null || !tlsContexts.TryGetValue(this, out AssetThreadContext? ctx))
-			throw new InvalidOperationException("current thread is not attached to this AssetStore");
+			throw new InvalidOperationException("the current thread is not attached to this AssetStore. if you're using Task/etc., your code is not guaranteed to run on the same physical thread across an await boundary, use a real Thread");
 		ctx.AtSafeBoundary();
 	}
 
@@ -784,12 +590,364 @@ public sealed class AssetStore {
 		return n;
 	}
 
+	/// <summary>
+	/// Registers a non-async asset source.
+	/// </summary>
+	/// <param name="ownerID">Owner ID to register the source under.</param>
+	/// <param name="source">Source to register.</param>
+	/// <param name="localID">Local ID for the source, used for deterministic ordering and tie-breaking.</param>
+	/// <param name="localPriority">Owner-local priority; higher-priority sources within the same owner are tried first.</param>
+	/// <param name="beforeOwners">
+	/// If not <see langword="null"/>, this source will be tried before any sources registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <param name="afterOwners">
+	/// If not <see langword="null"/>, this source will only be tried after all sources registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <returns>
+	/// An opaque handle that can be passed to <see cref="UnregisterSource(AssetSourceHandle)"/>.
+	/// </returns>
+	/// <exception cref="OwnerOrderingException">
+	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
+	/// </exception>
+	public AssetSourceHandle RegisterSource(string ownerID, IAssetSource source, string localID,
+		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
+		ArgumentNullException.ThrowIfNull(source);
+		lock (registryLock) {
+			ulong id = sources.Register(new OwnerOrderedEntry<ISourceEntry>(
+				new SyncSourceEntry(source),
+				ownerID, localID, localPriority, beforeOwners, afterOwners
+			));
+			return new AssetSourceHandle(id);
+		}
+	}
+
+	/// <summary>
+	/// Registers an async asset source.
+	/// </summary>
+	/// <param name="ownerID">Owner ID to register the source under.</param>
+	/// <param name="source">Source to register.</param>
+	/// <param name="localID">Local ID for the source, used for deterministic ordering and tie-breaking.</param>
+	/// <param name="localPriority">Owner-local priority; higher-priority sources within the same owner are tried first.</param>
+	/// <param name="beforeOwners">
+	/// If not <see langword="null"/>, this source will be tried before any sources registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <param name="afterOwners">
+	/// If not <see langword="null"/>, this source will only be tried after all sources registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <returns>
+	/// An opaque handle that can be passed to <see cref="UnregisterSource(AssetSourceHandle)"/>.
+	/// </returns>
+	/// <remarks>
+	/// <paramref name="localID"/> must be unique among all other sources registered in
+	/// this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
+	/// </remarks>
+	/// <exception cref="OwnerOrderingException">
+	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
+	/// </exception>
+	public AssetSourceHandle RegisterSource(string ownerID, IAssetSourceAsync source, string localID,
+		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
+		ArgumentNullException.ThrowIfNull(source);
+		lock (registryLock) {
+			ulong id = sources.Register(new OwnerOrderedEntry<ISourceEntry>(
+				new AsyncSourceEntry(source),
+				ownerID, localID, localPriority, beforeOwners, afterOwners
+			));
+			return new AssetSourceHandle(id);
+		}
+	}
+
+	/// <summary>
+	/// Registers a non-async asset resolver.
+	/// </summary>
+	/// <param name="ownerID">Owner ID to register the resolver under.</param>
+	/// <param name="resolver">Resolver to register.</param>
+	/// <param name="localID">Local ID for the resolver, used for deterministic ordering and tie-breaking.</param>
+	/// <param name="localPriority">Owner-local priority; higher-priority resolvers within the same owner are tried first.</param>
+	/// <param name="beforeOwners">
+	/// If not <see langword="null"/>, this resolver will be tried before any resolvers registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <param name="afterOwners">
+	/// If not <see langword="null"/>, this resolver will only be tried after all resolvers registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <returns>
+	/// An opaque handle that can be passed to <see cref="UnregisterResolver(AssetResolverHandle)"/>.
+	/// </returns>
+	/// <remarks>
+	/// <paramref name="localID"/> must be unique among all other resolvers registered in
+	/// this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
+	/// </remarks>
+	/// <exception cref="OwnerOrderingException">
+	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
+	/// </exception>
+	public AssetResolverHandle RegisterResolver(string ownerID, IAssetResolver resolver, string localID,
+		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
+		ArgumentNullException.ThrowIfNull(resolver);
+		lock (registryLock) {
+			ulong id = resolvers.Register(new OwnerOrderedEntry<IResolverEntry>(
+				new SyncResolverEntry(resolver),
+				ownerID, localID, localPriority, beforeOwners, afterOwners
+			));
+			return new AssetResolverHandle(id);
+		}
+	}
+
+	/// <summary>
+	/// Registers an async asset resolver.
+	/// </summary>
+	/// <param name="ownerID">Owner ID to register the resolver under.</param>
+	/// <param name="resolver">Resolver to register.</param>
+	/// <param name="localID">Local ID for the resolver, used for deterministic ordering and tie-breaking.</param>
+	/// <param name="localPriority">Owner-local priority; higher-priority resolvers within the same owner are tried first.</param>
+	/// <param name="beforeOwners">
+	/// If not <see langword="null"/>, this resolver will be tried before any resolvers registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <param name="afterOwners">
+	/// If not <see langword="null"/>, this resolver will only be tried after all resolvers registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <returns>
+	/// An opaque handle that can be passed to <see cref="UnregisterResolver(AssetResolverHandle)"/>.
+	/// </returns>
+	/// <remarks>
+	/// <paramref name="localID"/> must be unique among all other resolvers registered in
+	/// this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
+	/// </remarks>
+	/// <exception cref="OwnerOrderingException">
+	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
+	/// </exception>
+	public AssetResolverHandle RegisterResolver(string ownerID, IAssetResolverAsync resolver, string localID,
+		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
+		ArgumentNullException.ThrowIfNull(resolver);
+		lock (registryLock) {
+			ulong id = resolvers.Register(new OwnerOrderedEntry<IResolverEntry>(
+				new AsyncResolverEntry(resolver),
+				ownerID, localID, localPriority, beforeOwners, afterOwners
+			));
+			return new AssetResolverHandle(id);
+		}
+	}
+
+	/// <summary>
+	/// Registers an asset creator of a specific asset type.
+	/// </summary>
+	/// <typeparam name="T">Asset type produced by the creator.</typeparam>
+	/// <param name="ownerID">Owner ID to register the creator under.</param>
+	/// <param name="creator">Creator to register.</param>
+	/// <param name="localID">Local ID for the creator, used for deterministic ordering and tie-breaking.</param>
+	/// <param name="localPriority">Owner-local priority; higher-priority creators within the same owner are tried first.</param>
+	/// <param name="beforeOwners">
+	/// If not <see langword="null"/>, this creator will be tried before any creators registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <param name="afterOwners">
+	/// If not <see langword="null"/>, this creator will only be tried after all creators registered
+	/// under one of the specified owner IDs.
+	/// </param>
+	/// <returns>
+	/// An opaque handle that can be passed to <see cref="UnregisterCreator(AssetCreatorHandle)"/>.
+	/// </returns>
+	/// <remarks>
+	/// <para>
+	/// <paramref name="localID"/> must be unique among all other creators for the type <typeparamref name="T"/>
+	/// registered in this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
+	/// </para>
+	/// <para>
+	/// Non-async creators are not supported.
+	/// </para>
+	/// </remarks>
+	/// <exception cref="OwnerOrderingException">
+	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
+	/// </exception>
+	public AssetCreatorHandle RegisterCreator<T>(string ownerID, IAssetCreatorAsync<T> creator, string localID,
+		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null)
+		where T : class {
+		ArgumentNullException.ThrowIfNull(creator);
+		lock (registryLock) {
+			OwnerOrderedEntry<IUntypedAssetCreator> ent = new OwnerOrderedEntry<IUntypedAssetCreator>(
+				new UntypedAssetCreator<T>(creator),
+				ownerID, localID, localPriority, beforeOwners, afterOwners
+			);
+			ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>> old = creators;
+			ulong id;
+			if (old.TryGetValue(typeof(T), out OwnerOrderedRegistry<IUntypedAssetCreator>? reg)) {
+				id = reg.Register(ent);
+			} else {
+				reg = new OwnerOrderedRegistry<IUntypedAssetCreator>();
+				id = reg.Register(ent);
+				Volatile.Write(ref creators, old.Add(typeof(T), reg));
+			}
+			return new AssetCreatorHandle(typeof(T), id);
+		}
+	}
+
+	/// <summary>
+	/// Registers a watcher for a specific dependency type.
+	/// </summary>
+	/// <typeparam name="T">Dependency type handled by the watcher.</typeparam>
+	/// <param name="ownerID">Owner ID to register the watcher under.</param>
+	/// <param name="watcher">Watcher to register.</param>
+	/// <param name="localID">Local ID for the watcher, used for deterministic ordering and tie-breaking.</param>
+	/// <param name="localPriority">
+	/// Owner-local priority; higher-priority watchers within the same owner will be subscribed to new
+	/// dependencies first.
+	/// </param>
+	/// <param name="beforeOwners">
+	/// If not <see langword="null"/>, this watcher will be subscribed to new dependencies before
+	/// any of the watchers registered under one of the specified owner IDs (also see remarks on
+	/// unsubscribe order).
+	/// </param>
+	/// <param name="afterOwners">
+	/// If not <see langword="null"/>, this watcher will be subscribed to new dependencies only after
+	/// all of the watchers registered under one of the specified owner IDs (also see remarks on
+	/// unsubscribe order).
+	/// </param>
+	/// <returns>
+	/// An opaque handle that can be passed to <see cref="UnregisterDependencyWatcher(AssetDependencyWatcherHandle)"/>.
+	/// </returns>
+	/// <remarks>
+	/// <para>
+	/// Newly registered watchers are immediately subscribed to all currently published
+	/// dependencies of the matching type that are already known to this store.
+	/// </para>
+	/// <para>
+	/// Unsubscription is done in reverse order; the last-ordered watcher, i.e the last one to have
+	/// been subscribed to a new dependency, will also be the first to be unsubscribed from it.
+	/// </para>
+	/// </remarks>
+	/// <exception cref="OwnerOrderingException">
+	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
+	/// </exception>
+	public AssetDependencyWatcherHandle RegisterDependencyWatcher<T>(string ownerID, IAssetDependencyWatcher<T> watcher, string localID,
+		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null)
+		where T : IAssetDependency {
+		ArgumentNullException.ThrowIfNull(watcher);
+		UntypedAssetDependencyWatcher<T> untyped = new UntypedAssetDependencyWatcher<T>(watcher);
+		lock (dependencyLock) {
+			OwnerOrderedEntry<IUntypedAssetDependencyWatcher> ent = new OwnerOrderedEntry<IUntypedAssetDependencyWatcher>(
+				untyped,
+				ownerID, localID, localPriority, beforeOwners, afterOwners
+			);
+			Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>> old = watchers;
+			ulong id;
+			if (old.TryGetValue(typeof(T), out OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>? reg)) {
+				id = reg.Register(ent);
+			} else {
+				reg = new OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>();
+				id = reg.Register(ent);
+				Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>> @new = new Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>>(old) {
+					[typeof(T)] = reg
+				};
+				Volatile.Write(ref watchers, @new);
+				untyped.Changed += onDependencyChanged;
+				foreach ((IAssetDependency dep, _) in slotsByDependency)
+					if (dep is T d)
+						watcher.Watch(d);
+			}
+			return new AssetDependencyWatcherHandle(typeof(T), id);
+		}
+	}
+
+	/// <summary>
+	/// Unregisters an asset source.
+	/// </summary>
+	/// <param name="handle">The handle obtained from registration.</param>
+	/// <exception cref="ArgumentException">
+	/// Thrown if the handle is invalid.
+	/// </exception>
+	/// <exception cref="InvalidOperationException">
+	/// Thrown if the handle doesn't point to a registered source, typically
+	/// because it has already been unregistered.
+	/// </exception>
+	public void UnregisterSource(AssetSourceHandle handle) {
+		if (handle.ID == 0)
+			throw new ArgumentException("invalid handle (did you accidentally pass `default`?)", nameof(handle));
+		lock (registryLock) {
+			if (!sources.Unregister(handle.ID, out _))
+				throw new InvalidOperationException("this handle doesn't point to a registered source");
+		}
+	}
+
+	/// <summary>
+	/// Unregisters an asset resolver.
+	/// </summary>
+	/// <param name="handle">The handle obtained from registration.</param>
+	/// <exception cref="ArgumentException">
+	/// Thrown if the handle is invalid.
+	/// </exception>
+	/// <exception cref="InvalidOperationException">
+	/// Thrown if the handle doesn't point to a registered resolver, typically
+	/// because it has already been unregistered.
+	/// </exception>
+	public void UnregisterResolver(AssetResolverHandle handle) {
+		if (handle.ID == 0)
+			throw new ArgumentException("invalid handle (did you accidentally pass `default`?)", nameof(handle));
+		lock (registryLock) {
+			if (!resolvers.Unregister(handle.ID, out _))
+				throw new InvalidOperationException("this handle doesn't point to a registered resolver");
+		}
+	}
+
+	/// <summary>
+	/// Unregisters an asset creator.
+	/// </summary>
+	/// <param name="handle">The handle obtained from registration.</param>
+	/// <exception cref="ArgumentException">
+	/// Thrown if the handle is invalid.
+	/// </exception>
+	/// <exception cref="InvalidOperationException">
+	/// Thrown if the handle doesn't point to a registered creator, typically
+	/// because it has already been unregistered.
+	/// </exception>
+	public void UnregisterCreator(AssetCreatorHandle handle) {
+		if (handle.AssetType is null || handle.ID == 0)
+			throw new ArgumentException("invalid handle (did you accidentally pass `default`?)", nameof(handle));
+		lock (registryLock) {
+			if (!creators.TryGetValue(handle.AssetType, out OwnerOrderedRegistry<IUntypedAssetCreator>? reg))
+				throw new InternalStateException("this handle's AssetType doesn't have a corresponding OwnerOrderedRegistry of creators, how did it even get handed out?");
+			if (!reg.Unregister(handle.ID, out _))
+				throw new InvalidOperationException("this handle doesn't point to a registered creator");
+		}
+	}
+
+	/// <summary>
+	/// Unregisters an asset dependency watcher.
+	/// </summary>
+	/// <param name="handle">The handle obtained from registration.</param>
+	/// <remarks>
+	/// Also calls <see cref="IDisposable.Dispose()"/> on the watcher.
+	/// </remarks>
+	/// <exception cref="ArgumentException">
+	/// Thrown if the handle is invalid.
+	/// </exception>
+	/// <exception cref="InvalidOperationException">
+	/// Thrown if the handle doesn't point to a registered watcher, typically
+	/// because it has already been unregistered.
+	/// </exception>
+	public void UnregisterDependencyWatcher(AssetDependencyWatcherHandle handle) {
+		if (handle.AssetType is null || handle.ID == 0)
+			throw new ArgumentException("invalid handle (did you accidentally pass `default`?)", nameof(handle));
+		lock (dependencyLock) {
+			if (!watchers.TryGetValue(handle.AssetType, out OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>? reg))
+				throw new InternalStateException("this handle's AssetType doesn't have a corresponding OwnerOrderedRegistry of watchers, how did it even get handed out?");
+			if (!reg.Unregister(handle.ID, out OwnerOrderedEntry<IUntypedAssetDependencyWatcher>? ent))
+				throw new InvalidOperationException("this handle doesn't point to a registered watcher");
+			ent.Item.Dispose();
+		}
+	}
+
 	// ==========================================================================
 	// internal api
 	internal void DetachThread(AssetThreadContext ctx) {
 		attachedContexts.TryRemove(ctx.ID, out _);
 		if (tlsContexts is null || !tlsContexts.Remove(this))
-			throw new InternalStateException("current thread is not attached to this AssetStore");
+			throw new InvalidOperationException("tried to detach a thread that is not attached to this AssetStore. if you're using Task/etc., your code is not guaranteed to run on the same physical thread across an await boundary, use a real Thread");
 	}
 
 	internal void QueueRetire<T>(T val, ulong epoch) where T : class {
@@ -853,7 +1011,7 @@ public sealed class AssetStore {
 					}
 				}
 			}
-			throw new AssetLoadException(id, typeof(T), "no registered asset creator accepted the asset");
+			throw new AssetUnhandledException(id, typeof(T), "no registered asset creator accepted the asset");
 		} finally {
 			if (prev is not null)
 				loadStackTop.Value = prev;

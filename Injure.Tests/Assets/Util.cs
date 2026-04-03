@@ -46,6 +46,7 @@ public sealed record TestDependency(string Name) : IAssetDependency;
 public sealed class TestDependencyWatcher : IAssetDependencyWatcher<TestDependency> {
 	public HashSet<TestDependency> Watched { get; } = new HashSet<TestDependency>();
 	public List<string> Log { get; } = new List<string>();
+	public bool Disposed { get; private set; } = false;
 
 	public event Action<TestDependency>? Changed;
 
@@ -60,7 +61,7 @@ public sealed class TestDependencyWatcher : IAssetDependencyWatcher<TestDependen
 	}
 
 	public void Raise(TestDependency dependency) => Changed?.Invoke(dependency);
-	public void Dispose() {}
+	public void Dispose() => Disposed = true;
 }
 
 public sealed class TestSource(TestDependency? dep = null) : IAssetSource {
@@ -189,7 +190,7 @@ public sealed class SteppingCreator(params Step[] steps) : IAssetCreatorAsync<Te
 	}
 }
 
-public sealed class Checkpoint {
+public sealed class TaskCheckpoint {
 	private readonly TaskCompletionSource<bool> _entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 	private readonly TaskCompletionSource<bool> _continue = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -201,7 +202,7 @@ public sealed class Checkpoint {
 	}
 }
 
-public sealed class CountingCheckpoint(int target) {
+public sealed class CountingTaskCheckpoint(int target) {
 	private readonly int target = target;
 	private int count;
 
@@ -217,4 +218,17 @@ public sealed class CountingCheckpoint(int target) {
 			_targetReached.TrySetResult(true);
 		await _continue.Task.WaitAsync(ct).ConfigureAwait(false);
 	}
+}
+
+public sealed class ThreadCheckpoint {
+	private readonly ManualResetEventSlim _entered = new ManualResetEventSlim(false);
+	private readonly ManualResetEventSlim _continue = new ManualResetEventSlim(false);
+
+	public ManualResetEventSlim Entered => _entered;
+	public void Proceed() => _continue.Set();
+	public void Wait() {
+		_entered.Set();
+		_continue.Wait();
+	}
+	public void ForceSet() => _entered.Set();
 }

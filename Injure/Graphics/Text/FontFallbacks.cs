@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO.Hashing;
 using System.Linq;
 using System.Threading;
 using HarfBuzzSharp;
@@ -30,45 +32,30 @@ public sealed class FontFallbackChain {
 	}
 
 	internal ulong Hash() {
-		// FNV-1a
-		const ulong basis = 14695981039346656037ul;
-		const ulong prime = 1099511628211ul;
-		ulong hash = basis;
+		XxHash3 h = new XxHash3();
+		const int estimated = 4 + 4 + 8 + 8; // worst-case
+		Span<byte> buf = stackalloc byte[estimated];
 		foreach (FontSpec fnt in allFonts) {
-			mix32(ref hash, (uint)fnt.SourceKind);
-			mix32(ref hash, unchecked((uint)fnt.FaceIndex));
+			int i = 0;
+			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], (uint)fnt.SourceKind); i += 4;
+			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], unchecked((uint)fnt.FaceIndex)); i += 4;
 			switch (fnt.SourceKind) {
 			case FontSourceKind.Direct:
-				mix64(ref hash, fnt.Direct.ID);
+				BinaryPrimitives.WriteUInt64LittleEndian(buf[i..], fnt.Direct.ID); i += 8;
 				break;
 			case FontSourceKind.Asset:
 				ulong ver = 0;
 				if (fnt.Asset.TryPassiveBorrow(out AssetLease<Font> lease))
 					ver = lease.Version;
-				mix64(ref hash, fnt.Asset.SlotID);
-				mix64(ref hash, ver);
+				BinaryPrimitives.WriteUInt64LittleEndian(buf[i..], fnt.Asset.SlotID); i += 8;
+				BinaryPrimitives.WriteUInt64LittleEndian(buf[i..], ver); i += 8;
 				break;
 			default:
 				throw new UnreachableException();
 			}
+			h.Append(buf);
 		}
-		return hash;
-		static void mix32(ref ulong h, uint x) {
-			h ^= (byte)x;         h *= prime;
-			h ^= (byte)(x >> 8);  h *= prime;
-			h ^= (byte)(x >> 16); h *= prime;
-			h ^= (byte)(x >> 24); h *= prime;
-		}
-		static void mix64(ref ulong h, ulong x) {
-			h ^= (byte)x;         h *= prime;
-			h ^= (byte)(x >> 8);  h *= prime;
-			h ^= (byte)(x >> 16); h *= prime;
-			h ^= (byte)(x >> 24); h *= prime;
-			h ^= (byte)(x >> 32); h *= prime;
-			h ^= (byte)(x >> 40); h *= prime;
-			h ^= (byte)(x >> 48); h *= prime;
-			h ^= (byte)(x >> 56); h *= prime;
-		}
+		return h.GetCurrentHashAsUInt64();
 	}
 
 }
@@ -92,38 +79,23 @@ internal sealed class ResolvedFontFallbackChain {
 	}
 
 	public ulong Hash() {
-		// FNV-1a
-		const ulong basis = 14695981039346656037ul;
-		const ulong prime = 1099511628211ul;
-		ulong hash = basis;
+		XxHash3 h = new XxHash3();
+		const int estimated = 4 + 8 + 4 + 4 + 4 + 4 + 1 + 8;
+		Span<byte> buf = stackalloc byte[estimated];
 		foreach (IResolvedFont fnt in allFonts) {
 			FontCacheToken t = fnt.GetCacheToken();
-			mix32(ref hash, (uint)t.Key.SourceKind);
-			mix64(ref hash, t.Key.ID);
-			mix32(ref hash, unchecked((uint)t.Key.FaceIndex));
-			mix32(ref hash, unchecked((uint)t.Key.Options.PixelSize));
-			mix32(ref hash, (uint)t.Key.Options.RasterMode);
-			mix32(ref hash, (uint)t.Key.Options.Hinting);
-			mix32(ref hash, t.Key.Options.UseEmbeddedBitmaps ? 1u : 0u);
-			mix64(ref hash, t.Version);
+			int i = 0;
+			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], (uint)t.Key.SourceKind); i += 4;
+			BinaryPrimitives.WriteUInt64LittleEndian(buf[i..], t.Key.ID); i += 8;
+			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], unchecked((uint)t.Key.FaceIndex)); i += 4;
+			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], unchecked((uint)t.Key.Options.PixelSize)); i += 4;
+			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], (uint)t.Key.Options.RasterMode); i += 4;
+			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], (uint)t.Key.Options.Hinting); i += 4;
+			buf[i++] = t.Key.Options.UseEmbeddedBitmaps ? (byte)1 : (byte)0;
+			BinaryPrimitives.WriteUInt64LittleEndian(buf[i..], t.Version); i += 8;
+			h.Append(buf);
 		}
-		return hash;
-		static void mix32(ref ulong h, uint x) {
-			h ^= (byte)x;         h *= prime;
-			h ^= (byte)(x >> 8);  h *= prime;
-			h ^= (byte)(x >> 16); h *= prime;
-			h ^= (byte)(x >> 24); h *= prime;
-		}
-		static void mix64(ref ulong h, ulong x) {
-			h ^= (byte)x;         h *= prime;
-			h ^= (byte)(x >> 8);  h *= prime;
-			h ^= (byte)(x >> 16); h *= prime;
-			h ^= (byte)(x >> 24); h *= prime;
-			h ^= (byte)(x >> 32); h *= prime;
-			h ^= (byte)(x >> 40); h *= prime;
-			h ^= (byte)(x >> 48); h *= prime;
-			h ^= (byte)(x >> 56); h *= prime;
-		}
+		return h.GetCurrentHashAsUInt64();
 	}
 }
 

@@ -19,6 +19,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- general deps -->
+		<PackageReference Include="System.IO.Hashing" Version="10.0.5" />
+
 		<!-- rendering -->
 		<PackageReference Include="Hexa.NET.SDL2" Version="1.2.17" />
 		<PackageReference Include="Silk.NET.WebGPU" Version="2.23.0" />

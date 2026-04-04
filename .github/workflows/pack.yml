@@ -33,6 +33,10 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      - name: Build native
+        working-directory: Injure.Native/Native
+        run: make RID=linux-x64 # TODO it's probably fine but still don't hardcode this
+
       - name: Build
         run: dotnet build --no-restore -c Release
 

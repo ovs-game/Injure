@@ -4,7 +4,7 @@ using Injure.Assets;
 
 namespace Injure.Tests.Assets;
 
-public class AssetStoreDependencyTests {
+public sealed class AssetStoreDependencyTests {
 	private const string ownerID = "test";
 
 	[Fact]

@@ -7,7 +7,7 @@ using Injure.Assets;
 
 namespace Injure.Tests.Assets;
 
-public class AssetStoreThreadContextTests {
+public sealed class AssetStoreThreadContextTests {
 	private const string ownerID = "test";
 
 	[Fact]

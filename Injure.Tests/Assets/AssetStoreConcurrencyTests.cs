@@ -9,7 +9,7 @@ using Injure.Assets;
 
 namespace Injure.Tests.Assets;
 
-public class AssetStoreConcurrencyTests {
+public sealed class AssetStoreConcurrencyTests {
 	private const string ownerID = "test";
 
 	[Fact]

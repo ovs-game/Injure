@@ -16,6 +16,7 @@
 	<ItemGroup>
 		<ProjectReference Include="../Injure.Native/Injure.Native.csproj" />
 		<ProjectReference Include="../Injure.SourceGen/Injure.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+		<InternalsVisibleTo Include="Injure.Tests" />
 	</ItemGroup>
 
 	<ItemGroup>

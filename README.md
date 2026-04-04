@@ -14,7 +14,7 @@ TODO:
 
 - [Idk when but this should be done] stop having the todo here and use github issues
 - [active] the text renderer
-  - [active] write tests for like everything that can be automatically tested
+  - [active] write tests for like everything that can be automatically tested, this is also going to involve somehow being able to do things that need `WebGPURenderer` without actually pulling a renderer
   - way to scale/etc text post-make
   - more ways to tweak the layout
     - alignment, at least basic left/center/right

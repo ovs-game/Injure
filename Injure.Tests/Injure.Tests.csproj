@@ -18,5 +18,7 @@
 
 	<ItemGroup>
 		<Using Include="Xunit" />
+		<AssemblyMetadata Include="ProjectRoot" Value="$(MSBuildProjectDirectory)" />
+		<AssemblyMetadata Include="RepoRoot" Value="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildProjectDirectory), 'Injure.slnx'))" />
 	</ItemGroup>
 </Project>

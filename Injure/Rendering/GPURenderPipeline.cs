@@ -30,5 +30,6 @@ public readonly record struct GPURenderPipelineCreateParams(
 	CullMode CullMode,
 	TextureFormat ColorTargetFormat,
 	BlendState? Blend = null,
+	ColorWriteMask ColorWriteMask = ColorWriteMask.All,
 	DepthStencilState? DepthStencil = null
 );

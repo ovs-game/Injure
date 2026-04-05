@@ -32,7 +32,8 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 	public GPUPipelineLayout PipelineLayout { get { ObjectDisposedException.ThrowIf(disposed, this); return _pipelineLayout; } }
 	public GPURenderPipeline Pipeline { get { ObjectDisposedException.ThrowIf(disposed, this); return _pipeline; } }
 
-	public PrimitiveBatchSharedState(WebGPURenderer renderer, EngineResourceStore engineResources, TextureFormat colorTargetFormat) {
+	public PrimitiveBatchSharedState(WebGPURenderer renderer, EngineResourceStore engineResources, BlendState? blend,
+		ColorWriteMask colorWriteMask, TextureFormat colorTargetFormat) {
 		ColorTargetFormat = colorTargetFormat;
 		_shader = renderer.CreateShaderWGSL(engineResources.GetText(BuiltinShaders.Primitive2D.ResourceID));
 		_localsBindGroupLayout = renderer.CreateSimpleBufferBindGroupLayout(ShaderStage.Vertex, (ulong)PrimitiveBatchLocalsUniform.Size);
@@ -62,7 +63,8 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 			FrontFace: FrontFace.Ccw,
 			CullMode: CullMode.None,
 			ColorTargetFormat: colorTargetFormat,
-			Blend: BlendStates.Alpha
+			Blend: blend,
+			ColorWriteMask: colorWriteMask
 		));
 	}
 

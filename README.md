@@ -44,9 +44,8 @@ TODO:
 - [priority] clocks, clock filtering, etc.
 - [priority] more tests, like a Lot more
 - `.tex.json` should be the primary way to load textures, add more stuff there
-- blend state params on canvas
+- streaming textures and readback
 - replace `InvalidOperationException`s in `Core/` and `SDL/` with a proper `SDLException` and the ones in `Timing/` with uhh idk something
-- think about whether we need streaming textures / readback
 - think about whether we need a roslyn analyzer
 - figure out how we're gonna handle `AssetRef`s for sounds since unlike `Texture2D` they carry MA state
 - mouse input api, it doesn't really need to be hi res since it's just for ui stuff

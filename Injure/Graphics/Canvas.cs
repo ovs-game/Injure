@@ -149,6 +149,55 @@ public readonly struct CanvasScissor : IEquatable<CanvasScissor> {
 	public static bool operator !=(CanvasScissor left, CanvasScissor right) => !left.Equals(right);
 }
 
+public readonly struct CanvasOutputState : IEquatable<CanvasOutputState> {
+	public required BlendState? Blend { get; init; }
+	public required ColorWriteMask WriteMask { get; init; }
+
+	private static bool eq(BlendState? left, BlendState? right) {
+		if (left is BlendState a && right is BlendState b) {
+			return a.Alpha.Operation == b.Alpha.Operation &&
+				a.Alpha.SrcFactor == b.Alpha.SrcFactor &&
+				a.Alpha.DstFactor == b.Alpha.DstFactor &&
+				a.Color.Operation == b.Color.Operation &&
+				a.Color.SrcFactor == b.Color.SrcFactor &&
+				a.Color.DstFactor == b.Color.DstFactor;
+		} else {
+			return (left is null) == (right is null);
+		}
+	}
+	private static int hash(BlendState? blendState) {
+		if (blendState is not BlendState s)
+			return 0;
+		return HashCode.Combine(
+			(int)s.Alpha.Operation, (int)s.Alpha.SrcFactor, (int)s.Alpha.DstFactor,
+			(int)s.Color.Operation, (int)s.Color.SrcFactor, (int)s.Color.DstFactor
+		);
+	}
+
+	public bool Equals(CanvasOutputState other) => eq(Blend, other.Blend) && WriteMask == other.WriteMask;
+	public override bool Equals(object? obj) => obj is CanvasOutputState other && Equals(other);
+	public override int GetHashCode() => HashCode.Combine(hash(Blend), (int)WriteMask);
+	public static bool operator ==(CanvasOutputState left, CanvasOutputState right) => left.Equals(right);
+	public static bool operator !=(CanvasOutputState left, CanvasOutputState right) => !left.Equals(right);
+}
+
+public static class CanvasOutputStates {
+	public static readonly CanvasOutputState Opaque = new CanvasOutputState {
+		Blend = null,
+		WriteMask = ColorWriteMask.All
+	};
+
+	public static readonly CanvasOutputState Alpha = new CanvasOutputState {
+		Blend = BlendStates.Alpha,
+		WriteMask = ColorWriteMask.All
+	};
+
+	public static readonly CanvasOutputState PremultipliedAlpha = new CanvasOutputState {
+		Blend = BlendStates.PremultipliedAlpha,
+		WriteMask = ColorWriteMask.All
+	};
+}
+
 /// <summary>
 /// Describes how <see cref="Canvas"/> should render textures.
 /// </summary>
@@ -260,6 +309,7 @@ public readonly record struct CanvasParams(
 
 	// batch-affecting
 	Matrix3x2 Transform,
+	CanvasOutputState OutputState,
 	CanvasMaterial Material,
 	CanvasSubmitMode SubmitMode = CanvasSubmitMode.SwapAndFlush
 );
@@ -280,6 +330,7 @@ public readonly record struct CanvasParamsOverride(
 
 	// batch-affecting
 	Matrix3x2? Transform = null,
+	CanvasOutputState? OutputState = null,
 	CanvasMaterial? Material = null,
 	CanvasSubmitMode? SubmitMode = null
 );
@@ -298,26 +349,35 @@ public readonly record struct CanvasParamsOverride(
 /// Batch state is stored per format as pipelines are color-target-format-specific.
 /// </remarks>
 public sealed class CanvasSharedResources(WebGPURenderer renderer, EngineResourceStore engineResources) : IDisposable {
+	public readonly record struct PrimBatchKey(
+		BlendState? BlendState,
+		ColorWriteMask ColorWriteMask,
+		TextureFormat ColorTargetFormat
+	);
+
 	public readonly record struct TexBatchKey(
+		BlendState? BlendState,
+		ColorWriteMask ColorWriteMask,
 		TextureInterpretation TextureInterpretation,
 		TextureFormat ColorTargetFormat
 	);
 
 	private readonly WebGPURenderer renderer = renderer;
 	private readonly EngineResourceStore engineResources = engineResources;
-	private readonly Dictionary<TextureFormat, PrimitiveBatchSharedState> primState = new Dictionary<TextureFormat, PrimitiveBatchSharedState>();
+	private readonly Dictionary<PrimBatchKey, PrimitiveBatchSharedState> primState = new Dictionary<PrimBatchKey, PrimitiveBatchSharedState>();
 	private readonly Dictionary<TexBatchKey, TexturedBatchSharedState> texState = new Dictionary<TexBatchKey, TexturedBatchSharedState>();
 	private bool disposed = false;
 
 	/// <summary>
-	/// Gets or lazy-creates primitive batch state for the given color target format.
+	/// Gets or lazy-creates primitive batch state for the given key.
 	/// </summary>
-	public PrimitiveBatchSharedState GetPrimitiveBatchSharedState(TextureFormat colorTargetFormat) {
+	public PrimitiveBatchSharedState GetPrimitiveBatchSharedState(PrimBatchKey key) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 
-		if (!primState.TryGetValue(colorTargetFormat, out PrimitiveBatchSharedState? r)) {
-			r = new PrimitiveBatchSharedState(renderer, engineResources, colorTargetFormat);
-			primState.Add(colorTargetFormat, r);
+		if (!primState.TryGetValue(key, out PrimitiveBatchSharedState? r)) {
+			r = new PrimitiveBatchSharedState(renderer, engineResources,
+				key.BlendState, key.ColorWriteMask, key.ColorTargetFormat);
+			primState.Add(key, r);
 		}
 		return r;
 	}
@@ -329,7 +389,8 @@ public sealed class CanvasSharedResources(WebGPURenderer renderer, EngineResourc
 		ObjectDisposedException.ThrowIf(disposed, this);
 
 		if (!texState.TryGetValue(key, out TexturedBatchSharedState? r)) {
-			r = new TexturedBatchSharedState(renderer, engineResources, key.TextureInterpretation, key.ColorTargetFormat);
+			r = new TexturedBatchSharedState(renderer, engineResources,
+				key.BlendState, key.ColorWriteMask, key.TextureInterpretation, key.ColorTargetFormat);
 			texState.Add(key, r);
 		}
 		return r;
@@ -973,9 +1034,10 @@ public sealed class Canvas : IDisposable {
 		ColorAttachmentOps? ColorAttachmentOps = null,
 		CanvasScissor? Scissor = null,
 		Matrix3x2? Transform = null,
+		CanvasOutputState? OutputState = null,
 		CanvasMaterial? Material = null,
 		CanvasSubmitMode? SubmitMode = null
-	) => PushParams(new CanvasParamsOverride(Target, ColorAttachmentOps, Scissor, Transform, Material, SubmitMode));
+	) => PushParams(new CanvasParamsOverride(Target, ColorAttachmentOps, Scissor, Transform, OutputState, Material, SubmitMode));
 
 	/// <summary>
 	/// Pushes a temporary parameter override onto the canvas parameter stack, or
@@ -988,7 +1050,7 @@ public sealed class Canvas : IDisposable {
 	/// <returns>
 	/// An <see cref="IDisposable"/> that restores the previous parameter state
 	/// when disposed. If <paramref name="ov"/> is <see langword="null"/>, returns
-	/// a dummy object that does nothing instead.
+	/// a dummy that does nothing when disposed instead.
 	/// </returns>
 	/// <remarks>
 	/// This is a convenience method to allow APIs to return <c>CanvasParamsOverride?</c>,
@@ -1017,6 +1079,7 @@ public sealed class Canvas : IDisposable {
 			Target: ov.Target ?? curr.Target,
 			ColorAttachmentOps: ov.ColorAttachmentOps ?? curr.ColorAttachmentOps,
 			Scissor: mergeScissor(curr.Scissor, ov.Scissor),
+			OutputState: ov.OutputState ?? curr.OutputState,
 			Material: ov.Material ?? curr.Material,
 			SubmitMode: ov.SubmitMode ?? curr.SubmitMode
 		);
@@ -1030,9 +1093,10 @@ public sealed class Canvas : IDisposable {
 		bool newscissor = from.Scissor != to.Scissor;
 
 		bool newtransform = from.Transform != to.Transform;
+		bool newoutstate = from.OutputState != to.OutputState;
 		bool newmaterial = from.Material != to.Material;
 		bool newsubmit = from.SubmitMode != to.SubmitMode;
-		bool affectsbatch = newtransform || newmaterial || newsubmit;
+		bool affectsbatch = newtransform || newoutstate || newmaterial || newsubmit;
 
 		if (pass is null)
 			throw new InternalStateException("was expecting an open render pass to be there for params transition");
@@ -1127,8 +1191,13 @@ public sealed class Canvas : IDisposable {
 	private PrimitiveBatch createPrimBatch() {
 		if (pass is null)
 			throw new InternalStateException("tried to create a PrimitiveBatch but there's no active render pass");
-		return new PrimitiveBatch(renderer, frame, pass, shared.GetPrimitiveBatchSharedState(currentColorFormat),
-			new PrimitiveBatchParams(Transform: CurrentParams.Transform));
+		return new PrimitiveBatch(renderer, frame, pass,
+			shared.GetPrimitiveBatchSharedState(new CanvasSharedResources.PrimBatchKey(
+				CurrentParams.OutputState.Blend, CurrentParams.OutputState.WriteMask,
+				currentColorFormat
+			)),
+			new PrimitiveBatchParams(Transform: CurrentParams.Transform)
+		);
 	}
 
 	[MemberNotNull(nameof(primbatch))]
@@ -1154,7 +1223,10 @@ public sealed class Canvas : IDisposable {
 		if (pass is null)
 			throw new InternalStateException("tried to create a TexturedBatch but there's no active render pass");
 		return new TexturedBatch(renderer, frame, pass,
-			shared.GetTexturedBatchSharedState(new CanvasSharedResources.TexBatchKey(CurrentParams.Material.TextureInterpretation, currentColorFormat)),
+			shared.GetTexturedBatchSharedState(new CanvasSharedResources.TexBatchKey(
+				CurrentParams.OutputState.Blend, CurrentParams.OutputState.WriteMask,
+				CurrentParams.Material.TextureInterpretation, currentColorFormat
+			)),
 			new TexturedBatchParams(Transform: CurrentParams.Transform, SdfParams: CurrentParams.Material.SdfParams));
 	}
 

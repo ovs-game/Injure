@@ -77,7 +77,8 @@ public sealed class TexturedBatchSharedState : IDisposable {
 	public GPUPipelineLayout PipelineLayout { get { ObjectDisposedException.ThrowIf(disposed, this); return _pipelineLayout; } }
 	public GPURenderPipeline Pipeline { get { ObjectDisposedException.ThrowIf(disposed, this); return _pipeline; } }
 
-	public TexturedBatchSharedState(WebGPURenderer renderer, EngineResourceStore engineResources, TextureInterpretation interp, TextureFormat colorTargetFormat) {
+	public TexturedBatchSharedState(WebGPURenderer renderer, EngineResourceStore engineResources, BlendState? blend,
+		ColorWriteMask colorWriteMask, TextureInterpretation interp, TextureFormat colorTargetFormat) {
 		TextureInterpretation = interp;
 		ColorTargetFormat = colorTargetFormat;
 		BuiltinShaderInfo shaderInfo = interp switch {
@@ -123,7 +124,8 @@ public sealed class TexturedBatchSharedState : IDisposable {
 			FrontFace: FrontFace.Ccw,
 			CullMode: CullMode.None,
 			ColorTargetFormat: colorTargetFormat,
-			Blend: BlendStates.Alpha
+			Blend: blend,
+			ColorWriteMask: colorWriteMask
 		));
 	}
 

@@ -27,6 +27,7 @@ public static unsafe class Runner {
 		ColorAttachmentOps: ColorAttachmentOps.Clear(Color32.Black),
 		Scissor: CanvasScissor.None,
 		Transform: Matrix3x2.Identity,
+		OutputState: CanvasOutputStates.Alpha,
 		Material: CanvasMaterials.Color
 	);
 

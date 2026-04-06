@@ -9,7 +9,7 @@ using Injure.Rendering;
 namespace Injure.Graphics;
 
 public sealed class RenderTarget2D : IDisposable {
-	private readonly WebGPURenderer renderer;
+	private readonly WebGPUDevice device;
 	private int disposed = 0;
 
 	public GPURenderTarget Target {
@@ -27,7 +27,7 @@ public sealed class RenderTarget2D : IDisposable {
 	public GPUBindGroupRef BindGroup {
 		get {
 			ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
-			colorBindGroup ??= renderer.CreateTextureBindGroup(Target, Sampler);
+			colorBindGroup ??= device.CreateTextureBindGroup(Target, Sampler);
 			return colorBindGroup.AsRef();
 		}
 	}
@@ -37,27 +37,27 @@ public sealed class RenderTarget2D : IDisposable {
 	public uint Height => Target.Height;
 	public TextureFormat Format => Target.Format;
 
-	public RenderTarget2D(WebGPURenderer renderer, GPURenderTarget target, GPUSampler sampler) {
-		this.renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
+	public RenderTarget2D(WebGPUDevice device, GPURenderTarget target, GPUSampler sampler) {
+		this.device = device ?? throw new ArgumentNullException(nameof(device));
 		Target = target ?? throw new ArgumentNullException(nameof(target));
 		Sampler = sampler ?? throw new ArgumentNullException(nameof(sampler));
 	}
 
-	// use `default` since if renderer is null it'll throw anyways before even getting to that arg
-	public RenderTarget2D(WebGPURenderer renderer, uint width, uint height) : this(renderer, width, height, renderer?.BackbufferFormat ?? default) {
+	// "i don't care about the format" convenience
+	public RenderTarget2D(WebGPUDevice device, uint width, uint height) : this(device, width, height, TextureFormat.Rgba8Unorm) {
 	}
 
-	public RenderTarget2D(WebGPURenderer renderer, uint width, uint height, TextureFormat format) {
-		this.renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
+	public RenderTarget2D(WebGPUDevice device, uint width, uint height, TextureFormat format) {
+		this.device = device ?? throw new ArgumentNullException(nameof(device));
 		ArgumentOutOfRangeException.ThrowIfZero(width);
 		ArgumentOutOfRangeException.ThrowIfZero(height);
 
-		Target = renderer.CreateRenderTarget(new GPURenderTargetCreateParams(
+		Target = device.CreateRenderTarget(new GPURenderTargetCreateParams(
 			Width: width,
 			Height: height,
 			Format: format
 		));
-		Sampler = renderer.CreateSampler(SamplerStates.NearestClamp);
+		Sampler = device.CreateSampler(SamplerStates.NearestClamp);
 	}
 
 	public void Dispose() {

@@ -1,5 +1,7 @@
 # rendering/overview.md
 
+# **This is currently really of out of date. I'll fix this soon.**
+
 The drawing layer provides a 2D-oriented abstraction over WebGPU, and is split into two namespaces:
 - `Graphics` - higher-level abstractions such as `Canvas`, draw batches, `Texture2D`, `RenderTarget2D`, etc.
 - `Rendering` - low-level rendering API wrapping over WebGPU, resources, pass/frame, etc.

@@ -10,8 +10,8 @@ namespace Injure.Rendering;
 /// <summary>
 /// Low-level owning wrapper around a GPU buffer.
 /// </summary>
-public sealed unsafe class GPUBuffer(WebGPURenderer renderer, Buffer *buffer, ulong size, BufferUsage usage) : IDisposable {
-	private readonly WebGPURenderer renderer = renderer;
+public sealed unsafe class GPUBuffer(WebGPUDevice device, Buffer *buffer, ulong size, BufferUsage usage) : IDisposable {
+	private readonly WebGPUDevice device = device;
 
 	internal Buffer *Buffer { get; private set; } = buffer;
 
@@ -38,7 +38,7 @@ public sealed unsafe class GPUBuffer(WebGPURenderer renderer, Buffer *buffer, ul
 	/// </summary>
 	public void Dispose() {
 		if (Buffer is not null)
-			renderer.webgpu.BufferRelease(Buffer);
+			device.API.BufferRelease(Buffer);
 		Buffer = null;
 	}
 }

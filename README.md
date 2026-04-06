@@ -12,8 +12,11 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 ----------
 TODO:
 
+- [active] FIX THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
+- [next-up] fix the `Rendering/` doc comments and write the missing ones
+- [next-up] dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
 - [Idk when but this should be done] stop having the todo here and use github issues
-- [active] the text renderer
+- [next-up] the text renderer
   - [active] write tests for like everything that can be automatically tested, this is also going to involve somehow being able to do things that need `WebGPURenderer` without actually pulling a renderer
   - way to scale/etc text post-make
   - more ways to tweak the layout
@@ -36,7 +39,6 @@ TODO:
     - SDF/MSDF rasterization
     - text effects, outlines, etc.
     - per-glyph effects
-- [next-up] dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
 - [next-up] fix paragraphs in doc comments (i found out it doesn't work like markdown and you need explicit `<para>`)
 - [next-up] asset file watchers (FOR REAL THIS TIME (
 - [priority] windows builds

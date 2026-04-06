@@ -54,7 +54,7 @@ public sealed unsafe class TextSystem : IDisposable {
 
 	internal FT_LibraryRec_ *FtLibrary { get { ObjectDisposedException.ThrowIf(disposed, this); return ftLibrary; } }
 
-	internal TextSystem(WebGPURenderer renderer, ITextItemizer? itemizer = null, TextCacheOptions? cacheOptions = null) {
+	internal TextSystem(WebGPUDevice gpuDevice, ITextItemizer? itemizer = null, TextCacheOptions? cacheOptions = null) {
 		fixed (FT_LibraryRec_ **l = &ftLibrary)
 			FTException.Check(FT_Init_FreeType(l));
 		this.itemizer = itemizer ?? new DefaultTextItemizer();
@@ -63,7 +63,7 @@ public sealed unsafe class TextSystem : IDisposable {
 		fallbackProbeCache = new FallbackProbeCache(this, this.cacheOptions.MaxFallbackProbeEntries, this.cacheOptions.MaxFallbackProbeEstimatedCost);
 		fallbackResolver = new FallbackResolver(shapeCache, fallbackProbeCache);
 		atlas = new GlyphAtlas(
-			renderer,
+			gpuDevice,
 			this,
 			this.cacheOptions.GlyphAtlasPageWidth,
 			this.cacheOptions.GlyphAtlasPageHeight,

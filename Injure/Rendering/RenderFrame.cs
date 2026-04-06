@@ -7,27 +7,39 @@ using Silk.NET.WebGPU;
 namespace Injure.Rendering;
 
 /// <summary>
+/// <para>
 /// Frame-local command recording scope.
-///
-/// Owns the command encoder and acquired backbuffer surface resources for one
-/// render frame, and allows opening render passes to either the backbuffer or
+/// </para>
+/// <para>
+/// Owns the command encoder and acquired primary-target surface resources for one
+/// render frame, and allows opening render passes to either the primary target or
 /// offscreen render targets.
+/// </para>
 /// </summary>
 /// <remarks>
+/// <para>
 /// Intended to be used as a scope via <c>using</c>.
-///
+/// </para>
+/// <para>
 /// Only one <see cref="RenderPass"/> may be active at a time. Temporary
 /// resources that must survive up to the submission can be registered with
 /// <see cref="DisposeAfterSubmit(IDisposable)"/>.
+/// </para>
 /// </remarks>
-public sealed unsafe class RenderFrame(WebGPURenderer renderer, SurfaceTexture surfaceTex, TextureView *backbufferView, CommandEncoder *encoder) : IDisposable {
-	private readonly WebGPURenderer renderer = renderer;
-	private readonly SurfaceTexture surfaceTex = surfaceTex;
-	private readonly TextureView *backbufferView = backbufferView;
+public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture primaryTex, TextureView *primaryView, CommandEncoder *encoder,
+	Action present, uint primaryW, uint primaryH, TextureFormat primaryFormat) : IDisposable {
+	private readonly WebGPUDevice device = device;
+	private readonly SurfaceTexture primaryTex = primaryTex;
+	private readonly TextureView *primaryView = primaryView;
 	private readonly CommandEncoder *encoder = encoder;
+	private readonly Action present = present;
 	private readonly List<IDisposable> deferred = new List<IDisposable>();
 	private bool activepass = false;
 	private bool done = false;
+
+	public uint PrimaryWidth { get; } = primaryW;
+	public uint PrimaryHeight { get; } = primaryH;
+	public TextureFormat PrimaryFormat { get; } = primaryFormat;
 
 	private void onPassFinished() {
 		if (!activepass)
@@ -74,13 +86,13 @@ public sealed unsafe class RenderFrame(WebGPURenderer renderer, SurfaceTexture s
 			throw new ArgumentException("depthStencilOps were provided, but the render target has no depth/stencil attachment");
 		}
 
-		RenderPassEncoder *passEnc = WebGPUException.Check(renderer.webgpu.CommandEncoderBeginRenderPass(enc, &desc));
+		RenderPassEncoder *passEnc = WebGPUException.Check(device.API.CommandEncoderBeginRenderPass(enc, &desc));
 		activepass = true;
-		return new RenderPass(renderer, passEnc, onPassFinished);
+		return new RenderPass(device, passEnc, onPassFinished);
 	}
 
 	/// <summary>
-	/// Opens a render pass targeting the backbuffer view acquired for this frame.
+	/// Opens a render pass targeting the primary view acquired for this frame.
 	/// </summary>
 	/// <param name="colorOps">Color attachment load/store operations.</param>
 	/// <remarks>
@@ -91,8 +103,8 @@ public sealed unsafe class RenderFrame(WebGPURenderer renderer, SurfaceTexture s
 	/// Thrown if the frame has already been submitted/disposed, or if another
 	/// render pass is already active.
 	/// </exception>
-	public RenderPass BeginBackbufferPass(in ColorAttachmentOps colorOps) {
-		return beginPass(encoder, backbufferView, null, colorOps, null);
+	public RenderPass BeginPrimaryPass(in ColorAttachmentOps colorOps) {
+		return beginPass(encoder, primaryView, null, colorOps, null);
 	}
 
 	/// <summary>
@@ -150,7 +162,7 @@ public sealed unsafe class RenderFrame(WebGPURenderer renderer, SurfaceTexture s
 
 	/// <summary>
 	/// Finishes command recording, submits the frame, and presents the currently
-	/// acquired backbuffer surface texture.
+	/// acquired primary target texture.
 	/// </summary>
 	/// <remarks>
 	/// Any disposables registered with <see cref="DisposeAfterSubmit(IDisposable)"/>
@@ -167,15 +179,15 @@ public sealed unsafe class RenderFrame(WebGPURenderer renderer, SurfaceTexture s
 			throw new InvalidOperationException("frame still has an unclosed render pass");
 
 		CommandBufferDescriptor desc;
-		CommandBuffer *cmdbuf = WebGPUException.Check(renderer.webgpu.CommandEncoderFinish(encoder, &desc));
+		CommandBuffer *cmdbuf = WebGPUException.Check(device.API.CommandEncoderFinish(encoder, &desc));
 
-		renderer.Submit(cmdbuf);
-		renderer.Present();
+		device.Submit(cmdbuf);
+		present();
 
-		renderer.webgpu.CommandBufferRelease(cmdbuf);
-		renderer.webgpu.CommandEncoderRelease(encoder);
-		renderer.webgpu.TextureViewRelease(backbufferView);
-		renderer.webgpu.TextureRelease(surfaceTex.Texture);
+		device.API.CommandBufferRelease(cmdbuf);
+		device.API.CommandEncoderRelease(encoder);
+		device.API.TextureViewRelease(primaryView);
+		device.API.TextureRelease(primaryTex.Texture);
 		foreach (IDisposable disp in deferred)
 			disp.Dispose();
 		deferred.Clear();
@@ -204,9 +216,9 @@ public sealed unsafe class RenderFrame(WebGPURenderer renderer, SurfaceTexture s
 			throw new InvalidOperationException("frame still has an unclosed render pass - this could be automatically cleaned up, but if it happened you probably have a bug");
 
 		done = true;
-		renderer.webgpu.CommandEncoderRelease(encoder);
-		renderer.webgpu.TextureViewRelease(backbufferView);
-		renderer.webgpu.TextureRelease(surfaceTex.Texture);
+		device.API.CommandEncoderRelease(encoder);
+		device.API.TextureViewRelease(primaryView);
+		device.API.TextureRelease(primaryTex.Texture);
 		foreach (IDisposable disp in deferred)
 			disp.Dispose();
 		deferred.Clear();

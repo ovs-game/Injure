@@ -5,15 +5,15 @@ using Silk.NET.WebGPU;
 
 namespace Injure.Rendering;
 
-public sealed unsafe class GPUSampler(WebGPURenderer renderer, Sampler *sampler) : IDisposable {
-	private readonly WebGPURenderer renderer = renderer;
+public sealed unsafe class GPUSampler(WebGPUDevice device, Sampler *sampler) : IDisposable {
+	private readonly WebGPUDevice device = device;
 
 	internal Sampler *Sampler { get; private set; } = sampler;
 	public Sampler *DangerousGetPtr() => Sampler;
 
 	public void Dispose() {
 		if (Sampler is not null)
-			renderer.webgpu.SamplerRelease(Sampler);
+			device.API.SamplerRelease(Sampler);
 		Sampler = null;
 	}
 }

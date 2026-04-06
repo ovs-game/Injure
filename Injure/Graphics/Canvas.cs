@@ -16,35 +16,29 @@ namespace Injure.Graphics;
 /// Identifies the current draw target for a <see cref="Canvas"/>.
 /// </summary>
 /// <remarks>
-/// A target is either the backbuffer sentinel <see cref="Backbuffer"/> or an
+/// A target is either the sentinel <see cref="Primary"/> or an
 /// offscreen <see cref="RenderTarget2D"/>. <see cref="RenderTarget2D"/> has an
 /// implicit cast to <see cref="CanvasTarget"/> for convenience.
 /// </remarks>
 public readonly struct CanvasTarget : IEquatable<CanvasTarget> {
 	/// <summary>
-	/// Sentinel value representing the backbuffer.
+	/// Sentinel value representing the primary target.
 	/// </summary>
-	public static readonly CanvasTarget Backbuffer = new CanvasTarget(true, null);
+	public static readonly CanvasTarget Primary = default;
 
 	/// <summary>
-	/// Whether this target represents the backbuffer.
+	/// Whether this target represents the primary target.
 	/// </summary>
 	[MemberNotNullWhen(false, nameof(rtBacking), nameof(RenderTarget))]
-	public bool IsBackbuffer { get; }
+	public bool IsPrimary => rtBacking is null;
 
 	/// <summary>
 	/// Gets the <see cref="RenderTarget2D"/> wrapped by this canvas target.
 	/// </summary>
 	/// <exception cref="InvalidOperationException">
-	/// Thrown if this target represents the backbuffer.
+	/// Thrown if this target represents the primary target.
 	/// </exception>
-	public readonly RenderTarget2D RenderTarget {
-		get {
-			if (IsBackbuffer)
-				throw new InvalidOperationException("backbuffer has no RenderTarget2D");
-			return rtBacking;
-		}
-	}
+	public readonly RenderTarget2D RenderTarget => rtBacking ?? throw new InvalidOperationException("primary target has no RenderTarget2D");
 	private readonly RenderTarget2D? rtBacking;
 
 	/// <summary>
@@ -52,26 +46,16 @@ public readonly struct CanvasTarget : IEquatable<CanvasTarget> {
 	/// </summary>
 	/// <param name="renderTarget">Target to draw into.</param>
 	public CanvasTarget(RenderTarget2D renderTarget) {
-		IsBackbuffer = false;
+		ArgumentNullException.ThrowIfNull(renderTarget);
 		rtBacking = renderTarget;
 	}
 
-	private CanvasTarget(bool isBackbuffer, RenderTarget2D? renderTarget) {
-		IsBackbuffer = isBackbuffer;
-		if (isBackbuffer ^ renderTarget is null)
-			throw new InternalStateException("tried to create invalid CanvasTarget state");
-		rtBacking = renderTarget;
-	}
-
-	public bool Equals(CanvasTarget other) => IsBackbuffer == other.IsBackbuffer && ReferenceEquals(rtBacking, other.rtBacking);
+	public bool Equals(CanvasTarget other) => ReferenceEquals(rtBacking, other.rtBacking);
 	public override bool Equals(object? obj) => obj is CanvasTarget other && Equals(other);
-	public override int GetHashCode() => HashCode.Combine(IsBackbuffer, rtBacking);
+	public override int GetHashCode() => rtBacking?.GetHashCode() ?? 0;
 	public static bool operator ==(CanvasTarget left, CanvasTarget right) => left.Equals(right);
 	public static bool operator !=(CanvasTarget left, CanvasTarget right) => !left.Equals(right);
 
-	/// <summary>
-	/// Implicitly converts a <see cref="RenderTarget2D"/> to a <see cref="CanvasTarget"/>.
-	/// </summary>
 	public static implicit operator CanvasTarget(RenderTarget2D target) => new CanvasTarget(target);
 }
 
@@ -348,7 +332,7 @@ public readonly record struct CanvasParamsOverride(
 ///
 /// Batch state is stored per format as pipelines are color-target-format-specific.
 /// </remarks>
-public sealed class CanvasSharedResources(WebGPURenderer renderer, EngineResourceStore engineResources) : IDisposable {
+public sealed class CanvasSharedResources(WebGPUDevice device, EngineResourceStore engineResources) : IDisposable {
 	public readonly record struct PrimBatchKey(
 		BlendState? BlendState,
 		ColorWriteMask ColorWriteMask,
@@ -362,7 +346,7 @@ public sealed class CanvasSharedResources(WebGPURenderer renderer, EngineResourc
 		TextureFormat ColorTargetFormat
 	);
 
-	private readonly WebGPURenderer renderer = renderer;
+	private readonly WebGPUDevice device = device;
 	private readonly EngineResourceStore engineResources = engineResources;
 	private readonly Dictionary<PrimBatchKey, PrimitiveBatchSharedState> primState = new Dictionary<PrimBatchKey, PrimitiveBatchSharedState>();
 	private readonly Dictionary<TexBatchKey, TexturedBatchSharedState> texState = new Dictionary<TexBatchKey, TexturedBatchSharedState>();
@@ -375,7 +359,7 @@ public sealed class CanvasSharedResources(WebGPURenderer renderer, EngineResourc
 		ObjectDisposedException.ThrowIf(disposed, this);
 
 		if (!primState.TryGetValue(key, out PrimitiveBatchSharedState? r)) {
-			r = new PrimitiveBatchSharedState(renderer, engineResources,
+			r = new PrimitiveBatchSharedState(device, engineResources,
 				key.BlendState, key.ColorWriteMask, key.ColorTargetFormat);
 			primState.Add(key, r);
 		}
@@ -389,7 +373,7 @@ public sealed class CanvasSharedResources(WebGPURenderer renderer, EngineResourc
 		ObjectDisposedException.ThrowIf(disposed, this);
 
 		if (!texState.TryGetValue(key, out TexturedBatchSharedState? r)) {
-			r = new TexturedBatchSharedState(renderer, engineResources,
+			r = new TexturedBatchSharedState(device, engineResources,
 				key.BlendState, key.ColorWriteMask, key.TextureInterpretation, key.ColorTargetFormat);
 			texState.Add(key, r);
 		}
@@ -455,7 +439,8 @@ public sealed class Canvas : IDisposable {
 
 	// ==========================================================================
 	// internal objects / properties
-	private readonly WebGPURenderer renderer;
+	private readonly WebGPUDevice device;
+	private readonly ViewGlobals globals;
 	private readonly RenderFrame frame;
 	private readonly CanvasSharedResources shared;
 	private readonly Stack<CanvasParams> @params;
@@ -470,7 +455,7 @@ public sealed class Canvas : IDisposable {
 	private TextureFormat currentColorFormat {
 		get {
 			CanvasTarget t = CurrentParams.Target;
-			return t.IsBackbuffer ? renderer.BackbufferFormat : t.RenderTarget.Format;
+			return t.IsPrimary ? frame.PrimaryFormat : t.RenderTarget.Format;
 		}
 	}
 	
@@ -485,31 +470,36 @@ public sealed class Canvas : IDisposable {
 	/// <summary>
 	/// Gets the drawable width in pixels of the active target.
 	/// </summary>
-	public uint CurrentWidth => CurrentParams.Target.IsBackbuffer ? renderer.Width : CurrentParams.Target.RenderTarget.Width;
+	public uint CurrentWidth => CurrentParams.Target.IsPrimary ? frame.PrimaryWidth : CurrentParams.Target.RenderTarget.Width;
 
 	/// <summary>
 	/// Gets the drawable height in pixels of the active target.
 	/// </summary>
-	public uint CurrentHeight => CurrentParams.Target.IsBackbuffer ? renderer.Height : CurrentParams.Target.RenderTarget.Height;
+	public uint CurrentHeight => CurrentParams.Target.IsPrimary ? frame.PrimaryHeight : CurrentParams.Target.RenderTarget.Height;
 
 	/// <summary>
 	/// Creates a canvas bound to the given frame and base parameters.
 	/// </summary>
-	/// <param name="renderer">Renderer used to create rendering objects.</param>
+	/// <param name="device">Device used to create rendering objects.</param>
+	/// <param name="globals">View globals to use.</param>
 	/// <param name="frame">Frame that receives all encoded work.</param>
 	/// <param name="shared">Shared batch state cache to use.</param>
 	/// <param name="baseParams">The base of the parameters stack.</param>
 	/// <remarks>
+	/// <para>
 	/// Immediately opens a render pass as dictated by <paramref name="baseParams"/>.
-	///
+	/// </para>
+	/// <para>
 	/// The base parameters cannot be popped off the stack.
+	/// </para>
 	/// </remarks>
 	/// <exception cref="ArgumentException">
-	/// Thrown if <paramref name="baseParams"/> contains a scissor of kind
-	/// <see cref="CanvasScissorKind.Intersect"/>.
+	/// Thrown if <paramref name="baseParams"/> is invalid or contains a scissor
+	/// of kind <see cref="CanvasScissorKind.Intersect"/>.
 	/// </exception>
-	public Canvas(WebGPURenderer renderer, RenderFrame frame, CanvasSharedResources shared, in CanvasParams baseParams) {
-		this.renderer = renderer;
+	public Canvas(WebGPUDevice device, ViewGlobals globals, RenderFrame frame, CanvasSharedResources shared, in CanvasParams baseParams) {
+		this.device = device;
+		this.globals = globals;
 		this.frame = frame;
 		this.shared = shared;
 		validate(baseParams);
@@ -794,7 +784,7 @@ public sealed class Canvas : IDisposable {
 	}
 
 	private void checkSelfDraw(in ResolvedTextureSource tex) {
-		if (CurrentParams.Target.IsBackbuffer)
+		if (CurrentParams.Target.IsPrimary)
 			return;
 		if (tex.RTAndSameColorTarget(CurrentParams.Target.RenderTarget))
 			throw new InvalidOperationException("attempt to draw a render target while it is the active canvas target (i.e draw it into itself)");
@@ -1152,8 +1142,8 @@ public sealed class Canvas : IDisposable {
 
 	private void applyScissor(RenderPass pass, in CanvasParams p) {
 		// XXX: yucky casts back and forth from int/uint
-		int w = (int)(p.Target.IsBackbuffer ? renderer.Width : p.Target.RenderTarget.Width);
-		int h = (int)(p.Target.IsBackbuffer ? renderer.Height : p.Target.RenderTarget.Height);
+		int w = (int)(p.Target.IsPrimary ? frame.PrimaryWidth : p.Target.RenderTarget.Width);
+		int h = (int)(p.Target.IsPrimary ? frame.PrimaryHeight : p.Target.RenderTarget.Height);
 		RectI full = new RectI(0, 0, w, h);
 		RectI effective = p.Scissor.Kind switch {
 			CanvasScissorKind.None => full,
@@ -1172,8 +1162,8 @@ public sealed class Canvas : IDisposable {
 			throw new InternalStateException("tried to open a render pass but there's already an active one");
 
 		// see above on indirection
-		pass = p.Target.IsBackbuffer ?
-			frame.BeginBackbufferPass(p.ColorAttachmentOps) :
+		pass = p.Target.IsPrimary ?
+			frame.BeginPrimaryPass(p.ColorAttachmentOps) :
 			frame.BeginRenderTargetPass(p.Target.RenderTarget.Target, p.ColorAttachmentOps);
 		applyScissor(pass, in p);
 	}
@@ -1191,7 +1181,7 @@ public sealed class Canvas : IDisposable {
 	private PrimitiveBatch createPrimBatch() {
 		if (pass is null)
 			throw new InternalStateException("tried to create a PrimitiveBatch but there's no active render pass");
-		return new PrimitiveBatch(renderer, frame, pass,
+		return new PrimitiveBatch(device, globals, frame, pass,
 			shared.GetPrimitiveBatchSharedState(new CanvasSharedResources.PrimBatchKey(
 				CurrentParams.OutputState.Blend, CurrentParams.OutputState.WriteMask,
 				currentColorFormat
@@ -1222,7 +1212,7 @@ public sealed class Canvas : IDisposable {
 	private TexturedBatch createTexBatch() {
 		if (pass is null)
 			throw new InternalStateException("tried to create a TexturedBatch but there's no active render pass");
-		return new TexturedBatch(renderer, frame, pass,
+		return new TexturedBatch(device, globals, frame, pass,
 			shared.GetTexturedBatchSharedState(new CanvasSharedResources.TexBatchKey(
 				CurrentParams.OutputState.Blend, CurrentParams.OutputState.WriteMask,
 				CurrentParams.Material.TextureInterpretation, currentColorFormat

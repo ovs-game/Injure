@@ -32,16 +32,16 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 	public GPUPipelineLayout PipelineLayout { get { ObjectDisposedException.ThrowIf(disposed, this); return _pipelineLayout; } }
 	public GPURenderPipeline Pipeline { get { ObjectDisposedException.ThrowIf(disposed, this); return _pipeline; } }
 
-	public PrimitiveBatchSharedState(WebGPURenderer renderer, EngineResourceStore engineResources, BlendState? blend,
+	public PrimitiveBatchSharedState(WebGPUDevice device, EngineResourceStore engineResources, BlendState? blend,
 		ColorWriteMask colorWriteMask, TextureFormat colorTargetFormat) {
 		ColorTargetFormat = colorTargetFormat;
-		_shader = renderer.CreateShaderWGSL(engineResources.GetText(BuiltinShaders.Primitive2D.ResourceID));
-		_localsBindGroupLayout = renderer.CreateSimpleBufferBindGroupLayout(ShaderStage.Vertex, (ulong)PrimitiveBatchLocalsUniform.Size);
-		_pipelineLayout = renderer.CreatePipelineLayout([
-			renderer.GlobalsUniformBindGroupLayout,
+		_shader = device.CreateShaderWGSL(engineResources.GetText(BuiltinShaders.Primitive2D.ResourceID));
+		_localsBindGroupLayout = device.CreateSimpleBufferBindGroupLayout(ShaderStage.Vertex, (ulong)PrimitiveBatchLocalsUniform.Size);
+		_pipelineLayout = device.CreatePipelineLayout([
+			device.GlobalsUniformBindGroupLayout,
 			_localsBindGroupLayout
 		]);
-		_pipeline = renderer.CreateRenderPipeline(PipelineLayout, new GPURenderPipelineCreateParams(
+		_pipeline = device.CreateRenderPipeline(PipelineLayout, new GPURenderPipelineCreateParams(
 			Shader: Shader,
 			VertShaderEntryPoint: BuiltinShaders.Primitive2D.VSEntry,
 			FragShaderEntryPoint: BuiltinShaders.Primitive2D.FSEntry,
@@ -85,7 +85,8 @@ public readonly record struct PrimitiveBatchParams(
 
 // policy: ccw winding for generated geometry, preserve existing order for user-passed geometry
 public sealed class PrimitiveBatch : IDisposable {
-	private readonly WebGPURenderer renderer;
+	private readonly WebGPUDevice device;
+	private readonly ViewGlobals globals;
 	private readonly RenderFrame frame;
 	private readonly RenderPass pass;
 	private readonly PrimitiveBatchSharedState shared;
@@ -103,23 +104,25 @@ public sealed class PrimitiveBatch : IDisposable {
 	private bool submitted = false;
 	private bool disposed = false;
 
-	public PrimitiveBatch(WebGPURenderer renderer, RenderFrame frame, RenderPass pass, PrimitiveBatchSharedState shared, in PrimitiveBatchParams @params, int initialVertCapacity = 256, int initialIndexCapacity = 512) {
-		this.renderer = renderer;
+	public PrimitiveBatch(WebGPUDevice device, ViewGlobals globals, RenderFrame frame, RenderPass pass,
+		PrimitiveBatchSharedState shared, in PrimitiveBatchParams @params, int initialVertCapacity = 256, int initialIndexCapacity = 512) {
+		this.device = device;
+		this.globals = globals;
 		this.frame = frame;
 		this.pass = pass;
 		this.shared = shared;
 
-		localsUniformBuffer = renderer.CreateBuffer((ulong)PrimitiveBatchLocalsUniform.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
+		localsUniformBuffer = device.CreateBuffer((ulong)PrimitiveBatchLocalsUniform.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
 		PrimitiveBatchLocalsUniform l = new PrimitiveBatchLocalsUniform {
 			Transform = MatrixUtil.To4x4(@params.Transform)
 		};
-		renderer.WriteToBuffer(localsUniformBuffer, 0, in l);
-		localsUniformBindGroup = renderer.CreateBufferBindGroup(shared.LocalsBindGroupLayout, 0, localsUniformBuffer, 0, (ulong)PrimitiveBatchLocalsUniform.Size);
+		device.WriteToBuffer(localsUniformBuffer, 0, in l);
+		localsUniformBindGroup = device.CreateBufferBindGroup(shared.LocalsBindGroupLayout, 0, localsUniformBuffer, 0, (ulong)PrimitiveBatchLocalsUniform.Size);
 
 		verts = new Vertex2DColor[initialVertCapacity];
 		idxs = new uint[initialIndexCapacity];
-		vbuffer = renderer.CreateBuffer((ulong)(initialVertCapacity * Vertex2DColor.Size), BufferUsage.Vertex | BufferUsage.CopyDst);
-		ibuffer = renderer.CreateBuffer((ulong)(initialIndexCapacity * sizeof(uint)), BufferUsage.Index | BufferUsage.CopyDst);
+		vbuffer = device.CreateBuffer((ulong)(initialVertCapacity * Vertex2DColor.Size), BufferUsage.Vertex | BufferUsage.CopyDst);
+		ibuffer = device.CreateBuffer((ulong)(initialIndexCapacity * sizeof(uint)), BufferUsage.Index | BufferUsage.CopyDst);
 	}
 
 	private void chk() {
@@ -133,13 +136,13 @@ public sealed class PrimitiveBatch : IDisposable {
 			int sz = Math.Max(vcount + needVerts, verts.Length * 2);
 			Array.Resize(ref verts, sz);
 			vbuffer.Dispose();
-			vbuffer = renderer.CreateBuffer((ulong)(sz * Vertex2DColor.Size), BufferUsage.Vertex | BufferUsage.CopyDst);
+			vbuffer = device.CreateBuffer((ulong)(sz * Vertex2DColor.Size), BufferUsage.Vertex | BufferUsage.CopyDst);
 		}
 		if (icount + needIdxs > idxs.Length) {
 			int sz = Math.Max(icount + needIdxs, idxs.Length * 2);
 			Array.Resize(ref idxs, sz);
 			ibuffer.Dispose();
-			ibuffer = renderer.CreateBuffer((ulong)(sz * sizeof(uint)), BufferUsage.Index | BufferUsage.CopyDst);
+			ibuffer = device.CreateBuffer((ulong)(sz * sizeof(uint)), BufferUsage.Index | BufferUsage.CopyDst);
 		}
 	}
 
@@ -337,10 +340,10 @@ public sealed class PrimitiveBatch : IDisposable {
 			return;
 		ulong vbytes = (ulong)(vcount * Vertex2DColor.Size);
 		ulong ibytes = (ulong)(icount * sizeof(uint));
-		renderer.WriteToBuffer(vbuffer, 0, verts.AsSpan(0, vcount));
-		renderer.WriteToBuffer(ibuffer, 0, idxs.AsSpan(0, icount));
+		device.WriteToBuffer(vbuffer, 0, verts.AsSpan(0, vcount));
+		device.WriteToBuffer(ibuffer, 0, idxs.AsSpan(0, icount));
 		pass.SetPipeline(shared.Pipeline);
-		pass.SetBindGroup(0, renderer.GlobalsUniformBindGroup);
+		pass.SetBindGroup(0, globals.BindGroup);
 		pass.SetBindGroup(1, localsUniformBindGroup);
 		pass.SetVertexBuffer(0, vbuffer, 0, vbytes);
 		pass.SetIndexBuffer(ibuffer, IndexFormat.Uint32, 0, ibytes);

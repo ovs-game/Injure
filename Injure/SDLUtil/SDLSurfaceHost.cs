@@ -8,13 +8,13 @@ using Injure.Rendering;
 
 namespace Injure.SDLUtil;
 
-public sealed unsafe partial class SDLRenderSurfaceSource(SDLWindow *win, void *metalLayer) : IRenderSurfaceSource {
+public sealed unsafe partial class SDLSurfaceHost(SDLWindow *win, void *metalLayer) : ISurfaceHost {
 	private readonly SDLWindow *win = win;
 	private readonly void *metalLayer = metalLayer;
 
 	public void CreateSurfaceDesc(SurfaceDescriptorContainer *container) {
 		if (win is null)
-			throw new InternalStateException("this SDLRenderSurfaceSource's Window is null");
+			throw new InternalStateException("this SDLSurfaceHost's Window is null");
 
 		SDLSysWMInfo wm = default;
 		SDL.GetVersion(&wm.Version);
@@ -22,7 +22,7 @@ public sealed unsafe partial class SDLRenderSurfaceSource(SDLWindow *win, void *
 			throw new InvalidOperationException($"SDL_GetWindowWMInfo failed: {SDL.GetErrorS()}");
 
 		if (wm.Subsystem == SdlSyswmType.Cocoa && metalLayer is null)
-			throw new InternalStateException("this SDLRenderSurfaceSource's Metal layer is null and we need it");
+			throw new InternalStateException("this SDLSurfaceHost's Metal layer is null and we need it");
 		switch (wm.Subsystem) {
 		case SdlSyswmType.Windows: getWindows(&wm, container); break;
 		case SdlSyswmType.Cocoa: getCocoa(metalLayer, container); break;

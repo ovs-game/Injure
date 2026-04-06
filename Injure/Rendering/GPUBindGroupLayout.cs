@@ -10,8 +10,8 @@ public abstract unsafe class GPUBindGroupLayoutHandle {
 	public BindGroupLayout *DangerousGetPtr() => BindGroupLayout;
 }
 
-public sealed unsafe class GPUBindGroupLayout(WebGPURenderer renderer, BindGroupLayout *bindGroup) : GPUBindGroupLayoutHandle, IDisposable {
-	private readonly WebGPURenderer renderer = renderer;
+public sealed unsafe class GPUBindGroupLayout(WebGPUDevice device, BindGroupLayout *bindGroup) : GPUBindGroupLayoutHandle, IDisposable {
+	private readonly WebGPUDevice device = device;
 	private BindGroupLayout *p = bindGroup;
 
 	internal override BindGroupLayout *BindGroupLayout => p;
@@ -20,7 +20,7 @@ public sealed unsafe class GPUBindGroupLayout(WebGPURenderer renderer, BindGroup
 
 	public void Dispose() {
 		if (p is not null)
-			renderer.webgpu.BindGroupLayoutRelease(p);
+			device.API.BindGroupLayoutRelease(p);
 		p = null;
 	}
 }

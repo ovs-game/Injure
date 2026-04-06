@@ -13,12 +13,12 @@ public static unsafe class SDLOwner {
 	public static void *AppleMetalView { get; private set; } = null;
 	public static void *AppleMetalLayer { get; private set; } = null;
 
-	public static SDLRenderSurfaceSource? RenderSurfaceSource { get; private set; }
+	public static SDLSurfaceHost? SurfaceHost { get; private set; }
 
 	internal static PerfTick PerfTickFrequency { get; private set; }
 	private static bool inited = false;
 
-	[MemberNotNull(nameof(Window), nameof(RenderSurfaceSource))]
+	[MemberNotNull(nameof(Window), nameof(SurfaceHost))]
 	public static void InitSDL(string title, int x, int y, int w, int h, SDLWindowFlags flags) {
 		if (SDL.Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS) < 0)
 			throw new InvalidOperationException($"SDL_Init: {SDL.GetErrorS()}");
@@ -49,7 +49,7 @@ public static unsafe class SDLOwner {
 			}
 		}
 
-		RenderSurfaceSource = new SDLRenderSurfaceSource(Window, AppleMetalLayer);
+		SurfaceHost = new SDLSurfaceHost(Window, AppleMetalLayer);
 
 		PerfTickFrequency = (PerfTick)SDL.GetPerformanceFrequency();
 		inited = true;
@@ -57,7 +57,7 @@ public static unsafe class SDLOwner {
 	
 	public static void ShutdownSDL() {
 		if (inited) {
-			RenderSurfaceSource = null;
+			SurfaceHost = null;
 			if (AppleMetalView is not null) {
 				SDL.MetalDestroyView(AppleMetalView);
 				AppleMetalLayer = null;

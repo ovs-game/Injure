@@ -5,15 +5,15 @@ using Silk.NET.WebGPU;
 
 namespace Injure.Rendering;
 
-public sealed unsafe class GPURenderPipeline(WebGPURenderer renderer, RenderPipeline *pipeline) : IDisposable {
-	private readonly WebGPURenderer renderer = renderer;
+public sealed unsafe class GPURenderPipeline(WebGPUDevice device, RenderPipeline *pipeline) : IDisposable {
+	private readonly WebGPUDevice device = device;
 
 	internal RenderPipeline *Pipeline { get; private set; } = pipeline;
 	public RenderPipeline *DangerousGetPtr() => Pipeline;
 
 	public void Dispose() {
 		if (Pipeline is not null)
-			renderer.webgpu.RenderPipelineRelease(Pipeline);
+			device.API.RenderPipelineRelease(Pipeline);
 		Pipeline = null;
 	}
 }

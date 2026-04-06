@@ -1,5 +1,7 @@
 # rendering/lifetimes.md
 
+# **This is currently really of out of date. I'll fix this soon.**
+
 This document describes the ownership and lifetime semantics of the `Rendering` API.
 
 The API is small, but many of its failure modes are lifetime failures rather than logic / correctness failures:

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading;
 using Silk.NET.Core.Native;
 using Silk.NET.WebGPU;
 
@@ -15,71 +16,35 @@ using static Injure.Rendering.WebGPUException;
 namespace Injure.Rendering;
 
 /// <summary>
-/// Policy for selecting a surface present mode in <see cref="WebGPURenderer"/>.
-/// </summary>
-public enum SurfacePresentModePolicy {
-	/// <summary>
-	/// Prefer <see cref="PresentMode.Mailbox"/>, fall back to <see cref="PresentMode.Fifo"/>
-	/// if not present.
-	/// </summary>
-	/// <remarks>
-	/// Tear-free.
-	/// </remarks>
-	AutoMailbox,
-
-	/// <summary>
-	/// Prefer <see cref="PresentMode.FifoRelaxed"/>, fall back to <see cref="PresentMode.Mailbox"/>
-	/// and then <see cref="PresentMode.Fifo"/> if not present.
-	/// </summary>
-	/// <remarks>
-	/// Normally tear-free; may tear if a frame remains on the frontbuffer for more than one vblank.
-	/// </remarks>
-	AutoRelaxedFifo,
-
-	/// <summary>
-	/// Prefer <see cref="PresentMode.Immediate"/>, fall back to <see cref="PresentMode.Mailbox"/>,
-	/// then <see cref="PresentMode.FifoRelaxed">, and finally <see cref="PresentMode.Fifo"/>
-	/// if not present.
-	/// </summary>
-	/// <remarks>
-	/// May tear. Lowest latency.
-	/// </remarks>
-	AutoImmediate
-}
-
-/// <summary>
-/// Base WebGPU renderer.
-///
-/// Owns the WebGPU instance, surface, adapter, device, queue, surface
-/// configuration, renderer-global bind groups, and shared bind group layouts.
-/// Almost all other rendering objects are created from this type and should be
+/// Owner of output-independent WebGPU state (instance, adapter, device, queue) and
+/// resource creator/uploader.
+/// Most other rendering objects are created from this type and should be
 /// treated as invalid once it is disposed.
 /// </summary>
-public sealed unsafe class WebGPURenderer : IDisposable {
+public sealed unsafe class WebGPUDevice : IDisposable {
+	// ==========================================================================
+	// internal types
+	private sealed class Request<TStatus, TObject> where TStatus : unmanaged, Enum where TObject : unmanaged {
+		public int Done;
+		public TStatus Status;
+		public TObject *Object;
+		public string Message = "<no message available>";
+	}
+
 	// ==========================================================================
 	// internal objects / properties
-	internal readonly WebGPU webgpu;
+	internal readonly WebGPU API;
 
-	private readonly IRenderSurfaceSource surfaceSource;
-	private readonly Instance *instance;
-	private readonly Adapter *adapter;
-	private readonly Device *device;
-	private readonly Queue *queue;
+	internal readonly Instance *Instance;
+	internal readonly Adapter *Adapter;
+	internal readonly Device *Device;
+	internal readonly Queue *Queue;
 
-	private readonly GPUBuffer globalsUniformBuffer;
 	private readonly BindGroupLayout *globalsUniformBindGroupLayout;
 	private readonly BindGroupLayout *texBindGroupLayout;
-	private readonly BindGroup *globalsUniformBindGroup;
-
-	private readonly SurfacePresentModePolicy presentPolicy;
-	private Surface *surface;
-	private TextureFormat surfaceFormat;
-	private PresentMode surfacePresentMode;
-	private SurfaceConfiguration surfaceConfig;
 
 	private readonly GPUBindGroupLayoutRef globalsUniformBindGroupLayoutWrap;
 	private readonly GPUBindGroupLayoutRef textureBindGroupLayoutWrap;
-	private readonly GPUBindGroupRef globalsUniformBindGroupWrap;
 
 	private bool disposed = false;
 
@@ -87,27 +52,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 	// public properties and ctor
 
 	/// <summary>
-	/// Current drawable width of the backbuffer surface in pixels.
-	/// </summary>
-	public uint Width { get; private set; }
-
-	/// <summary>
-	/// Current drawable height of the backbuffer surface in pixels.
-	/// </summary>
-	public uint Height { get; private set; }
-
-	/// <summary>
-	/// Color format used by the backbuffer surface.
-	/// </summary>
-	public TextureFormat BackbufferFormat {
-		get {
-			ObjectDisposedException.ThrowIf(disposed, this);
-			return surfaceFormat;
-		}
-	}
-
-	/// <summary>
-	/// Ref to the renderer-global bind group layout for the globals uniform.
+	/// Ref to the global bind group layout for the globals uniform.
 	/// </summary>
 	public GPUBindGroupLayoutRef GlobalsUniformBindGroupLayout {
 		get {
@@ -127,98 +72,105 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 	}
 
 	/// <summary>
-	/// Ref to the renderer-global bind group containing the globals uniform.
+	/// Creates a <see cref="WebGPUDevice"/>.
 	/// </summary>
-	public GPUBindGroupRef GlobalsUniformBindGroup {
-		get {
-			ObjectDisposedException.ThrowIf(disposed, this);
-			return globalsUniformBindGroupWrap;
+	/// <param name="api">WebGPU API object to use.</param>
+	/// <param name="instance">Instance to use, or <see langword="null"/> to create one.</param>
+	/// <param name="compatibleSurface"><c>compatibleSurface</c> to pass to adapter creation.</param>
+	/// <remarks>
+	/// The instance may be passed separately as its creation sometimes took up
+	/// to 1-2s on my machine.
+	/// </remarks>
+	public WebGPUDevice(WebGPU api, Instance *instance = null, Surface *compatibleSurface = null) {
+		API = api;
+		Instance = instance;
+		if (Instance is null) {
+			InstanceDescriptor instDesc = default;
+			Instance = Check(API.CreateInstance(&instDesc));
 		}
-	}
-
-	/// <summary>
-	/// Creates a renderer from the given <see cref="WebGPUBootstrapResult"/>.
-	/// </summary>
-	public WebGPURenderer(WebGPUBootstrapResult bootstrap, SurfacePresentModePolicy presentPolicy) {
-		webgpu = WebGPU.GetApi();
-		surfaceSource = bootstrap.SurfaceSource;
-		instance = bootstrap.Instance;
-		surface = bootstrap.Surface;
-		adapter = bootstrap.Adapter;
-		device = bootstrap.Device;
-		queue = bootstrap.Queue;
-		this.presentPolicy = presentPolicy;
-		surfaceFormat = getSurfaceFormat();
-		surfacePresentMode = getSurfacePresentMode();
-		queryAndResize(updateProj: false);
-		mkGlobalsUniformBindGroup(out globalsUniformBuffer, out globalsUniformBindGroupLayout, out globalsUniformBindGroup);
+		Adapter = requestAdapterBlocking(instance, compatibleSurface);
+		Device = requestDeviceBlocking(instance, Adapter);
+		Queue = Check(API.DeviceGetQueue(Device));
+		globalsUniformBindGroupLayout = mkGlobalsUniformBindGroupLayout();
 		globalsUniformBindGroupLayoutWrap = new GPUBindGroupLayoutRef(globalsUniformBindGroupLayout);
-		globalsUniformBindGroupWrap = new GPUBindGroupRef(globalsUniformBindGroup);
-		updateProjection(Width, Height);
 		texBindGroupLayout = mkTexBindGroupLayout();
 		textureBindGroupLayoutWrap = new GPUBindGroupLayoutRef(texBindGroupLayout);
 	}
 
 	// ==========================================================================
 	// resource creation
-	private TextureFormat getSurfaceFormat() {
-		SurfaceCapabilities caps;
-		webgpu.SurfaceGetCapabilities(surface, adapter, &caps);
-		try {
-			if (caps.FormatCount == 0)
-				throw new WebGPUException("SurfaceGetCapabilities", "surface doesn't report any supported formats");
-			// wgpu says the first format is the most preferred one
-			return caps.Formats[0];
-		} finally {
-			webgpu.SurfaceCapabilitiesFreeMembers(caps);
+	private void waitRequest(Instance *instance, ref int done, string opName, int timeoutMs = 10000) {
+		SpinWait sw = new SpinWait();
+		long start = Environment.TickCount64;
+		while (Volatile.Read(ref done) == 0) {
+			API.InstanceProcessEvents(instance);
+			if (Environment.TickCount64 - start > timeoutMs)
+				throw new WebGPUException(opName, $"waiting for callback timed out (waited {timeoutMs} ms)");
+			if (sw.NextSpinWillYield)
+				Thread.Sleep(1);
+			else
+				sw.SpinOnce();
 		}
 	}
 
-	private PresentMode getSurfacePresentMode() {
-		SurfaceCapabilities caps;
-		webgpu.SurfaceGetCapabilities(surface, adapter, &caps);
+	private Adapter *requestAdapterBlocking(Instance *instance, Surface *compatibleSurface) {
+		Request<RequestAdapterStatus, Adapter> req = new Request<RequestAdapterStatus, Adapter>();
+		GCHandle h = GCHandle.Alloc(req);
 		try {
-			if (caps.PresentModeCount == 0)
-				throw new WebGPUException("SurfaceGetCapabilities", "surface doesn't report any supported present modes");
-			ReadOnlySpan<PresentMode> modes = new ReadOnlySpan<PresentMode>(caps.PresentModes, (int)caps.PresentModeCount);
-			bool haverelaxed = modes.Contains(PresentMode.FifoRelaxed);
-			bool havemailbox = modes.Contains(PresentMode.Mailbox);
-			bool haveimmediate = modes.Contains(PresentMode.Immediate);
-			switch (presentPolicy) {
-			case SurfacePresentModePolicy.AutoMailbox:
-				return havemailbox ? PresentMode.Mailbox : PresentMode.Fifo;
-			case SurfacePresentModePolicy.AutoRelaxedFifo:
-				if (haverelaxed)
-					return PresentMode.FifoRelaxed;
-				return havemailbox ? PresentMode.Mailbox : PresentMode.Fifo;
-			case SurfacePresentModePolicy.AutoImmediate:
-				if (haveimmediate)
-					return PresentMode.Immediate;
-				if (havemailbox)
-					return PresentMode.Mailbox;
-				return haverelaxed ? PresentMode.FifoRelaxed : PresentMode.Fifo;
-			default:
-				throw new UnreachableException();
-			}
+			RequestAdapterOptions opts = default;
+			opts.CompatibleSurface = compatibleSurface;
+			opts.PowerPreference = PowerPreference.HighPerformance;
+
+			PfnRequestAdapterCallback cb =
+				(delegate *unmanaged[Cdecl] <RequestAdapterStatus, Adapter *, byte *, void *, void>)&adapterRequestedCallback;
+			API.InstanceRequestAdapter(instance, &opts, cb, (void *)GCHandle.ToIntPtr(h));
+			waitRequest(instance, ref req.Done, "InstanceRequestAdapter");
+			if (req.Status != RequestAdapterStatus.Success || req.Object is null)
+				throw new WebGPUException("InstanceRequestAdapter", req.Message);
+			return req.Object;
 		} finally {
-			webgpu.SurfaceCapabilitiesFreeMembers(caps);
+			h.Free();
 		}
 	}
 
-	private SurfaceConfiguration getSurfaceConfig(uint width, uint height) {
-		SurfaceConfiguration cfg = default;
-		cfg.Device = device;
-		cfg.Format = surfaceFormat;
-		cfg.Usage = TextureUsage.RenderAttachment;
-		cfg.Width = width;
-		cfg.Height = height;
-		cfg.PresentMode = PresentMode.Fifo;
-		cfg.AlphaMode = CompositeAlphaMode.Auto;
-		return cfg;
+	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+	private static void adapterRequestedCallback(RequestAdapterStatus status, Adapter *adapter, byte *message, void *userdata) {
+		GCHandle h = GCHandle.FromIntPtr((IntPtr)userdata);
+		Request<RequestAdapterStatus, Adapter> req = (Request<RequestAdapterStatus, Adapter>)h.Target!;
+		req.Status = status;
+		req.Object = adapter;
+		req.Message = (message is not null ? SilkMarshal.PtrToString((IntPtr)message) : null) ?? "<no message available>";
+		Volatile.Write(ref req.Done, 1);
 	}
 
-	private void mkGlobalsUniformBindGroup(out GPUBuffer globalsUniformBuffer, out BindGroupLayout *globalsUniformBindGroupLayout, out BindGroup *globalsUniformBindGroup) {
-		globalsUniformBuffer = CreateBuffer((ulong)sizeof(GlobalsUniform), BufferUsage.Uniform | BufferUsage.CopyDst);
+	private Device *requestDeviceBlocking(Instance *instance, Adapter *adapter) {
+		Request<RequestDeviceStatus, Device> req = new Request<RequestDeviceStatus, Device>();
+		GCHandle h = GCHandle.Alloc(req);
+		try {
+			DeviceDescriptor desc = default;
+			PfnRequestDeviceCallback cb =
+				(delegate *unmanaged[Cdecl] <RequestDeviceStatus, Device *, byte *, void *, void>)&deviceRequestedCallback;
+			API.AdapterRequestDevice(adapter, &desc, cb, (void *)GCHandle.ToIntPtr(h));
+			waitRequest(instance, ref req.Done, "AdapterRequestDevice");
+			if (req.Status != RequestDeviceStatus.Success || req.Object is null)
+				throw new WebGPUException("AdapterRequestDevice", req.Message);
+			return req.Object;
+		} finally {
+			h.Free();
+		}
+	}
+
+	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+	private static void deviceRequestedCallback(RequestDeviceStatus status, Device *device, byte *message, void *userdata) {
+		GCHandle h = GCHandle.FromIntPtr((IntPtr)userdata);
+		Request<RequestDeviceStatus, Device> req = (Request<RequestDeviceStatus, Device>)h.Target!;
+		req.Status = status;
+		req.Object = device;
+		req.Message = (message is not null ? SilkMarshal.PtrToString((IntPtr)message) : null) ?? "<no message available>";
+		Volatile.Write(ref req.Done, 1);
+	}
+
+	private BindGroupLayout *mkGlobalsUniformBindGroupLayout() {
 		BindGroupLayoutEntry *bglEntries = stackalloc BindGroupLayoutEntry[1];
 		bglEntries[0] = new BindGroupLayoutEntry {
 			Binding = 0,
@@ -233,20 +185,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			EntryCount = 1,
 			Entries = bglEntries
 		};
-		globalsUniformBindGroupLayout = Check(webgpu.DeviceCreateBindGroupLayout(device, &bglDesc));
-		BindGroupEntry *bgEntries = stackalloc BindGroupEntry[1];
-		bgEntries[0] = new BindGroupEntry {
-			Binding = 0,
-			Buffer = globalsUniformBuffer.Buffer,
-			Offset = 0,
-			Size = globalsUniformBuffer.Size
-		};
-		BindGroupDescriptor bgDesc = new BindGroupDescriptor {
-			Layout = globalsUniformBindGroupLayout,
-			EntryCount = 1,
-			Entries = bgEntries
-		};
-		globalsUniformBindGroup = Check(webgpu.DeviceCreateBindGroup(device, &bgDesc));
+		return Check(API.DeviceCreateBindGroupLayout(Device, &bglDesc));
 	}
 
 	private BindGroupLayout *mkTexBindGroupLayout() {
@@ -256,7 +195,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			Visibility = ShaderStage.Fragment,
 			Texture = new TextureBindingLayout {
 				SampleType = TextureSampleType.Float,
-				ViewDimension = TextureViewDimension.Dimension2D, // TODO: support for array textures
+				ViewDimension = TextureViewDimension.Dimension2D, // TODO: support for texture arrays
 				Multisampled = false
 			}
 		};
@@ -271,42 +210,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			EntryCount = 2,
 			Entries = bglEntries
 		};
-		return Check(webgpu.DeviceCreateBindGroupLayout(device, &bglDesc));
-	}
-
-	private bool tryGetCurrentTex(out SurfaceTexture outTex) {
-		SurfaceTexture tex;
-		webgpu.SurfaceGetCurrentTexture(surface, &tex);
-		switch (tex.Status) {
-		case SurfaceGetCurrentTextureStatus.Success:
-			outTex = tex;
-			return true;
-		case SurfaceGetCurrentTextureStatus.Timeout:
-			outTex = default;
-			return false;
-		case SurfaceGetCurrentTextureStatus.Outdated:
-			queryAndResize();
-			webgpu.SurfaceGetCurrentTexture(surface, &tex);
-			outTex = tex;
-			return tex.Status == SurfaceGetCurrentTextureStatus.Success;
-		case SurfaceGetCurrentTextureStatus.Lost:
-			webgpu.SurfaceRelease(surface);
-			SurfaceDescriptorContainer sdc;
-			surfaceSource.CreateSurfaceDesc(&sdc);
-			surface = webgpu.InstanceCreateSurface(instance, &sdc.Desc);
-			surfaceFormat = getSurfaceFormat();
-			surfacePresentMode = getSurfacePresentMode();
-			queryAndResize();
-			webgpu.SurfaceGetCurrentTexture(surface, &tex);
-			outTex = tex;
-			return tex.Status == SurfaceGetCurrentTextureStatus.Success;
-		case SurfaceGetCurrentTextureStatus.DeviceLost:
-			throw new WebGPUException("SurfaceGetCurrentTexture", "got DeviceLost, bailing out");
-		case SurfaceGetCurrentTextureStatus.OutOfMemory:
-			throw new OutOfMemoryException("WebGPU: SurfaceGetCurrentTexture out of memory");
-		default:
-			throw new WebGPUException("SurfaceGetCurrentTexture", tex.Status.ToString());
-		}
+		return Check(API.DeviceCreateBindGroupLayout(Device, &bglDesc));
 	}
 
 	private GPUBindGroup createTexViewPlusSamplerBindGroup(TextureView *tv, Sampler *sampler) {
@@ -326,86 +230,12 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			Entries = entries
 		};
 
-		BindGroup *bg = Check(webgpu.DeviceCreateBindGroup(device, &desc));
+		BindGroup *bg = Check(API.DeviceCreateBindGroup(Device, &desc));
 		return new GPUBindGroup(this, bg);
 	}
 
 	// ==========================================================================
-	// global state update
-	private void queryAndResize(bool updateProj = true) {
-		(uint w, uint h) = surfaceSource.GetDrawableSize();
-		surfaceConfig = getSurfaceConfig(w, h);
-		fixed (SurfaceConfiguration *cfg = &surfaceConfig)
-			webgpu.SurfaceConfigure(surface, cfg);
-		if (updateProj)
-			updateProjection(w, h);
-		Width = w;
-		Height = h;
-	}
-
-	private void updateProjection(uint w, uint h) {
-		GlobalsUniform @params = new GlobalsUniform {
-			Projection = MatrixUtil.OrthoTopLeft(w, h)
-		};
-		WriteToBuffer(globalsUniformBuffer, 0, @params);
-	}
-
-	// ==========================================================================
 	// public api
-
-	/// <summary>
-	/// Re-queries the drawable size and updates surface configuration /
-	/// projection matrix state.
-	/// </summary>
-	public void Resized() {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		queryAndResize();
-	}
-
-	/// <summary>
-	/// Attempts to begin a new render frame.
-	/// </summary>
-	/// <param name="frame">On success, the newly created frame.</param>
-	/// <returns>
-	/// <see langword="true"/> if a frame was created successfully;
-	/// <see langword="false"/> if no current surface texture could be acquired
-	/// for this frame and rendering should be skipped.
-	/// </returns>
-	/// <remarks>
-	/// Fatal failures throw exceptions instead of returning <see langword="false"/>.
-	/// Recovery for outdated/lost surfaces is handled internally. Lost device /
-	/// OOM is treated as fatal.
-	/// </remarks>
-	public bool TryBeginFrame([NotNullWhen(true)] out RenderFrame? frame) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		frame = null;
-		if (!tryGetCurrentTex(out SurfaceTexture currTex))
-			return false;
-
-		TextureViewDescriptor tvdesc = new TextureViewDescriptor {
-			Format = surfaceFormat,
-			Dimension = TextureViewDimension.Dimension2D,
-			BaseMipLevel = 0,
-			MipLevelCount = 1,
-			BaseArrayLayer = 0,
-			ArrayLayerCount = 1,
-			Aspect = TextureAspect.All
-		};
-		TextureView *backbufferView = webgpu.TextureCreateView(currTex.Texture, &tvdesc);
-		if (backbufferView == null) {
-			webgpu.TextureRelease(currTex.Texture);
-			throw new WebGPUException("TextureCreateView", "WebGPU call returned null");
-		}
-		CommandEncoderDescriptor encDesc = default;
-		CommandEncoder *enc = webgpu.DeviceCreateCommandEncoder(device, &encDesc);
-		if (enc is null) {
-			webgpu.TextureViewRelease(backbufferView);
-			webgpu.TextureRelease(currTex.Texture);
-			throw new WebGPUException("DeviceCreateCommandEncoder", "WebGPU call returned null");
-		}
-		frame = new RenderFrame(this, currTex, backbufferView, enc);
-		return true;
-	}
 
 	/// <summary>
 	/// Creates a GPU buffer, returning an owning object.
@@ -422,12 +252,12 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			Usage = usage,
 			MappedAtCreation = mappedAtCreation
 		};
-		Buffer *buffer = Check(webgpu.DeviceCreateBuffer(device, &desc));
+		Buffer *buffer = Check(API.DeviceCreateBuffer(Device, &desc));
 		return new GPUBuffer(this, buffer, size, usage);
 	}
 
 	/// <summary>
-	/// Writes a single unmanaged value into a GPU buffer using the renderer's queue.
+	/// Writes a single unmanaged value into a GPU buffer using the queue.
 	/// </summary>
 	/// <typeparam name="T">Unmanaged value type to upload.</typeparam>
 	/// <param name="buffer">Destination buffer.</param>
@@ -439,11 +269,11 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 	public void WriteToBuffer<T>(GPUBuffer buffer, ulong offset, in T val) where T : unmanaged {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		fixed (T *p = &val)
-			webgpu.QueueWriteBuffer(queue, buffer.Buffer, offset, p, (nuint)sizeof(T));
+			API.QueueWriteBuffer(Queue, buffer.Buffer, offset, p, (nuint)sizeof(T));
 	}
 
 	/// <summary>
-	/// Writes data from a span into a GPU buffer using the renderer's queue.
+	/// Writes data from a span into a GPU buffer using the queue.
 	/// </summary>
 	/// <typeparam name="T">Unmanaged element type to upload.</typeparam>
 	/// <param name="buffer">Destination buffer.</param>
@@ -458,11 +288,11 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 		if (data.IsEmpty)
 			return;
 		fixed (T *p = data)
-			webgpu.QueueWriteBuffer(queue, buffer.Buffer, offset, p, (nuint)(data.Length * sizeof(T)));
+			API.QueueWriteBuffer(Queue, buffer.Buffer, offset, p, (nuint)(data.Length * sizeof(T)));
 	}
 
 	/// <summary>
-	/// Writes data from a pointer into a GPU buffer using the renderer's queue.
+	/// Writes data from a pointer into a GPU buffer using the queue.
 	/// </summary>
 	/// <param name="buffer">Destination buffer.</param>
 	/// <param name="offset">Byte offset into <paramref name="buffer"/>.</param>
@@ -474,7 +304,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 	/// </remarks>
 	public void WriteToBuffer(GPUBuffer buffer, ulong offset, void *data, nuint size) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		webgpu.QueueWriteBuffer(queue, buffer.Buffer, offset, data, size);
+		API.QueueWriteBuffer(Queue, buffer.Buffer, offset, data, size);
 	}
 
 	/// <summary>
@@ -495,7 +325,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			SampleCount = @params.SampleCount,
 			Usage = @params.Usage
 		};
-		Texture *tex = Check(webgpu.DeviceCreateTexture(device, &desc));
+		Texture *tex = Check(API.DeviceCreateTexture(Device, &desc));
 		TextureViewDescriptor viewDesc = new TextureViewDescriptor {
 			Format = @params.Format,
 			Dimension = @params.ArrayLayerCount > 1 ? TextureViewDimension.Dimension2DArray : TextureViewDimension.Dimension2D,
@@ -505,9 +335,9 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			ArrayLayerCount = @params.ArrayLayerCount,
 			Aspect = TextureAspect.All
 		};
-		TextureView *view = webgpu.TextureCreateView(tex, &viewDesc);
+		TextureView *view = API.TextureCreateView(tex, &viewDesc);
 		if (view is null) {
-			webgpu.TextureRelease(tex);
+			API.TextureRelease(tex);
 			throw new WebGPUException("TextureCreateView", "WebGPU call returned null");
 		}
 		return new GPUTexture(this, tex, view, @params.Width, @params.Height, @params.Format, @params.Usage, @params.MipLevelCount,
@@ -515,7 +345,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 	}
 
 	/// <summary>
-	/// Writes texel data into a texture using the renderer's queue.
+	/// Writes texel data into a texture using the queue.
 	/// </summary>
 	/// <typeparam name="T">Unmanaged source element type.</typeparam>
 	/// <param name="tex">Destination texture.</param>
@@ -534,7 +364,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 	}
 
 	/// <summary>
-	/// Writes texel data into a texture using the renderer's queue.
+	/// Writes texel data into a texture using the queue.
 	/// </summary>
 	/// <param name="tex">Destination texture.</param>
 	/// <param name="dst">Destination texture region and subresource.</param>
@@ -566,7 +396,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			Height = dst.Height,
 			DepthOrArrayLayers = dst.DepthOrArrayLayers
 		};
-		webgpu.QueueWriteTexture(queue, &copyDst, data, size, &dataLayout, &texSize);
+		API.QueueWriteTexture(Queue, &copyDst, data, size, &dataLayout, &texSize);
 	}
 
 	/// <summary>
@@ -584,7 +414,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			AddressModeW = @params.AddressModeW,
 			MaxAnisotropy = 1
 		};
-		Sampler *sampler = Check(webgpu.DeviceCreateSampler(device, &desc));
+		Sampler *sampler = Check(API.DeviceCreateSampler(Device, &desc));
 		return new GPUSampler(this, sampler);
 	}
 
@@ -605,7 +435,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			EntryCount = 1,
 			Entries = bglEntries
 		};
-		return new GPUBindGroupLayout(this, Check(webgpu.DeviceCreateBindGroupLayout(device, &bglDesc)));
+		return new GPUBindGroupLayout(this, Check(API.DeviceCreateBindGroupLayout(Device, &bglDesc)));
 	}
 
 	/// <summary>
@@ -646,7 +476,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			EntryCount = 1,
 			Entries = entries
 		};
-		BindGroup *bg = Check(webgpu.DeviceCreateBindGroup(device, &desc));
+		BindGroup *bg = Check(API.DeviceCreateBindGroup(Device, &desc));
 		return new GPUBindGroup(this, bg);
 	}
 
@@ -700,7 +530,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			SampleCount = 1,
 			Usage = TextureUsage.RenderAttachment | TextureUsage.TextureBinding
 		};
-		Texture *colorTex = Check(webgpu.DeviceCreateTexture(device, &colorDesc));
+		Texture *colorTex = Check(API.DeviceCreateTexture(Device, &colorDesc));
 		TextureViewDescriptor colorViewDesc = new TextureViewDescriptor {
 			Format = @params.Format,
 			Dimension = TextureViewDimension.Dimension2D,
@@ -710,9 +540,9 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			ArrayLayerCount = 1,
 			Aspect = TextureAspect.All
 		};
-		TextureView *colorView = webgpu.TextureCreateView(colorTex, &colorViewDesc);
+		TextureView *colorView = API.TextureCreateView(colorTex, &colorViewDesc);
 		if (colorView is null) {
-			webgpu.TextureRelease(colorTex);
+			API.TextureRelease(colorTex);
 			throw new WebGPUException("TextureCreateView", "WebGPU call returned null");
 		}
 
@@ -733,10 +563,10 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 				SampleCount = 1,
 				Usage = TextureUsage.RenderAttachment
 			};
-			depthTex = webgpu.DeviceCreateTexture(device, &depthDesc);
+			depthTex = API.DeviceCreateTexture(Device, &depthDesc);
 			if (depthTex is null) {
-				webgpu.TextureViewRelease(colorView);
-				webgpu.TextureRelease(colorTex);
+				API.TextureViewRelease(colorView);
+				API.TextureRelease(colorTex);
 				throw new WebGPUException("DeviceCreateTexture", "WebGPU call returned null");
 			}
 			TextureViewDescriptor depthViewDesc = new TextureViewDescriptor {
@@ -748,11 +578,11 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 				ArrayLayerCount = 1,
 				Aspect = TextureAspect.DepthOnly
 			};
-			depthView = webgpu.TextureCreateView(depthTex, &depthViewDesc);
+			depthView = API.TextureCreateView(depthTex, &depthViewDesc);
 			if (depthView is null) {
-				webgpu.TextureRelease(depthTex);
-				webgpu.TextureViewRelease(colorView);
-				webgpu.TextureRelease(colorTex);
+				API.TextureRelease(depthTex);
+				API.TextureViewRelease(colorView);
+				API.TextureRelease(colorTex);
 				throw new WebGPUException("TextureCreateView", "WebGPU call returned null");
 			}
 		}
@@ -777,7 +607,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			ShaderModuleDescriptor desc = new ShaderModuleDescriptor {
 				NextInChain = (ChainedStruct *)&src
 			};
-			ShaderModule *module = Check(webgpu.DeviceCreateShaderModule(device, &desc));
+			ShaderModule *module = Check(API.DeviceCreateShaderModule(Device, &desc));
 			return new GPUShader(this, module);
 		} finally {
 			SilkMarshal.Free((IntPtr)p);
@@ -809,7 +639,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 			BindGroupLayoutCount = (nuint)layouts.Length,
 			BindGroupLayouts = bgLayouts
 		};
-		PipelineLayout *layout = Check(webgpu.DeviceCreatePipelineLayout(device, &desc));
+		PipelineLayout *layout = Check(API.DeviceCreatePipelineLayout(Device, &desc));
 		return new GPUPipelineLayout(this, layout);
 	}
 
@@ -894,7 +724,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 				Multisample = multisample
 			};
 
-			RenderPipeline *pipeline = Check(webgpu.DeviceCreateRenderPipeline(device, &desc));
+			RenderPipeline *pipeline = Check(API.DeviceCreateRenderPipeline(Device, &desc));
 			return new GPURenderPipeline(this, pipeline);
 		} finally {
 			SilkMarshal.Free((IntPtr)fsEntry);
@@ -903,7 +733,7 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 	}
 
 	/// <summary>
-	/// Submits a finished command buffer to the renderer's queue.
+	/// Submits a finished command buffer to the queue.
 	/// </summary>
 	/// <remarks>
 	/// Renderer-internal submission interface used by <see cref="RenderFrame"/>.
@@ -911,38 +741,22 @@ public sealed unsafe class WebGPURenderer : IDisposable {
 	/// </remarks>
 	internal void Submit(CommandBuffer *cmdbuf) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		webgpu.QueueSubmit(queue, 1, &cmdbuf);
+		API.QueueSubmit(Queue, 1, &cmdbuf);
 	}
 
 	/// <summary>
-	/// Presents the currently acquired backbuffer surface texture.
-	/// </summary>
-	/// <remarks>
-	/// Renderer-internal present step used by <see cref="RenderFrame.SubmitAndPresent"/>.
-	/// This should only be called for a successfully begun frame that acquired a
-	/// presentable surface texture.
-	/// </remarks>
-	internal void Present() {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		webgpu.SurfacePresent(surface);
-	}
-
-	/// <summary>
-	/// Releases all renderer-owned GPU state and invalidates all objects created from this renderer.
+	/// Releases all owned GPU state and invalidates all objects created from this <see cref="WebGPUDevice"/>.
 	/// </summary>
 	public void Dispose() {
 		if (disposed)
 			return;
 		disposed = true;
 
-		if (texBindGroupLayout is not null) webgpu.BindGroupLayoutRelease(texBindGroupLayout);
-		if (globalsUniformBindGroup is not null) webgpu.BindGroupRelease(globalsUniformBindGroup);
-		if (globalsUniformBindGroupLayout is not null) webgpu.BindGroupLayoutRelease(globalsUniformBindGroupLayout);
-		globalsUniformBuffer?.Dispose();
-		if (queue is not null) webgpu.QueueRelease(queue);
-		if (device is not null) webgpu.DeviceRelease(device);
-		if (adapter is not null) webgpu.AdapterRelease(adapter);
-		if (surface is not null) webgpu.SurfaceRelease(surface);
-		if (instance is not null) webgpu.InstanceRelease(instance);
+		if (texBindGroupLayout is not null) API.BindGroupLayoutRelease(texBindGroupLayout);
+		if (globalsUniformBindGroupLayout is not null) API.BindGroupLayoutRelease(globalsUniformBindGroupLayout);
+		if (Queue is not null) API.QueueRelease(Queue);
+		if (Device is not null) API.DeviceRelease(Device);
+		if (Adapter is not null) API.AdapterRelease(Adapter);
+		if (Instance is not null) API.InstanceRelease(Instance);
 	}
 }

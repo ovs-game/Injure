@@ -5,9 +5,9 @@ using Silk.NET.WebGPU;
 
 namespace Injure.Rendering;
 
-public sealed unsafe class GPURenderTarget(WebGPURenderer renderer, Texture *colorTex, TextureView *colorView,
+public sealed unsafe class GPURenderTarget(WebGPUDevice device, Texture *colorTex, TextureView *colorView,
 	Texture *depthStencilTex, TextureView *depthStencilView, uint w, uint h, TextureFormat fmt) : IDisposable {
-	private readonly WebGPURenderer renderer = renderer;
+	private readonly WebGPUDevice device = device;
 
 	internal Texture *ColorTexture { get; private set; } = colorTex;
 	internal TextureView *ColorView { get; private set; } = colorView;
@@ -25,17 +25,17 @@ public sealed unsafe class GPURenderTarget(WebGPURenderer renderer, Texture *col
 
 	public void Dispose() {
 		if (DepthStencilView is not null)
-			renderer.webgpu.TextureViewRelease(DepthStencilView);
+			device.API.TextureViewRelease(DepthStencilView);
 		DepthStencilView = null;
 		if (DepthStencilTexture is not null)
-			renderer.webgpu.TextureRelease(DepthStencilTexture);
+			device.API.TextureRelease(DepthStencilTexture);
 		DepthStencilTexture = null;
 
 		if (ColorView is not null)
-			renderer.webgpu.TextureViewRelease(ColorView);
+			device.API.TextureViewRelease(ColorView);
 		ColorView = null;
 		if (ColorTexture is not null)
-			renderer.webgpu.TextureRelease(ColorTexture);
+			device.API.TextureRelease(ColorTexture);
 		ColorTexture = null;
 	}
 }

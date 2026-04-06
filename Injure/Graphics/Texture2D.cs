@@ -21,8 +21,8 @@ namespace Injure.Graphics;
 /// it will be revoked once that lease expires to make misuse more difficult. After revocation,
 /// further usage attempts throw <see cref="AssetLeaseExpiredException"/>.
 /// </remarks>
-public sealed class Texture2D(WebGPURenderer renderer, GPUTexture texture, GPUSampler sampler) : IRevokable, IDisposable {
-	private readonly WebGPURenderer renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
+public sealed class Texture2D(WebGPUDevice device, GPUTexture texture, GPUSampler sampler) : IRevokable, IDisposable {
+	private readonly WebGPUDevice device = device ?? throw new ArgumentNullException(nameof(device));
 	private readonly GPUTexture texture = texture ?? throw new ArgumentNullException(nameof(texture));
 	private readonly GPUSampler sampler = sampler ?? throw new ArgumentNullException(nameof(sampler));
 	private GPUBindGroup? bindGroup = null;
@@ -34,7 +34,7 @@ public sealed class Texture2D(WebGPURenderer renderer, GPUTexture texture, GPUSa
 	internal GPUBindGroupRef BindGroup {
 		get {
 			chk();
-			bindGroup ??= renderer.CreateTextureBindGroup(Texture, Sampler);
+			bindGroup ??= device.CreateTextureBindGroup(Texture, Sampler);
 			return bindGroup.AsRef();
 		}
 	}

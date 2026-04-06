@@ -5,9 +5,9 @@ using Silk.NET.WebGPU;
 
 namespace Injure.Rendering;
 
-public sealed unsafe class GPUTexture(WebGPURenderer renderer, Texture *tex, TextureView *view, uint w, uint h,
+public sealed unsafe class GPUTexture(WebGPUDevice device, Texture *tex, TextureView *view, uint w, uint h,
 	TextureFormat fmt, TextureUsage usage, uint mipLevelCount, uint sampleCount, uint arrayLayerCount) : IDisposable {
-	private readonly WebGPURenderer renderer = renderer;
+	private readonly WebGPUDevice device = device;
 
 	internal Texture *Texture { get; private set; } = tex;
 	internal TextureView *View { get; private set; } = view;
@@ -23,10 +23,10 @@ public sealed unsafe class GPUTexture(WebGPURenderer renderer, Texture *tex, Tex
 
 	public void Dispose() {
 		if (View is not null)
-			renderer.webgpu.TextureViewRelease(View);
+			device.API.TextureViewRelease(View);
 		View = null;
 		if (Texture is not null)
-			renderer.webgpu.TextureRelease(Texture);
+			device.API.TextureRelease(Texture);
 		Texture = null;
 	}
 }

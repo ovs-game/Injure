@@ -114,8 +114,8 @@ public sealed class Texture2DAssetPreparedData(uint width, uint height, byte[] r
 	public readonly Texture2DAssetMetadata Metadata = metadata;
 }
 
-public sealed class Texture2DAssetCreator(WebGPURenderer renderer) : IAssetCreatorAsync<Texture2D> {
-	private readonly WebGPURenderer renderer = renderer;
+public sealed class Texture2DAssetCreator(WebGPUDevice gpuDevice) : IAssetCreatorAsync<Texture2D> {
+	private readonly WebGPUDevice gpuDevice = gpuDevice;
 
 	public async Task<AssetCreatePreparedResult> TryCreateAsync(AssetCreateInfo info, IAssetDependencyCollector coll, CancellationToken ct = default) {
 		ct.ThrowIfCancellationRequested();
@@ -162,7 +162,7 @@ public sealed class Texture2DAssetCreator(WebGPURenderer renderer) : IAssetCreat
 				texLayout = new GPUTextureLayout(Offset: 0, BytesPerRow: p.Width * 4, RowsPerImage: p.Height);
 			}
 
-			GPUTexture tex = renderer.CreateTexture(new GPUTextureCreateParams(
+			GPUTexture tex = gpuDevice.CreateTexture(new GPUTextureCreateParams(
 				Width: p.Width,
 				Height: p.Height,
 				Format: fmt,
@@ -170,10 +170,10 @@ public sealed class Texture2DAssetCreator(WebGPURenderer renderer) : IAssetCreat
 			));
 			// TODO: don't do This thing with the try { try {} catch { throw; } } catch { throw; } it's ugly
 			try {
-				GPUSampler sampler = renderer.CreateSampler(in smpParams);
+				GPUSampler sampler = gpuDevice.CreateSampler(in smpParams);
 				try {
-					renderer.WriteToTexture(tex, in texRegion, p.RGBA, in texLayout);
-					return AssetCreateResult<Texture2D>.Success(new Texture2D(renderer, tex, sampler));
+					gpuDevice.WriteToTexture(tex, in texRegion, p.RGBA, in texLayout);
+					return AssetCreateResult<Texture2D>.Success(new Texture2D(gpuDevice, tex, sampler));
 				} catch {
 					sampler.Dispose();
 					throw;

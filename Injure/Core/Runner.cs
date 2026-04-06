@@ -5,7 +5,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
+using System.Threading.Tasks;
 using Hexa.NET.SDL2;
+using Silk.NET.WebGPU;
 
 using Injure.Assets;
 using Injure.Assets.Builtin;
@@ -23,7 +25,7 @@ namespace Injure.Core;
 
 public static unsafe class Runner {
 	public static readonly CanvasParams BaseCanvasParams = new CanvasParams(
-		Target: CanvasTarget.Backbuffer,
+		Target: CanvasTarget.Primary,
 		ColorAttachmentOps: ColorAttachmentOps.Clear(Color32.Black),
 		Scissor: CanvasScissor.None,
 		Transform: Matrix3x2.Identity,
@@ -31,7 +33,11 @@ public static unsafe class Runner {
 		Material: CanvasMaterials.Color
 	);
 
-	[AllowNull] private static WebGPURenderer renderer;
+	[AllowNull] private static WebGPU webgpu;
+	[AllowNull] private static WebGPUDevice gpuDevice;
+	[AllowNull] private static SurfaceRenderOutput sfOutput;
+	[AllowNull] private static ViewGlobals viewGlobals;
+
 	[AllowNull] private static GameServices services;
 	[AllowNull] private static CanvasSharedResources canvasResources;
 	[AllowNull] private static Queue<RawInputEvent> inputQueue;
@@ -48,7 +54,8 @@ public static unsafe class Runner {
 				// hand over logical window size, not px-drawable size to the game
 				// since that's probably more fitting here, the renderer gets
 				// px-drawable size internally
-				renderer.Resized();
+				sfOutput.Resized();
+				viewGlobals.Update(sfOutput.Width, sfOutput.Height);
 				game.OnHostEvent(new HostEvent(HostEventKind.Resized, (uint)ev->Window.Data1, (uint)ev->Window.Data2));
 				break;
 			case SDLWindowEventID.Minimized:
@@ -80,10 +87,10 @@ public static unsafe class Runner {
 	}
 
 	private static void render(IGame game) {
-		if (!renderer.TryBeginFrame(out RenderFrame? frame))
+		if (!sfOutput.TryBeginFrame(out RenderFrame? frame))
 			return;
 		using (frame) {
-			using (Canvas cv = new Canvas(renderer, frame, canvasResources, in BaseCanvasParams))
+			using (Canvas cv = new Canvas(gpuDevice, viewGlobals, frame, canvasResources, in BaseCanvasParams))
 				game.Render(cv);
 			frame.SubmitAndPresent();
 		}
@@ -145,21 +152,24 @@ public static unsafe class Runner {
 		game.Loading(new LoadingContext(LoadingPhase.Start, redrawRequested: true));
 		PerfTick loadingStartTick = PerfTick.GetCurrent();
 
-		// webgpu bootstrap
-		WebGPUBootstrap bootstrap = new WebGPUBootstrap();
-		bootstrap.Start(SDLOwner.RenderSurfaceSource!);
+		// webgpu instance creation
+		webgpu = WebGPU.GetApi();
+		Task<IntPtr> instTask = Task.Run(() => {
+			InstanceDescriptor instDesc = default;
+			Instance *inst = WebGPUException.Check(webgpu.CreateInstance(&instDesc));
+			return (IntPtr)inst;
+		});
 
 		// basic loading-time event loop
 		SDLEvent ev;
 		double elapsed;
 		bool cancelled = false;
-		while (bootstrap.CurrentState == WebGPUBootstrap.State.Running) {
+		while (!instTask.IsCompleted) {
 			if (!cancelled) {
 				while (SDL.PollEvent(&ev) == 1) {
 					switch ((SDLEventType)ev.Type) {
 					case SDLEventType.Quit:
 						SDL.HideWindow(SDLOwner.Window);
-						bootstrap.Cancel();
 						cancelled = true;
 						goto bootstrapCancelled;
 					case SDLEventType.Windowevent:
@@ -174,19 +184,20 @@ public static unsafe class Runner {
 bootstrapCancelled:
 			SDL.Delay(10);
 		}
-		if (bootstrap.CurrentState == WebGPUBootstrap.State.Cancelled)
+		if (!instTask.IsCompletedSuccessfully)
 			goto earlyquit;
 		elapsed = (double)(PerfTick.GetCurrent() - loadingStartTick) / (double)PerfTick.Frequency;
 		game.Loading(new LoadingContext(LoadingPhase.Finish, elapsed));
 
-		// renderer setup
-		WebGPUBootstrapResult bootstrapResult = bootstrap.GetResultOrThrow();
-		renderer = new WebGPURenderer(bootstrapResult, rconf.PresentMode switch {
+		// webgpu setup
+		gpuDevice = new WebGPUDevice(webgpu, (Instance *)instTask.Result);
+		sfOutput = new SurfaceRenderOutput(gpuDevice, SDLOwner.SurfaceHost!, rconf.PresentMode switch {
 			PresentMode.TearFree => SurfacePresentModePolicy.AutoMailbox,
 			PresentMode.Adaptive => SurfacePresentModePolicy.AutoRelaxedFifo,
 			PresentMode.LowLatency => SurfacePresentModePolicy.AutoImmediate,
 			_ => throw new UnreachableException()
 		});
+		viewGlobals = new ViewGlobals(gpuDevice, sfOutput.Width, sfOutput.Height);
 
 		// service init
 		// TODO: the builtin source/resolver/creator registry should be moved out somewhere
@@ -208,20 +219,20 @@ bootstrapCancelled:
 			assets = new AssetStore();
 			assets.RegisterResolver(ModUtils.Info.OwnerID, new Texture2DJsonAssetResolver(), "Texture2DJsonAssetResolver");
 			assets.RegisterResolver(ModUtils.Info.OwnerID, new Texture2DImageAssetResolver(), "Texture2DImageAssetResolver");
-			assets.RegisterCreator(ModUtils.Info.OwnerID, new Texture2DAssetCreator(renderer), "Texture2DAssetCreator");
+			assets.RegisterCreator(ModUtils.Info.OwnerID, new Texture2DAssetCreator(gpuDevice), "Texture2DAssetCreator");
 			assetCtx = assets.AttachCurrentThread();
 		}
 		AudioEngine? audio = svconf.Audio ? new AudioEngine() : null;
 		TextSystem? text = null;
 		if (svconf.Text) {
-			text = new TextSystem(renderer);
+			text = new TextSystem(gpuDevice);
 			assets?.RegisterResolver(ModUtils.Info.OwnerID, new FontAssetResolver(), "FontSourceAssetResolver");
 			assets?.RegisterCreator(ModUtils.Info.OwnerID, new FontAssetCreator(text), "FontSourceAssetCreator");
 		}
 		services = new GameServices(sched, eresources, assets, assetCtx, audio, text);
 
 		// game init
-		canvasResources = new CanvasSharedResources(renderer, eresources);
+		canvasResources = new CanvasSharedResources(gpuDevice, eresources);
 		inputQueue = new Queue<RawInputEvent>(64);
 		game.Init(services);
 
@@ -320,9 +331,12 @@ bootstrapCancelled:
 		game.Shutdown();
 		canvasResources.Dispose();
 		services.Shutdown();
-		renderer.Dispose();
+		viewGlobals.Dispose();
+		sfOutput.Dispose();
+		gpuDevice.Dispose();
 
 earlyquit:
+		webgpu.Dispose();
 		PreciseWait.Deinit();
 		SDLOwner.ShutdownSDL();
 		running = false;

@@ -6,13 +6,13 @@ namespace Injure.Rendering;
 
 public struct SurfaceDescriptorContainer {
 	public SurfaceDescriptor Desc;
-	public SurfaceDescriptorFromWindowsHWND WindowsHWND;
-	public SurfaceDescriptorFromMetalLayer MetalLayer;
-	public SurfaceDescriptorFromXlibWindow XlibWindow;
-	public SurfaceDescriptorFromWaylandSurface WaylandSurface;
+	internal SurfaceDescriptorFromWindowsHWND WindowsHWND;
+	internal SurfaceDescriptorFromMetalLayer MetalLayer;
+	internal SurfaceDescriptorFromXlibWindow XlibWindow;
+	internal SurfaceDescriptorFromWaylandSurface WaylandSurface;
 }
 
-public unsafe interface IRenderSurfaceSource {
+public unsafe interface ISurfaceHost {
 	void CreateSurfaceDesc(SurfaceDescriptorContainer *container);
 	(uint Width, uint Height) GetDrawableSize();
 }

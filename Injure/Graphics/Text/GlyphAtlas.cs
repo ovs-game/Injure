@@ -56,8 +56,8 @@ internal readonly record struct GlyphAtlasEntry(
 	int Height
 );
 
-internal sealed unsafe class GlyphAtlas(WebGPURenderer renderer, TextSystem text, int pageWidth = 1024, int pageHeight = 1024, int padding = 1, int maxPages = 16) : IDisposable {
-	private readonly WebGPURenderer renderer = renderer;
+internal sealed unsafe class GlyphAtlas(WebGPUDevice gpuDevice, TextSystem text, int pageWidth = 1024, int pageHeight = 1024, int padding = 1, int maxPages = 16) : IDisposable {
+	private readonly WebGPUDevice gpuDevice = gpuDevice;
 	private readonly TextSystem text = text;
 	private readonly Dictionary<GlyphAtlasKey, GlyphAtlasEntry> entries = new Dictionary<GlyphAtlasKey, GlyphAtlasEntry>();
 	private readonly List<GlyphAtlasPage> pages = new List<GlyphAtlasPage>();
@@ -119,7 +119,7 @@ internal sealed unsafe class GlyphAtlas(WebGPURenderer renderer, TextSystem text
 
 		byte[] pixels = readbitmap(slot->bitmap);
 		GlyphAtlasPage page = alloc(w, h, out int x, out int y);
-		renderer.WriteToTexture(
+		gpuDevice.WriteToTexture(
 			page.Texture.Texture,
 			new GPUTextureRegion(X: (uint)x, Y: (uint)y, Z: 0, Width: slot->bitmap.width, Height: slot->bitmap.rows),
 			pixels,
@@ -183,15 +183,15 @@ internal sealed unsafe class GlyphAtlas(WebGPURenderer renderer, TextSystem text
 	}
 
 	private GlyphAtlasPage newpage() {
-		GPUTexture tex = renderer.CreateTexture(new GPUTextureCreateParams(
+		GPUTexture tex = gpuDevice.CreateTexture(new GPUTextureCreateParams(
 			Width: (uint)pageWidth,
 			Height: (uint)pageHeight,
 			Format: TextureFormat.R8Unorm,
 			Usage: TextureUsage.TextureBinding | TextureUsage.CopyDst
 		));
-		GPUSampler sampler = renderer.CreateSampler(SamplerStates.LinearClamp);
+		GPUSampler sampler = gpuDevice.CreateSampler(SamplerStates.LinearClamp);
 		GlyphAtlasPage page = new GlyphAtlasPage {
-			Texture = new Texture2D(renderer, tex, sampler),
+			Texture = new Texture2D(gpuDevice, tex, sampler),
 			Width = pageWidth,
 			Height = pageHeight,
 			WriteX = 0,

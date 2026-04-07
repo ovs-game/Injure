@@ -7,7 +7,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Threading.Tasks;
 using Hexa.NET.SDL2;
-using Silk.NET.WebGPU;
 
 using Injure.Assets;
 using Injure.Assets.Builtin;
@@ -33,7 +32,6 @@ public static unsafe class Runner {
 		Material: CanvasMaterials.Color
 	);
 
-	[AllowNull] private static WebGPU webgpu;
 	[AllowNull] private static WebGPUDevice gpuDevice;
 	[AllowNull] private static SurfaceRenderOutput sfOutput;
 	[AllowNull] private static ViewGlobals viewGlobals;
@@ -142,9 +140,9 @@ public static unsafe class Runner {
 		double loopStep = tmconf.TargetLoopHz > 0.0 ? 1.0 / tmconf.TargetLoopHz : 0.0;
 		PerfTick loopStepTicks = (PerfTick)(ulong)Math.Round(loopStep * (double)PerfTick.Frequency);
 
-		PerfTick t1_5ms = (PerfTick)(ulong)(((UInt128)PerfTick.Frequency.Value * 15) / 10000);
-		PerfTick t0_5ms = (PerfTick)(ulong)(((UInt128)PerfTick.Frequency.Value * 5) / 10000);
-		PerfTick t0_1ms = (PerfTick)(ulong)(((UInt128)PerfTick.Frequency.Value * 1) / 10000);
+		PerfTick t1_5ms = (PerfTick)(ulong)((UInt128)PerfTick.Frequency.Value * 15 / 10000);
+		PerfTick t0_5ms = (PerfTick)(ulong)((UInt128)PerfTick.Frequency.Value * 5 / 10000);
+		PerfTick t0_1ms = (PerfTick)(ulong)((UInt128)PerfTick.Frequency.Value * 1 / 10000);
 
 		// sdl/precisewait init
 		initSDLFrom(in winconf);
@@ -152,19 +150,14 @@ public static unsafe class Runner {
 		game.Loading(new LoadingContext(LoadingPhase.Start, redrawRequested: true));
 		PerfTick loadingStartTick = PerfTick.GetCurrent();
 
-		// webgpu instance creation
-		webgpu = WebGPU.GetApi();
-		Task<IntPtr> instTask = Task.Run(() => {
-			InstanceDescriptor instDesc = default;
-			Instance *inst = WebGPUException.Check(webgpu.CreateInstance(&instDesc));
-			return (IntPtr)inst;
-		});
+		// webgpu bootstrap
+		Task<WebGPUDevice> bootstrap = Task.Run(() => new WebGPUDevice());
 
 		// basic loading-time event loop
 		SDLEvent ev;
 		double elapsed;
 		bool cancelled = false;
-		while (!instTask.IsCompleted) {
+		while (!bootstrap.IsCompleted) {
 			if (!cancelled) {
 				while (SDL.PollEvent(&ev) == 1) {
 					switch ((SDLEventType)ev.Type) {
@@ -184,13 +177,13 @@ public static unsafe class Runner {
 bootstrapCancelled:
 			SDL.Delay(10);
 		}
-		if (!instTask.IsCompletedSuccessfully)
+		if (!bootstrap.IsCompletedSuccessfully)
 			goto earlyquit;
 		elapsed = (double)(PerfTick.GetCurrent() - loadingStartTick) / (double)PerfTick.Frequency;
 		game.Loading(new LoadingContext(LoadingPhase.Finish, elapsed));
 
 		// webgpu setup
-		gpuDevice = new WebGPUDevice(webgpu, (Instance *)instTask.Result);
+		gpuDevice = bootstrap.Result;
 		sfOutput = new SurfaceRenderOutput(gpuDevice, SDLOwner.SurfaceHost!, rconf.PresentMode switch {
 			PresentMode.TearFree => SurfacePresentModePolicy.AutoMailbox,
 			PresentMode.Adaptive => SurfacePresentModePolicy.AutoRelaxedFifo,
@@ -298,7 +291,7 @@ bootstrapCancelled:
 					PerfTick remaining = deadline - now;
 					if (remaining > t1_5ms) { // n > 1.5ms
 						PerfTick n = remaining - t0_5ms; // 0.5ms of safety
-						int ms = (int)(((UInt128)n.Value * 1000) / (UInt128)PerfTick.Frequency.Value);
+						int ms = (int)((UInt128)n.Value * 1000 / (UInt128)PerfTick.Frequency.Value);
 						if (ms > 0 && SDL.WaitEventTimeout(&ev, ms) == 1) {
 							handleEvent(&ev, game, ref cont);
 							while (SDL.PollEvent(&ev) == 1)
@@ -310,7 +303,7 @@ bootstrapCancelled:
 						}
 					} else if (remaining > t0_1ms) { // 1.5ms >= n > 0.1ms
 						PerfTick n = remaining - t0_1ms; // 0.1ms of safety
-						PreciseWait.Wait((long)(((UInt128)n.Value * 1000000000) / (UInt128)PerfTick.Frequency.Value));
+						PreciseWait.Wait((long)((UInt128)n.Value * 1000000000 / (UInt128)PerfTick.Frequency.Value));
 					} else { // 0.1ms >= n > 0ms
 						Thread.SpinWait(128);
 					}
@@ -336,7 +329,6 @@ bootstrapCancelled:
 		gpuDevice.Dispose();
 
 earlyquit:
-		webgpu.Dispose();
 		PreciseWait.Deinit();
 		SDLOwner.ShutdownSDL();
 		running = false;

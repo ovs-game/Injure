@@ -60,6 +60,9 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 		this.surfaceHost = surfaceHost;
 		this.presentPolicy = presentPolicy;
 
+		SurfaceDescriptorContainer sdc;
+		surfaceHost.CreateSurfaceDesc(&sdc);
+		surface = device.API.InstanceCreateSurface(device.Instance, &sdc.Desc);
 		format = getSurfaceFormat();
 		presentMode = getSurfacePresentMode();
 		queryAndResize();

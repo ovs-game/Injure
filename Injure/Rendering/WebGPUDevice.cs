@@ -74,22 +74,13 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <summary>
 	/// Creates a <see cref="WebGPUDevice"/>.
 	/// </summary>
-	/// <param name="api">WebGPU API object to use.</param>
-	/// <param name="instance">Instance to use, or <see langword="null"/> to create one.</param>
 	/// <param name="compatibleSurface"><c>compatibleSurface</c> to pass to adapter creation.</param>
-	/// <remarks>
-	/// The instance may be passed separately as its creation sometimes took up
-	/// to 1-2s on my machine.
-	/// </remarks>
-	public WebGPUDevice(WebGPU api, Instance *instance = null, Surface *compatibleSurface = null) {
-		API = api;
-		Instance = instance;
-		if (Instance is null) {
-			InstanceDescriptor instDesc = default;
-			Instance = Check(API.CreateInstance(&instDesc));
-		}
-		Adapter = requestAdapterBlocking(instance, compatibleSurface);
-		Device = requestDeviceBlocking(instance, Adapter);
+	public WebGPUDevice(Surface *compatibleSurface = null) {
+		API = WebGPU.GetApi();
+		InstanceDescriptor instDesc = default;
+		Instance = Check(API.CreateInstance(&instDesc));
+		Adapter = requestAdapterBlocking(Instance, compatibleSurface);
+		Device = requestDeviceBlocking(Instance, Adapter);
 		Queue = Check(API.DeviceGetQueue(Device));
 		globalsUniformBindGroupLayout = mkGlobalsUniformBindGroupLayout();
 		globalsUniformBindGroupLayoutWrap = new GPUBindGroupLayoutRef(globalsUniformBindGroupLayout);
@@ -758,5 +749,6 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		if (Device is not null) API.DeviceRelease(Device);
 		if (Adapter is not null) API.AdapterRelease(Adapter);
 		if (Instance is not null) API.InstanceRelease(Instance);
+		API.Dispose();
 	}
 }

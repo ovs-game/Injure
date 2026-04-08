@@ -6,6 +6,7 @@ using Silk.NET.WebGPU;
 
 using Injure.Assets;
 using Injure.Rendering;
+using System.Runtime.CompilerServices;
 
 namespace Injure.Graphics;
 
@@ -58,26 +59,28 @@ public sealed class Texture2D(WebGPUDevice device, GPUTexture texture, GPUSample
 	// these three below should be fine as long as Texture calls alive()
 
 	/// <summary>
-	/// Gets the width of the texture in pixels.
+	/// Width of the texture in texels.
 	/// </summary>
 	public uint Width => Texture.Width;
 
 	/// <summary>
-	/// Gets the height of the texture in pixels.
+	/// Height of the texture in texels.
 	/// </summary>
 	public uint Height => Texture.Height;
 
 	/// <summary>
-	/// Gets the texture format.
+	/// Texture format.
 	/// </summary>
 	public TextureFormat Format => Texture.Format;
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void chk() {
 		ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
 		if (Volatile.Read(ref revoked) != 0)
 			throw new AssetLeaseExpiredException("borrowed texture was used after its lease expired");
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private T alive<T>(T val) {
 		chk();
 		return val;
@@ -90,6 +93,7 @@ public sealed class Texture2D(WebGPUDevice device, GPUTexture texture, GPUSample
 	/// This is used by the asset subsystem when a leased <see cref="Texture2D"/> obtained
 	/// by borrowing a <see cref="AssetRef{Texture2D}"/> expires. Revocation is logical
 	/// invalidation only; the underlying GPU resources remain alive until <see cref="Dispose"/>.
+	/// </remarks>
 	public void Revoke() {
 		if (Volatile.Read(ref disposed) != 0)
 			return;

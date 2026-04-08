@@ -8,7 +8,7 @@ using Buffer = Silk.NET.WebGPU.Buffer;
 namespace Injure.Rendering;
 
 /// <summary>
-/// Low-level owning wrapper around a GPU buffer.
+/// Owning wrapper around a GPU buffer.
 /// </summary>
 public sealed unsafe class GPUBuffer(WebGPUDevice device, Buffer *buffer, ulong size, BufferUsage usage) : IDisposable {
 	private readonly WebGPUDevice device = device;
@@ -16,11 +16,9 @@ public sealed unsafe class GPUBuffer(WebGPUDevice device, Buffer *buffer, ulong 
 	internal Buffer *Buffer { get; private set; } = buffer;
 
 	/// <summary>
-	/// Returns the underlying pointer to a WebGPU <see cref="Silk.NET.WebGPU.Buffer"/>.
+	/// Returns the underlying <see cref="Silk.NET.WebGPU.Buffer"/>, bypassing
+	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	/// <remarks>
-	/// Returns <see langword="null"/> post-disposal.
-	/// </remarks>
 	public Buffer *DangerousGetPtr() => Buffer;
 
 	/// <summary>

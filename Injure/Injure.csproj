@@ -5,6 +5,8 @@
 		<Nullable>enable</Nullable>
 		<IsAotCompatible>true</IsAotCompatible>
 		<JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<NoWarn>$(NoWarn);CS1591</NoWarn> <!-- temporary, disable warnings for undocumented public members -->
 
 		<PackageId>Injure</PackageId>
 		<Version>0.1.0-alpha.0</Version>

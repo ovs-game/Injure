@@ -31,7 +31,7 @@ public enum SurfacePresentModePolicy {
 
 	/// <summary>
 	/// Prefer <see cref="PresentMode.Immediate"/>, fall back to <see cref="PresentMode.Mailbox"/>,
-	/// then <see cref="PresentMode.FifoRelaxed">, and finally <see cref="PresentMode.Fifo"/>
+	/// then <see cref="PresentMode.FifoRelaxed"/>, and finally <see cref="PresentMode.Fifo"/>
 	/// if not present.
 	/// </summary>
 	/// <remarks>

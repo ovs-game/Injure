@@ -244,6 +244,9 @@ public sealed class CoroutineScheduler {
 	/// <param name="routine">The root iterator to run.</param>
 	/// <param name="scope">The lifetime scope to bind to. Must belong to this scheduler.</param>
 	/// <param name="options">Optional coroutine options. When <see langword="null"/>, defaults are used.</param>
+	/// <param name="callerFile">Caller file path, used for debug info.</param>
+	/// <param name="callerLine">Caller line number, used for debug info.</param>
+	/// <param name="callerMember">Caller member name, used for debug info.</param>
 	/// <returns>
 	/// A handle for the created coroutine.
 	/// </returns>
@@ -271,6 +274,9 @@ public sealed class CoroutineScheduler {
 	/// <param name="routine">The root iterator to run.</param>
 	/// <param name="scope">The lifetime scope to bind to. Must belong to this scheduler.</param>
 	/// <param name="options">Optional coroutine options. When <see langword="null"/>, defaults are used.</param>
+	/// <param name="callerFile">Caller file path, used for debug info.</param>
+	/// <param name="callerLine">Caller line number, used for debug info.</param>
+	/// <param name="callerMember">Caller member name, used for debug info.</param>
 	/// <returns>
 	/// A handle for the started coroutine.
 	/// </returns>

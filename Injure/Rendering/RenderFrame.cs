@@ -7,23 +7,21 @@ using Silk.NET.WebGPU;
 namespace Injure.Rendering;
 
 /// <summary>
-/// <para>
 /// Frame-local command recording scope.
-/// </para>
-/// <para>
-/// Owns the command encoder and acquired primary-target surface resources for one
-/// render frame, and allows opening render passes to either the primary target or
-/// offscreen render targets.
-/// </para>
+/// Owns the command encoder and acquired primary output for one render frame,
+/// and allows opening render passes to either the primary output or offscreen
+/// render targets.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Intended to be used as a scope via <c>using</c>.
+/// Intended to be used as a scope via <c>using</c>. If a frame is disposed without
+/// ever being submitted, the recorded work is discarded and acquired output resources
+/// are released without presentation.
 /// </para>
 /// <para>
 /// Only one <see cref="RenderPass"/> may be active at a time. Temporary
-/// resources that must survive up to the submission can be registered with
-/// <see cref="DisposeAfterSubmit(IDisposable)"/>.
+/// resources that must survive up to the submission (or discard via disposal)
+/// can be registered with <see cref="DisposeAfterSubmit(IDisposable)"/>.
 /// </para>
 /// </remarks>
 public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture primaryTex, TextureView *primaryView, CommandEncoder *encoder,
@@ -37,8 +35,25 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 	private bool activepass = false;
 	private bool done = false;
 
+	/// <summary>
+	/// The width of this frame's primary output in physical pixels.
+	/// </summary>
+	/// <remarks>
+	/// This is a snapshot and does not change for the lifetime of the frame.
+	/// </remarks>
 	public uint PrimaryWidth { get; } = primaryW;
+
+	/// <summary>
+	/// The height of this frame's primary output in physical pixels.
+	/// </summary>
+	/// <remarks>
+	/// This is a snapshot and does not change for the lifetime of the frame.
+	/// </remarks>
 	public uint PrimaryHeight { get; } = primaryH;
+
+	/// <summary>
+	/// The color format of this frame's primary output.
+	/// </summary>
 	public TextureFormat PrimaryFormat { get; } = primaryFormat;
 
 	private void onPassFinished() {
@@ -47,7 +62,8 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 		activepass = false;
 	}
 
-	private RenderPass beginPass(CommandEncoder *enc, TextureView *colorView, TextureView *depthStencilView, in ColorAttachmentOps colorOps, in DepthStencilAttachmentOps? depthStencilOps) {
+	private RenderPass beginPass(CommandEncoder *enc, TextureView *colorView, TextureView *depthStencilView,
+		in ColorAttachmentOps colorOps, in DepthAttachmentOps? depthOps, in StencilAttachmentOps? stencilOps) {
 		if (done)
 			throw new InvalidOperationException("frame already submitted/disposed");
 		if (activepass)
@@ -69,21 +85,26 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 		// alloc here so it doesn't go out of scope after the if block
 		RenderPassDepthStencilAttachment *depthStencilAttachment = stackalloc RenderPassDepthStencilAttachment[1];
 		if (depthStencilView is not null) {
-			DepthStencilAttachmentOps ops = depthStencilOps ?? throw new ArgumentNullException(nameof(depthStencilOps));
+			DepthAttachmentOps d = depthOps ?? throw new ArgumentNullException(nameof(depthOps));
 			depthStencilAttachment[0] = new RenderPassDepthStencilAttachment {
 				View = depthStencilView,
-				DepthLoadOp = ops.DepthLoadOp,
-				DepthStoreOp = ops.DepthStoreOp,
-				DepthClearValue = ops.DepthClearValue,
-				DepthReadOnly = false,
-				StencilLoadOp = ops.StencilLoadOp,
-				StencilStoreOp = ops.StencilStoreOp,
-				StencilClearValue = ops.StencilClearValue,
-				StencilReadOnly = true
+				DepthLoadOp = d.LoadOp,
+				DepthStoreOp = d.StoreOp,
+				DepthClearValue = d.ClearValue,
+				DepthReadOnly = false
 			};
+			if (stencilOps is StencilAttachmentOps st) {
+				depthStencilAttachment[0].StencilLoadOp = st.LoadOp;
+				depthStencilAttachment[0].StencilStoreOp = st.StoreOp;
+				depthStencilAttachment[0].StencilClearValue = st.ClearValue;
+				depthStencilAttachment[0].StencilReadOnly = false;
+			} else {
+				depthStencilAttachment[0].StencilLoadOp = LoadOp.Undefined;
+				depthStencilAttachment[0].StencilStoreOp = StoreOp.Undefined;
+				depthStencilAttachment[0].StencilClearValue = 0;
+				depthStencilAttachment[0].StencilReadOnly = true;
+			}
 			desc.DepthStencilAttachment = depthStencilAttachment;
-		} else if (depthStencilOps is not null) {
-			throw new ArgumentException("depthStencilOps were provided, but the render target has no depth/stencil attachment");
 		}
 
 		RenderPassEncoder *passEnc = WebGPUException.Check(device.API.CommandEncoderBeginRenderPass(enc, &desc));
@@ -92,49 +113,112 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 	}
 
 	/// <summary>
-	/// Opens a render pass targeting the primary view acquired for this frame.
+	/// Opens a render pass targeting the primary output.
 	/// </summary>
 	/// <param name="colorOps">Color attachment load/store operations.</param>
 	/// <remarks>
+	/// <para>
+	/// The primary output is color-only. Passes that require depth/stencil
+	/// should use an offscreen render target instead.
+	/// </para>
+	/// <para>
 	/// The returned <see cref="RenderPass"/> object must be disposed before the
 	/// frame can be submitted or disposed.
+	/// </para>
 	/// </remarks>
 	/// <exception cref="InvalidOperationException">
 	/// Thrown if the frame has already been submitted/disposed, or if another
 	/// render pass is already active.
 	/// </exception>
 	public RenderPass BeginPrimaryPass(in ColorAttachmentOps colorOps) {
-		return beginPass(encoder, primaryView, null, colorOps, null);
+		return beginPass(encoder, primaryView, null, colorOps, null, null);
 	}
 
 	/// <summary>
-	/// Opens a render pass targeting the given offscreen render target.
+	/// Opens a render pass targeting the given offscreen render target with
+	/// no depth/stencil attachment.
 	/// </summary>
-	/// <param name="rt">Render target whose color view will be used as the pass's color attachment.</param>
+	/// <param name="rt">Render target to use.</param>
 	/// <param name="colorOps">Color attachment load/store operations.</param>
-	/// <param name="depthStencilOps">Depth/stencil attachment load/store operations, if applicable.</param>
 	/// <remarks>
-	/// If <paramref name="rt"/> has a depth/stencil attachment, it is bound
-	/// automatically alongside the color attachment.
 	/// The returned <see cref="RenderPass"/> object must be disposed before the
 	/// frame can be submitted or disposed.
 	/// </remarks>
 	/// <exception cref="ArgumentNullException">
-	/// Thrown if <paramref name="rt"/> is <see langword="null"/>, or if
-	/// <paramref name="rt"/> has a depth/stencil attachment but
-	/// <paramref name="depthStencilOps"/> is <see langword="null"/>.
+	/// Thrown if <paramref name="rt"/> is <see langword="null"/>.
 	/// </exception>
 	/// <exception cref="ArgumentException">
-	/// Thrown if <paramref name="depthStencilOps"/> is provided but
-	/// <paramref name="rt"/> does not have a depth/stencil attachment.
+	/// Thrown if <paramref name="rt"/> has a depth/stencil attachment.
 	/// </exception>
 	/// <exception cref="InvalidOperationException">
 	/// Thrown if the frame has already been submitted/disposed, or if another
 	/// render pass is already active.
 	/// </exception>
-	public RenderPass BeginRenderTargetPass(GPURenderTarget rt, in ColorAttachmentOps colorOps, in DepthStencilAttachmentOps? depthStencilOps = null) {
+	public RenderPass BeginRenderTargetPass(GPURenderTarget rt, in ColorAttachmentOps colorOps) {
 		ArgumentNullException.ThrowIfNull(rt);
-		return beginPass(encoder, rt.ColorView, rt.DepthStencilView, colorOps, depthStencilOps);
+		if (rt.HasDepth)
+			throw new ArgumentException("expected this render target to not have a depth/stencil attachment; use another overload of this method if it does", nameof(rt));
+		return beginPass(encoder, rt.ColorView, null, colorOps, null, null);
+	}
+
+	/// <summary>
+	/// Opens a render pass targeting the given offscreen render target with
+	/// a depth attachment and no stencil attachment.
+	/// </summary>
+	/// <param name="rt">Render target to use.</param>
+	/// <param name="colorOps">Color attachment load/store operations.</param>
+	/// <param name="depthOps">Depth attachment load/store operations.</param>
+	/// <remarks>
+	/// The returned <see cref="RenderPass"/> object must be disposed before the
+	/// frame can be submitted or disposed.
+	/// </remarks>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if <paramref name="rt"/> is <see langword="null"/>.
+	/// </exception>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="rt"/> has no depth attachment, or if its
+	/// depth attachment includes stencil.
+	/// </exception>
+	/// <exception cref="InvalidOperationException">
+	/// Thrown if the frame has already been submitted/disposed, or if another
+	/// render pass is already active.
+	/// </exception>
+	public RenderPass BeginRenderTargetPass(GPURenderTarget rt, in ColorAttachmentOps colorOps, in DepthAttachmentOps depthOps) {
+		ArgumentNullException.ThrowIfNull(rt);
+		if (!rt.HasDepth)
+			throw new ArgumentException("expected this render target to have a depth attachment; use another overload of this method if it doesn't", nameof(rt));
+		if (rt.HasStencil)
+			throw new ArgumentException("expected this render target to not have a stencil attachment; use another overload of this method if it does", nameof(rt));
+		return beginPass(encoder, rt.ColorView, rt.DepthStencilView, colorOps, depthOps, null);
+	}
+
+	/// <summary>
+	/// Opens a render pass targeting the given offscreen render target with
+	/// a depth + stencil attachment.
+	/// </summary>
+	/// <param name="rt">Render target to use.</param>
+	/// <param name="colorOps">Color attachment load/store operations.</param>
+	/// <param name="depthOps">Depth attachment load/store operations.</param>
+	/// <param name="stencilOps">Stencil attachment load/store operations.</param>
+	/// <remarks>
+	/// The returned <see cref="RenderPass"/> object must be disposed before the
+	/// frame can be submitted or disposed.
+	/// </remarks>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if <paramref name="rt"/> is <see langword="null"/>.
+	/// </exception>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="rt"/> has no depth attachment or no stencil attachment.
+	/// </exception>
+	/// <exception cref="InvalidOperationException">
+	/// Thrown if the frame has already been submitted/disposed, or if another
+	/// render pass is already active.
+	/// </exception>
+	public RenderPass BeginRenderTargetPass(GPURenderTarget rt, in ColorAttachmentOps colorOps, in DepthAttachmentOps depthOps, in StencilAttachmentOps stencilOps) {
+		ArgumentNullException.ThrowIfNull(rt);
+		if (!rt.HasDepth || !rt.HasStencil)
+			throw new ArgumentException("expected this render target to have a depth + stencil attachment; use another overload of this method if it doesn't", nameof(rt));
+		return beginPass(encoder, rt.ColorView, rt.DepthStencilView, colorOps, depthOps, stencilOps);
 	}
 
 	/// <summary>
@@ -161,8 +245,7 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 	}
 
 	/// <summary>
-	/// Finishes command recording, submits the frame, and presents the currently
-	/// acquired primary target texture.
+	/// Finishes command recording, submits the frame, and presents on the primary output.
 	/// </summary>
 	/// <remarks>
 	/// Any disposables registered with <see cref="DisposeAfterSubmit(IDisposable)"/>
@@ -176,7 +259,7 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 		if (done)
 			throw new InvalidOperationException("frame already submitted/disposed");
 		if (activepass)
-			throw new InvalidOperationException("frame still has an unclosed render pass");
+			throw new InvalidOperationException("frame still has an active render pass");
 
 		CommandBufferDescriptor desc;
 		CommandBuffer *cmdbuf = WebGPUException.Check(device.API.CommandEncoderFinish(encoder, &desc));
@@ -198,13 +281,16 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 	/// Discards the frame if it has not already been submitted.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// Callers should structure usage such that this always runs, typically via
 	/// <c>using</c>, rather than only disposing on non-submit paths.
-	///
+	/// </para>
+	/// <para>
 	/// Any disposables registered with <see cref="DisposeAfterSubmit(IDisposable)"/>
 	/// are disposed.
 	/// Disposing a frame with an active pass is a bug and throws instead of
-	/// silently closing the pass.
+	/// silently ending the pass.
+	/// </para>
 	/// </remarks>
 	/// <exception cref="InvalidOperationException">
 	/// Thrown if a render pass is still active.
@@ -213,7 +299,7 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 		if (done)
 			return;
 		if (activepass)
-			throw new InvalidOperationException("frame still has an unclosed render pass - this could be automatically cleaned up, but if it happened you probably have a bug");
+			throw new InvalidOperationException("frame still has an active render pass - this could be automatically cleaned up, but if it happened you probably have a bug");
 
 		done = true;
 		device.API.CommandEncoderRelease(encoder);

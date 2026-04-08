@@ -5,12 +5,27 @@ using Silk.NET.WebGPU;
 
 namespace Injure.Rendering;
 
+/// <summary>
+/// Owning wrapper around a GPU pipeline layout.
+/// </summary>
+/// <remarks>
+/// A pipeline layout describes the bind group layouts that pipelines
+/// created from it expect.
+/// </remarks>
 public sealed unsafe class GPUPipelineLayout(WebGPUDevice device, PipelineLayout *pipelineLayout) : IDisposable {
 	private readonly WebGPUDevice device = device;
 
 	internal PipelineLayout *PipelineLayout { get; private set; } = pipelineLayout;
+
+	/// <summary>
+	/// Returns the underlying <see cref="Silk.NET.WebGPU.PipelineLayout"/>, bypassing
+	/// ownership/lifetime/revocation contracts.
+	/// </summary>
 	public PipelineLayout *DangerousGetPtr() => PipelineLayout;
 
+	/// <summary>
+	/// Releases the underlying WebGPU pipeline layout.
+	/// </summary>
 	public void Dispose() {
 		if (PipelineLayout is not null)
 			device.API.PipelineLayoutRelease(PipelineLayout);

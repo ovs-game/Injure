@@ -8,6 +8,7 @@ using Injure.Rendering;
 
 namespace Injure.Graphics;
 
+// TODO: proper depth/stencil support
 public sealed class RenderTarget2D : IDisposable {
 	private readonly WebGPUDevice device;
 	private int disposed = 0;
@@ -24,10 +25,10 @@ public sealed class RenderTarget2D : IDisposable {
 			return field;
 		}
 	}
-	public GPUBindGroupRef BindGroup {
+	public GPUBindGroupRef ColorBindGroup {
 		get {
 			ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
-			colorBindGroup ??= device.CreateTextureBindGroup(Target, Sampler);
+			colorBindGroup ??= device.CreateRenderTargetColorBindGroup(Target, Sampler);
 			return colorBindGroup.AsRef();
 		}
 	}
@@ -35,7 +36,7 @@ public sealed class RenderTarget2D : IDisposable {
 
 	public uint Width => Target.Width;
 	public uint Height => Target.Height;
-	public TextureFormat Format => Target.Format;
+	public TextureFormat ColorFormat => Target.ColorFormat;
 
 	public RenderTarget2D(WebGPUDevice device, GPURenderTarget target, GPUSampler sampler) {
 		this.device = device ?? throw new ArgumentNullException(nameof(device));
@@ -55,7 +56,7 @@ public sealed class RenderTarget2D : IDisposable {
 		Target = device.CreateRenderTarget(new GPURenderTargetCreateParams(
 			Width: width,
 			Height: height,
-			Format: format
+			ColorFormat: format
 		));
 		Sampler = device.CreateSampler(SamplerStates.NearestClamp);
 	}

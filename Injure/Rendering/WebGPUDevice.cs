@@ -344,7 +344,18 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <param name="data">Source texel data.</param>
 	/// <param name="layout">Source memory layout.</param>
 	/// <remarks>
+	/// <para>
+	/// The number of bytes consumed from each source row is determined by the
+	/// uploaded texture region and format, while <see cref="GPUTextureLayout.BytesPerRow"/>
+	/// is the spacing between row starts in memory. This allows uploading from data
+	/// with padding between rows.
+	/// </para>
+	/// <para>
+	/// There are no alignment/etc. restrictions on the values in <see cref="GPUTextureLayout"/>.
+	/// </para>
+	/// <para>
 	/// Empty spans are accepted and are a no-op.
+	/// </para>
 	/// </remarks>
 	public void WriteToTexture<T>(GPUTexture tex, in GPUTextureRegion dst, ReadOnlySpan<T> data, in GPUTextureLayout layout) where T : unmanaged {
 		ObjectDisposedException.ThrowIf(disposed, this);
@@ -363,7 +374,18 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <param name="size">Number of bytes to upload from <paramref name="data"/>.</param>
 	/// <param name="layout">Source memory layout.</param>
 	/// <remarks>
+	/// <para>
+	/// The number of bytes consumed from each source row is determined by the
+	/// uploaded texture region and format, while <see cref="GPUTextureLayout.BytesPerRow"/>
+	/// is the spacing between row starts in memory. This allows uploading from data
+	/// with padding between rows.
+	/// </para>
+	/// <para>
+	/// There are no alignment/etc. restrictions on the values in <see cref="GPUTextureLayout"/>.
+	/// </para>
+	/// <para>
 	/// The pointer only needs to remain valid for the duration of the call.
+	/// </para>
 	/// </remarks>
 	public void WriteToTexture(GPUTexture tex, in GPUTextureRegion dst, void *data, nuint size, in GPUTextureLayout layout) {
 		ObjectDisposedException.ThrowIf(disposed, this);
@@ -485,15 +507,15 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	}
 
 	/// <summary>
-	/// Creates a texture+sampler bind group, returning an owning object.
+	/// Creates a texture+sampler bind group for a render target's color view,
+	/// returning an owning object.
 	/// </summary>
 	/// <param name="rt">Render target whose color view will be sampled.</param>
 	/// <param name="sampler">Sampler to pair with the render target's color view.</param>
 	/// <remarks>
 	/// The returned bind group matches <see cref="TextureBindGroupLayout"/>.
-	/// This does not bind the render target's depth attachment.
 	/// </remarks>
-	public GPUBindGroup CreateTextureBindGroup(GPURenderTarget rt, GPUSampler sampler) {
+	public GPUBindGroup CreateRenderTargetColorBindGroup(GPURenderTarget rt, GPUSampler sampler) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		return createTexViewPlusSamplerBindGroup(rt.ColorView, sampler.Sampler);
 	}
@@ -505,7 +527,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <remarks>
 	/// The created color texture is configured for both render attachment use
 	/// and texture sampling so that the render target can later be sampled via
-	/// <see cref="CreateTextureBindGroup(GPURenderTarget, GPUSampler)"/> and drawn.
+	/// <see cref="CreateRenderTargetColorBindGroup(GPURenderTarget, GPUSampler)"/> and drawn.
 	/// </remarks>
 	public GPURenderTarget CreateRenderTarget(in GPURenderTargetCreateParams @params) {
 		ObjectDisposedException.ThrowIf(disposed, this);
@@ -516,14 +538,14 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				Height = @params.Height,
 				DepthOrArrayLayers = 1
 			},
-			Format = @params.Format,
+			Format = @params.ColorFormat,
 			MipLevelCount = 1,
 			SampleCount = 1,
 			Usage = TextureUsage.RenderAttachment | TextureUsage.TextureBinding
 		};
 		Texture *colorTex = Check(API.DeviceCreateTexture(Device, &colorDesc));
 		TextureViewDescriptor colorViewDesc = new TextureViewDescriptor {
-			Format = @params.Format,
+			Format = @params.ColorFormat,
 			Dimension = TextureViewDimension.Dimension2D,
 			BaseMipLevel = 0,
 			MipLevelCount = 1,
@@ -539,9 +561,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 
 		Texture *depthTex = null;
 		TextureView *depthView = null;
-		if (@params.HasDepthStencil) {
-			const TextureFormat fmt = TextureFormat.Depth24Plus;
-
+		if (@params.DepthStencilFormat is TextureFormat fmt) {
 			TextureDescriptor depthDesc = new TextureDescriptor {
 				Dimension = TextureDimension.Dimension2D,
 				Size = new Extent3D {
@@ -577,7 +597,8 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				throw new WebGPUException("TextureCreateView", "WebGPU call returned null");
 			}
 		}
-		return new GPURenderTarget(this, colorTex, colorView, depthTex, depthView, @params.Width, @params.Height, @params.Format);
+		return new GPURenderTarget(this, colorTex, colorView, depthTex, depthView,
+			@params.Width, @params.Height, @params.ColorFormat, @params.DepthStencilFormat);
 	}
 
 	/// <summary>
@@ -677,7 +698,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			ColorTargetState *targets = stackalloc ColorTargetState[1];
 			targets[0] = new ColorTargetState {
 				Format = @params.ColorTargetFormat,
-				WriteMask = ColorWriteMask.All,
+				WriteMask = @params.ColorWriteMask,
 				Blend = blendp
 			};
 

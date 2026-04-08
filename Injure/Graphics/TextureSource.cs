@@ -89,13 +89,13 @@ internal readonly ref struct ResolvedTextureSource {
 	};
 	public TextureFormat Format => Kind switch {
 		ResolvedTextureSourceKind.Texture2D => texture!.Format,
-		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!.Format,
+		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!.ColorFormat,
 		ResolvedTextureSourceKind.LeasedTexture2D => lease.Value.Format,
 		_ => throw new UnreachableException()
 	};
 	public GPUBindGroupRef BindGroup => Kind switch {
 		ResolvedTextureSourceKind.Texture2D => texture!.BindGroup,
-		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!.BindGroup,
+		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!.ColorBindGroup,
 		ResolvedTextureSourceKind.LeasedTexture2D => lease.Value.BindGroup,
 		_ => throw new UnreachableException()
 	};

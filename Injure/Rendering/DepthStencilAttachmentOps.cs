@@ -4,47 +4,38 @@ using Silk.NET.WebGPU;
 
 namespace Injure.Rendering;
 
-public readonly record struct DepthStencilAttachmentOps(
-	LoadOp DepthLoadOp,
-	StoreOp DepthStoreOp,
-	float DepthClearValue,
-	LoadOp StencilLoadOp,
-	StoreOp StencilStoreOp,
-	uint StencilClearValue
+public readonly record struct DepthAttachmentOps(
+	LoadOp LoadOp,
+	StoreOp StoreOp,
+	float ClearValue
 ) {
-	public static readonly DepthStencilAttachmentOps Load = new DepthStencilAttachmentOps(
-		DepthLoadOp: LoadOp.Load,
-		DepthStoreOp: StoreOp.Store,
-		DepthClearValue: 1f,
-		StencilLoadOp: LoadOp.Load,
-		StencilStoreOp: StoreOp.Store,
-		StencilClearValue: 0
+	public static readonly DepthAttachmentOps Load = new DepthAttachmentOps(
+		LoadOp: LoadOp.Load,
+		StoreOp: StoreOp.Store,
+		ClearValue: 1f
 	);
 
-	public static DepthStencilAttachmentOps Clear(float depthClear = 1f, uint stencilClear = 0) => new DepthStencilAttachmentOps(
-		DepthLoadOp: LoadOp.Clear,
-		DepthStoreOp: StoreOp.Store,
-		DepthClearValue: depthClear,
-		StencilLoadOp: LoadOp.Clear,
-		StencilStoreOp: StoreOp.Store,
-		StencilClearValue: stencilClear
+	public static DepthAttachmentOps Clear(float value) => new DepthAttachmentOps(
+		LoadOp: LoadOp.Clear,
+		StoreOp: StoreOp.Store,
+		ClearValue: value
+	);
+}
+
+public readonly record struct StencilAttachmentOps(
+	LoadOp LoadOp,
+	StoreOp StoreOp,
+	uint ClearValue
+) {
+	public static readonly StencilAttachmentOps Load = new StencilAttachmentOps(
+		LoadOp: LoadOp.Load,
+		StoreOp: StoreOp.Store,
+		ClearValue: 0
 	);
 
-	public static DepthStencilAttachmentOps ClearDepth(float depthClear = 1f) => new DepthStencilAttachmentOps(
-		DepthLoadOp: LoadOp.Clear,
-		DepthStoreOp: StoreOp.Store,
-		DepthClearValue: depthClear,
-		StencilLoadOp: LoadOp.Load,
-		StencilStoreOp: StoreOp.Store,
-		StencilClearValue: 0
-	);
-
-	public static DepthStencilAttachmentOps ClearStencil(uint stencilClear = 0) => new DepthStencilAttachmentOps(
-		DepthLoadOp: LoadOp.Load,
-		DepthStoreOp: StoreOp.Store,
-		DepthClearValue: 1f,
-		StencilLoadOp: LoadOp.Clear,
-		StencilStoreOp: StoreOp.Store,
-		StencilClearValue: stencilClear
+	public static StencilAttachmentOps Clear(uint value) => new StencilAttachmentOps(
+		LoadOp: LoadOp.Clear,
+		StoreOp: StoreOp.Store,
+		ClearValue: value
 	);
 }

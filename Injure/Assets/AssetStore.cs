@@ -516,7 +516,7 @@ public sealed class AssetStore {
 	/// </summary>
 	/// <typeparam name="T">Expected asset type. Determines what creators are tried.</typeparam>
 	/// <param name="id">Asset ID.</param>
-	/// <returns>An <see cref="AssetRef{T}"/> handle for the specified asset.
+	/// <returns>An <see cref="AssetRef{T}"/> handle for the specified asset.</returns>
 	public AssetRef<T> GetAsset<T>(AssetID id) where T : class {
 		AssetKey key = new AssetKey(id, typeof(T));
 		if (!slots.TryGetValue(key, out IAssetSlot? s)) {

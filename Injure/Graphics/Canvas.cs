@@ -29,7 +29,7 @@ public readonly struct CanvasTarget : IEquatable<CanvasTarget> {
 	/// <summary>
 	/// Whether this target represents the primary target.
 	/// </summary>
-	[MemberNotNullWhen(false, nameof(rtBacking), nameof(RenderTarget))]
+	[MemberNotNullWhen(false, nameof(rtBacking))]
 	public bool IsPrimary => rtBacking is null;
 
 	/// <summary>
@@ -264,13 +264,15 @@ public enum CanvasSubmitMode {
 /// <summary>
 /// Parameters for <see cref="Canvas"/>.
 /// </summary>
-/// <param name="Transform">Transform matrix to be applied to draws.</param>
 /// <param name="Target">Target to be drawn into.</param>
 /// <param name="ColorAttachmentOps">
 /// Color attachment load/store behavior used when opening/reopening the pass
 /// for <paramref name="Target"/>.
 /// </param>
 /// <param name="Scissor">Scissor rect.</param>
+/// <param name="OutputState">Output state (blend state, color mask, etc.)</param>
+/// <param name="Material">Material to use for textured draws.</param>
+/// <param name="Transform">Transform matrix to be applied to draws.</param>
 /// <param name="SubmitMode">Submit policy for mixed primitive/textured draws.</param>
 /// <remarks>
 /// Passing a scissor of kind <see cref="CanvasScissorKind.Intersect"/> is invalid for
@@ -455,7 +457,7 @@ public sealed class Canvas : IDisposable {
 	private TextureFormat currentColorFormat {
 		get {
 			CanvasTarget t = CurrentParams.Target;
-			return t.IsPrimary ? frame.PrimaryFormat : t.RenderTarget.Format;
+			return t.IsPrimary ? frame.PrimaryFormat : t.RenderTarget.ColorFormat;
 		}
 	}
 	

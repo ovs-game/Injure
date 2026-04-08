@@ -12,7 +12,9 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 ----------
 TODO:
 
-- [active] FIX THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
+- [active] layers system
+- [active] clocks, clock filtering, etc.
+- [next-up] FIX THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
 - [next-up] fix the `Rendering/` doc comments and write the missing ones
 - [next-up] dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
 - [Idk when but this should be done] stop having the todo here and use github issues
@@ -42,8 +44,6 @@ TODO:
 - [next-up] fix paragraphs in doc comments (i found out it doesn't work like markdown and you need explicit `<para>`)
 - [next-up] asset file watchers (FOR REAL THIS TIME (
 - [priority] windows builds
-- [priority] layers system
-- [priority] clocks, clock filtering, etc.
 - [priority] more tests, like a Lot more
 - `.tex.json` should be the primary way to load textures, add more stuff there
 - streaming textures and readback

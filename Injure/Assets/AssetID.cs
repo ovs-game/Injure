@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -10,9 +11,23 @@ namespace Injure.Assets;
 /// Unique asset identifier, consisting of a namespace and path.
 /// </summary>
 [JsonConverter(typeof(AssetIDJsonConverter))]
-public readonly struct AssetID(string ns, string path) : IEquatable<AssetID>, ISpanParsable<AssetID> {
-	public readonly string Namespace = ns;
-	public readonly string Path = path;
+public readonly struct AssetID : IEquatable<AssetID>, ISpanParsable<AssetID> {
+	public readonly string Namespace;
+	public readonly string Path;
+
+	public AssetID(string ns, string path) : this(ns, path, skipValidation: false) {
+	}
+
+	internal AssetID(string ns, string path, bool skipValidation) {
+		if (!skipValidation) {
+			if (!tryValidateNamespace(ns, out string? err))
+				throw new ArgumentException(err, nameof(ns));
+			if (!tryValidatePath(path, out err))
+				throw new ArgumentException(err, nameof(path));
+		}
+		Namespace = ns;
+		Path = path;
+	}
 
 	public bool Equals(AssetID other) => Namespace == other.Namespace && Path == other.Path;
 	public override bool Equals(object? obj) => obj is AssetID other && Equals(other);
@@ -33,7 +48,8 @@ public readonly struct AssetID(string ns, string path) : IEquatable<AssetID>, IS
 	/// <param name="val">On success, the parsed value.</param>
 	/// <returns>
 	/// <see langword="true"/> if the string is in the format <c>namespace::path</c>
-	/// and as such the parse succeeded, otherwise <see langword="false"/>.
+	/// and has a valid namespace and path, and as such the parse succeeded,
+	/// otherwise <see langword="false"/>.
 	/// </returns>
 	public static bool TryParse(string? s, out AssetID val) {
 		val = default;
@@ -42,7 +58,9 @@ public readonly struct AssetID(string ns, string path) : IEquatable<AssetID>, IS
 		int i = s.IndexOf("::", StringComparison.Ordinal);
 		if (i < 0 || s.IndexOf("::", i + 2, StringComparison.Ordinal) >= 0)
 			return false;
-		val = new AssetID(s[..i], s[(i + 2)..]);
+		if (!tryValidateNamespace(s.AsSpan(0, i), out _) || !tryValidatePath(s.AsSpan(i + 2), out _))
+			return false;
+		val = new AssetID(s[..i], s[(i + 2)..], skipValidation: true);
 		return true;
 	}
 	/// <inheritdoc cref="TryParse(string, out AssetID)"/>
@@ -60,14 +78,17 @@ public readonly struct AssetID(string ns, string path) : IEquatable<AssetID>, IS
 	/// The parsed value.
 	/// </returns>
 	/// <exception cref="FormatException">
-	/// Thrown if the string is not in the format <c>namespace::path</c>.
+	/// Thrown if the string is not in the format <c>namespace::path</c> or has
+	/// an invalid namespace or path.
 	/// </exception>
 	public static AssetID Parse(string? s) {
 		ArgumentNullException.ThrowIfNull(s);
 		int i = s.IndexOf("::", StringComparison.Ordinal);
 		if (i < 0 || s.IndexOf("::", i + 2, StringComparison.Ordinal) >= 0)
 			throw new FormatException("string must contain exactly one occurrence of ::");
-		return new AssetID(s[..i], s[(i + 2)..]);
+		validateNamespace(s.AsSpan(0, i));
+		validatePath(s.AsSpan(i + 2));
+		return new AssetID(s[..i], s[(i + 2)..], skipValidation: true);
 	}
 	/// <inheritdoc cref="Parse(string)"/>
 	/// <remarks>
@@ -83,15 +104,17 @@ public readonly struct AssetID(string ns, string path) : IEquatable<AssetID>, IS
 	/// <param name="val">On success, the parsed value.</param>
 	/// <returns>
 	/// <see langword="true"/> if the string is in the format <c>namespace::path</c>
-	/// and as such the parse succeeded, otherwise <see langword="false"/>.
+	/// and has a valid namespace and path, and as such the parse succeeded,
+	/// otherwise <see langword="false"/>.
 	/// </returns>
 	public static bool TryParse(ReadOnlySpan<char> span, out AssetID val) {
+		val = default;
 		int i = span.IndexOf("::");
-		if (i < 0 || span[(i + 2)..].IndexOf("::") >= 0) {
-			val = default;
+		if (i < 0 || span[(i + 2)..].IndexOf("::") >= 0)
 			return false;
-		}
-		val = new AssetID(new string(span[..i]), new string(span[(i + 2)..]));
+		if (!tryValidateNamespace(span[..i], out _) || !tryValidatePath(span[(i + 2)..], out _))
+			return false;
+		val = new AssetID(new string(span[..i]), new string(span[(i + 2)..]), skipValidation: true);
 		return true;
 	}
 	/// <inheritdoc cref="TryParse(ReadOnlySpan{char}, out AssetID)"/>
@@ -109,19 +132,115 @@ public readonly struct AssetID(string ns, string path) : IEquatable<AssetID>, IS
 	/// The parsed value.
 	/// </returns>
 	/// <exception cref="FormatException">
-	/// Thrown if the string is not in the format <c>namespace::path</c>.
+	/// Thrown if the string is not in the format <c>namespace::path</c> or has
+	/// an invalid namespace or path.
 	/// </exception>
 	public static AssetID Parse(ReadOnlySpan<char> span) {
 		int i = span.IndexOf("::");
 		if (i < 0 || span[(i + 2)..].IndexOf("::") >= 0)
 			throw new FormatException("string must contain exactly one occurrence of ::");
-		return new AssetID(new string(span[..i]), new string(span[(i + 2)..]));
+		validateNamespace(span[..i]);
+		validatePath(span[(i + 2)..]);
+		return new AssetID(new string(span[..i]), new string(span[(i + 2)..]), skipValidation: true);
 	}
 	/// <inheritdoc cref="Parse(ReadOnlySpan{char})"/>
 	/// <remarks>
 	/// <paramref name="provider"/> is ignored and is for compatibility with <see cref="IParsable{TSelf}"/>.
 	/// </remarks>
 	public static AssetID Parse(ReadOnlySpan<char> span, IFormatProvider? provider) => Parse(span);
+
+	// ==========================================================================
+	// the string validation corner
+	private static bool tryValidateNamespace(ReadOnlySpan<char> s, [NotNullWhen(false)] out string? err) {
+		if (s.IsEmpty) {
+			err = "asset namespace must not be empty";
+			return false;
+		}
+		if (!char.IsAsciiLetterOrDigit(s[0])) {
+			err = "asset namespace must start with an ASCII letter or ASCII digit";
+			return false;
+		}
+		for (int i = 0; i < s.Length; i++) {
+			char c = s[i];
+			if (char.IsControl(c)) {
+				err = "asset namespace must not contain control characters";
+				return false;
+			}
+			if (!(char.IsAsciiLetterOrDigit(c) || c == '_' || c == '-' || c == '.')) {
+				err = $"asset namespace contains invalid character '{c}' (valid: ASCII letters, ASCII digits, '_', '-', '.')";
+				return false;
+			}
+		}
+		err = null;
+		return true;
+	}
+	private static void validateNamespace(ReadOnlySpan<char> s) {
+		if (!tryValidateNamespace(s, out string? err))
+			throw new FormatException(err);
+	}
+
+	private static bool tryValidatePath(ReadOnlySpan<char> s, [NotNullWhen(false)] out string? err) {
+		static bool checkSeg(ReadOnlySpan<char> seg, [NotNullWhen(false)] out string? err) {
+			if (seg.IsEmpty) {
+				err = "asset path must not contain empty path segments";
+				return false;
+			}
+			if (seg.SequenceEqual(".")) {
+				err = "asset path must not contain '.' path segments";
+				return false;
+			}
+			if (seg.SequenceEqual("..")) {
+				err = "asset path must not contain '..' path segments";
+				return false;
+			}
+			err = null;
+			return true;
+		}
+
+		if (s.IsEmpty) {
+			err = "asset path must not be empty";
+			return false;
+		}
+		if (char.IsWhiteSpace(s[0]) || char.IsWhiteSpace(s[^1])) {
+			err = "asset path must not have leading/trailing whitespace";
+			return false;
+		}
+		if (s[0] == '/') {
+			err = "asset path must not start with '/' (rooted to... what?)";
+			return false;
+		}
+		if (s[^1] == '/') {
+			err = "asset path must not end with '/'";
+			return false;
+		}
+		int segStart = 0;
+		for (int i = 0; i < s.Length; i++) {
+			char c = s[i];
+			if (char.IsControl(c)) {
+				err = "asset path must not contain control characters";
+				return false;
+			}
+			if (c == '\\') {
+				err = "asset path must use '/' as the path separator, not '\\'";
+				return false;
+			}
+			if (c == '/') {
+				ReadOnlySpan<char> seg = s[segStart..i];
+				if (!checkSeg(seg, out err))
+					return false;
+				segStart = i + 1;
+			}
+		}
+		ReadOnlySpan<char> lastSeg = s[segStart..];
+		if (!checkSeg(lastSeg, out err))
+			return false;
+		err = null;
+		return true;
+	}
+	private static void validatePath(ReadOnlySpan<char> s) {
+		if (!tryValidatePath(s, out string? err))
+			throw new FormatException(err);
+	}
 }
 
 public sealed class AssetIDJsonConverter : JsonConverter<AssetID> {

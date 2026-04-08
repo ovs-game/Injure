@@ -9,22 +9,54 @@ using Injure.Input;
 
 namespace Injure.Layers;
 
-// TODO: this is Still like really barebones
 public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	// ==========================================================================
 	// internal types
-	private struct LayerTimeState {
-		public double RawTime;
-		public double Time;
-		public ulong TickNum;
-	}
-
 	private sealed class LayerEntry {
 		public required Layer Layer { get; init; }
 		public required TickerHandle Ticker { get; set; }
-		public LayerTimeState TimeState;
 		public InputViewScratch Scratch { get; } = new InputViewScratch();
 		public InputEventSeq NextInputSeq { get; set; }
+		public LayerTagSet Tags;
+	}
+
+	private readonly struct ResolvedPassState(LayerPassMask activePasses) {
+		public readonly LayerPassMask ActivePasses = activePasses;
+		public bool Has(LayerPassMask pass) => (ActivePasses & pass) != 0;
+	}
+
+	private struct BlockAccumulator {
+		private LayerTagSet updateTags;
+		private LayerTagSet renderTags;
+		private LayerTagSet inputTags;
+
+		public readonly bool IsBlocked(LayerPassMask pass, in LayerTagSet tags) {
+			if (pass == LayerPassMask.Update)
+				return updateTags.Intersects(in tags);
+			if (pass == LayerPassMask.Render)
+				return renderTags.Intersects(in tags);
+			if (pass == LayerPassMask.Input)
+				return inputTags.Intersects(in tags);
+			return false;
+		}
+
+		public void AddRules(ReadOnlySpan<LayerBlockRule> rules, LayerPassMask activePasses) {
+			for (int i = 0; i < rules.Length; i++) {
+				ref readonly LayerBlockRule rule = ref rules[i];
+				LayerPassMask passes = rule.Passes & activePasses;
+				if ((passes & LayerPassMask.Update) != 0)
+					merge(ref updateTags, rule.MatchTags);
+				if ((passes & LayerPassMask.Render) != 0)
+					merge(ref renderTags, rule.MatchTags);
+				if ((passes & LayerPassMask.Input) != 0)
+					merge(ref inputTags, rule.MatchTags);
+			}
+		}
+
+		private static void merge(ref LayerTagSet dst, in LayerTagSet src) {
+			foreach (LayerTag tag in src.AsSpan())
+				dst.Add(tag);
+		}
 	}
 
 	private enum PendingOpKind {
@@ -112,7 +144,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	}
 
 	// ==========================================================================
-	// public api (other ops)
+	// public api (render, IDisposable)
 	public void Render(Canvas cv) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		maybeApplyPending();
@@ -155,26 +187,38 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		applyPending();
 		callbackDepth++;
 		try {
+			Span<ResolvedPassState> states = entries.Count <= 64 ? stackalloc ResolvedPassState[entries.Count] : new ResolvedPassState[entries.Count];
+			resolvePassStates(states);
+
+			InputEventSeq nowSeq = InputCollector.NextSeq;
+			for (int i = 0; i < entries.Count; i++) {
+				LayerEntry ent = entries[i];
+				if ((ent.Layer.ParticipatingPasses & LayerPassMask.Input) == 0)
+					continue;
+				if (!states[i].Has(LayerPassMask.Input))
+					ent.NextInputSeq = nowSeq;
+			}
+
+			double rawDt = info.Elapsed.ToSeconds();
 			for (int i = entries.Count - 1; i >= 0; i--) {
 				LayerEntry ent = entries[i];
+				ref readonly ResolvedPassState st = ref states[i];
+				LayerTimeDomain tm = ent.Layer.Runtime!.Time;
+				if (!st.Has(LayerPassMask.Update))
+					continue;
 				if (ent.Ticker != ticker)
 					continue;
-				ReadOnlySpan<InputActionEvent> events = ent.Layer.WantInputEvents ?
+				bool consumeInput = st.Has(LayerPassMask.Input);
+				ReadOnlySpan<InputActionEvent> events = consumeInput ?
 					InputCollector.ReadSince(ent.NextInputSeq) :
 					ReadOnlySpan<InputActionEvent>.Empty;
 				InputView input = new InputView(events, ent.Scratch);
 
-				double rawDt = info.Elapsed.ToSeconds();
-				double dt = ent.Layer.TransformDeltaTime(rawDt, in info);
-				ent.TimeState.RawTime += rawDt;
-				ent.TimeState.Time += dt;
-				ent.TimeState.TickNum++;
-				LayerTickContext ctx = new LayerTickContext(
-					dt, rawDt, ent.TimeState.Time, ent.TimeState.RawTime, ent.TimeState.TickNum,
-					input
-				);
-				ent.Layer.TickCore(in ctx);
-				if (ent.Layer.WantInputEvents)
+				double dt = tm.Transform(rawDt);
+				tm.Advance(dt, rawDt);
+				LayerTickContext ctx = new LayerTickContext(dt, rawDt, tm.Time, tm.RawTime, tm.TickNum, input);
+				ent.Layer.UpdateCore(in ctx);
+				if (consumeInput)
 					ent.NextInputSeq = InputCollector.NextSeq;
 			}
 		} finally {
@@ -187,11 +231,31 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 			InputCollector.DiscardAll();
 	}
 
+	private void resolvePassStates(Span<ResolvedPassState> dst) {
+		if (dst.Length < entries.Count)
+			throw new ArgumentException("destination span too small", nameof(dst));
+		BlockAccumulator blocked = default;
+		for (int i = entries.Count - 1; i >= 0; i--) {
+			LayerEntry ent = entries[i];
+			LayerPassMask ptcp = ent.Layer.ParticipatingPasses;
+			LayerPassMask active = LayerPassMask.None;
+			if ((ptcp & LayerPassMask.Update) != 0 && !blocked.IsBlocked(LayerPassMask.Update, in ent.Tags))
+				active |= LayerPassMask.Update;
+			if ((ptcp & LayerPassMask.Render) != 0 && !blocked.IsBlocked(LayerPassMask.Render, in ent.Tags))
+				active |= LayerPassMask.Render;
+			if ((ptcp & LayerPassMask.Input) != 0 && !blocked.IsBlocked(LayerPassMask.Input, in ent.Tags))
+				active |= LayerPassMask.Input;
+			dst[i] = new ResolvedPassState(active);
+			if (active != LayerPassMask.None)
+				blocked.AddRules(ent.Layer.BlockRules, active);
+		}
+	}
+
 	private bool tryGetOldestLiveInputSeq(out InputEventSeq oldest) {
 		bool found = false;
 		oldest = InputEventSeq.Zero;
 		foreach (LayerEntry ent in entries) {
-			if (!ent.Layer.WantInputEvents)
+			if ((ent.Layer.ParticipatingPasses & LayerPassMask.Input) == 0)
 				continue;
 			if (!found || ent.NextInputSeq < oldest) {
 				oldest = ent.NextInputSeq;
@@ -202,9 +266,9 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	}
 
 	// ==========================================================================
-	// actually Doing things to layers
+	// pending ops
 	private void maybeApplyPending() {
-		if (!disposed && !applying && callbackDepth == 0 && renderDepth == 0)
+		if (callbackDepth == 0 && renderDepth == 0)
 			applyPending();
 	}
 
@@ -213,18 +277,17 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 			return;
 		applying = true;
 		try {
-			// not a foreach so that if OnEnter/OnLeave adds more
-			// ops to the queue it won't be a "collection modified while
-			// iterating over it"
-			int n = pending.Count;
-			for (int i = 0; i < n; i++) {
-				PendingOp op = pending[i];
-				switch (op.Kind) {
-				case PendingOpKind.PushTop: enter(op.Layer!, op.Ticker, pushToTop: true); break;
-				case PendingOpKind.PushBottom: enter(op.Layer!, op.Ticker, pushToTop: false); break;
-				case PendingOpKind.Remove: leave(op.Layer!); break;
-				case PendingOpKind.Replace: replace(op.Layer!, op.NewLayer!, op.Ticker); break;
-				case PendingOpKind.Clear: clear(); break;
+			while (pending.Count > 0) {
+				PendingOp[] batch = pending.ToArray();
+				pending.Clear();
+				foreach (PendingOp op in batch) {
+					switch (op.Kind) {
+					case PendingOpKind.PushTop:    enter(op.Layer!, op.Ticker, true); break;
+					case PendingOpKind.PushBottom: enter(op.Layer!, op.Ticker, false); break;
+					case PendingOpKind.Remove:     leave(op.Layer!); break;
+					case PendingOpKind.Replace:    replace(op.Layer!, op.NewLayer!, op.Ticker); break;
+					case PendingOpKind.Clear:      clear(); break;
+					}
 				}
 			}
 		} finally {
@@ -238,7 +301,8 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		LayerEntry ent = new LayerEntry {
 			Layer = layer,
 			Ticker = ticker,
-			NextInputSeq = layer.WantInputEvents ? InputCollector.NextSeq : InputEventSeq.Zero
+			NextInputSeq = InputCollector.NextSeq,
+			Tags = new LayerTagSet(layer.Tags)
 		};
 		if (pushToTop)
 			entries.Add(ent);
@@ -278,7 +342,8 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		entries[idx] = new LayerEntry {
 			Layer = newLayer,
 			Ticker = newTicker,
-			NextInputSeq = newLayer.WantInputEvents ? InputCollector.NextSeq : InputEventSeq.Zero
+			NextInputSeq = InputCollector.NextSeq,
+			Tags = new LayerTagSet(newLayer.Tags)
 		};
 		if (oldTicker != newTicker)
 			grabTicker(newTicker);
@@ -298,6 +363,8 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		InputCollector.DiscardAll();
 	}
 
+	// ==========================================================================
+	// bookkeeping
 	private bool mentions(Layer layer) {
 		bool ret = findEntryIdx(layer) >= 0;
 		foreach (PendingOp op in pending) {

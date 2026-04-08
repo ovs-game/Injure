@@ -18,7 +18,7 @@ public readonly struct InputActionEvent(ActionID id, EdgeType edge, PerfTick per
 
 // TODO: keybind / controller bind creation system that Isn't this
 public static class InputSystem {
-	private static readonly FrozenTwoWayMap<ActionID, string> map = new FrozenTwoWayMap<ActionID, string>(cmpLeft: null, StringComparer.Ordinal);
+	private static readonly FrozenSnapshotTwoWayMap<ActionID, string> map = new FrozenSnapshotTwoWayMap<ActionID, string>(cmpLeft: null, StringComparer.Ordinal);
 	private static int next = -1;
 	internal static int ActionCount => Volatile.Read(ref next) + 1;
 

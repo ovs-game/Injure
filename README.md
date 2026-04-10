@@ -12,14 +12,17 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 ----------
 TODO:
 
-- [active] proper depth/stencil support, as of the commit where i'm writing this it's like half baked
-- [next-up] layers system
-- [next-up] clocks, clock filtering, etc.
-- [really priority] FIX THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
+- [this one is next-up] test if it actually Works since the latest commit
+- [this one is next-up] finish the Big fat rendering stack refactor
+- [this one is next-up] public optimized swizzle/convert api
+- [this one is next-up] high-level texture creation / upload api
+- [next-up afterwards] FIX THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
+- [next-up afterwards #2] layers system
+- [next-up afterwards #2] clocks, clock filtering, etc.
 - [really priority] dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
 - [Idk when but this should be done] stop having the todo here and use github issues
-- [really priority] the text renderer
-  - [active] write tests for like everything that can be automatically tested, this is also going to involve somehow being able to do things that need `WebGPURenderer` without actually pulling a renderer
+- the text renderer
+  - [priority] write tests for like everything that can be automatically tested, this is also going to involve somehow being able to do things that need `WebGPURenderer` without actually pulling a renderer
   - way to scale/etc text post-make
   - more ways to tweak the layout
     - alignment, at least basic left/center/right
@@ -41,13 +44,14 @@ TODO:
     - SDF/MSDF rasterization
     - text effects, outlines, etc.
     - per-glyph effects
-- [really priority] fix paragraphs in doc comments (i found out it doesn't work like markdown and you need explicit `<para>`)
-- [really priority] asset file watchers (FOR REAL THIS TIME (
-- [priority] windows builds
-- [priority] more tests, like a Lot more
-- `.tex.json` should be the primary way to load textures, add more stuff there
+- fix paragraphs in doc comments (i found out it doesn't work like markdown and you need explicit `<para>`)
+- asset file watchers (FOR REAL THIS TIME (
+- windows builds
+- more tests, like a Lot more
 - streaming textures and readback
+- proper depth/stencil support incl. drawing to them and sampling them through Canvas
 - replace `InvalidOperationException`s in `Core/` and `SDL/` with a proper `SDLException` and the ones in `Timing/` with uhh idk something
+- `.tex.json` should be the primary way to load textures, add more stuff there
 - think about whether we need a roslyn analyzer
 - figure out how we're gonna handle `AssetRef`s for sounds since unlike `Texture2D` they carry MA state
 - mouse input api, it doesn't really need to be hi res since it's just for ui stuff

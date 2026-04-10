@@ -222,7 +222,7 @@ bootstrapCancelled:
 			assets?.RegisterResolver(ModUtils.Info.OwnerID, new FontAssetResolver(), "FontSourceAssetResolver");
 			assets?.RegisterCreator(ModUtils.Info.OwnerID, new FontAssetCreator(text), "FontSourceAssetCreator");
 		}
-		services = new GameServices(sched, eresources, assets, assetCtx, audio, text);
+		services = new GameServices(gpuDevice, sched, eresources, assets, assetCtx, audio, text);
 
 		// game init
 		canvasResources = new CanvasSharedResources(gpuDevice, eresources);
@@ -324,6 +324,9 @@ bootstrapCancelled:
 		game.Shutdown();
 		canvasResources.Dispose();
 		services.Shutdown();
+		text?.Dispose();
+		audio?.Dispose();
+		assetCtx?.Dispose();
 		viewGlobals.Dispose();
 		sfOutput.Dispose();
 		gpuDevice.Dispose();

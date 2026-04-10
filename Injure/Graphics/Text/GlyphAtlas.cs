@@ -186,6 +186,10 @@ internal sealed unsafe class GlyphAtlas(WebGPUDevice gpuDevice, TextSystem text,
 		GPUTexture tex = gpuDevice.CreateTexture(new GPUTextureCreateParams(
 			Width: (uint)pageWidth,
 			Height: (uint)pageHeight,
+			DepthOrArrayLayers: 1,
+			MipLevelCount: 1,
+			SampleCount: 1,
+			Dimension: TextureDimension.Dimension2D,
 			Format: TextureFormat.R8Unorm,
 			Usage: TextureUsage.TextureBinding | TextureUsage.CopyDst
 		));

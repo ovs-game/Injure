@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -16,10 +19,16 @@ using static Injure.Rendering.WebGPUException;
 namespace Injure.Rendering;
 
 /// <summary>
+/// <para>
 /// Owner of output-independent WebGPU state (instance, adapter, device, queue) and
 /// resource creator/uploader.
 /// Most other rendering objects are created from this type and should be
 /// treated as invalid once it is disposed.
+/// </para>
+/// <para>
+/// Also owns standard bind group layouts for common cases, and provides convenience
+/// helpers to create matching bind groups.
+/// </para>
 /// </summary>
 public sealed unsafe class WebGPUDevice : IDisposable {
 	// ==========================================================================
@@ -40,11 +49,10 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	internal readonly Device *Device;
 	internal readonly Queue *Queue;
 
-	private readonly BindGroupLayout *globalsUniformBindGroupLayout;
-	private readonly BindGroupLayout *texBindGroupLayout;
-
-	private readonly GPUBindGroupLayoutRef globalsUniformBindGroupLayoutWrap;
-	private readonly GPUBindGroupLayoutRef textureBindGroupLayoutWrap;
+	private readonly GPUBindGroupLayout globalsUniformBindGroupLayout;
+	private readonly GPUBindGroupLayout colorTex2DBindGroupLayout;
+	private readonly GPUBindGroupLayout filteringDepthTex2DBindGroupLayout;
+	private readonly GPUBindGroupLayout comparisonDepthTex2DBindGroupLayout;
 
 	private bool disposed = false;
 
@@ -52,22 +60,134 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	// public properties and ctor
 
 	/// <summary>
-	/// Ref to the global bind group layout for the globals uniform.
+	/// Standard bind group layout for the globals uniform, describing a single
+	/// vertex-visible uniform buffer binding at binding 0 with a minimum binding
+	/// size of <c>sizeof(GlobalsUniform)</c>.
 	/// </summary>
-	public GPUBindGroupLayoutRef GlobalsUniformBindGroupLayout {
+	/// <remarks>
+	/// Functionally equivalent to a bind group layout created with:
+	/// <code>
+	/// CreateBindGroupLayout([
+	/// 	new GPUBindGroupLayoutEntry(
+	/// 		Binding: 0,
+	/// 		Visibility: ShaderStage.Vertex,
+	/// 		Layout: new GPUBufferBindingLayout(
+	/// 			Type: BufferBindingType.Uniform,
+	/// 			MinBindingSize: (ulong)sizeof(GlobalsUniform)
+	/// 		)
+	/// 	)
+	/// ]);
+	/// </code>
+	/// </remarks>
+	public GPUBindGroupLayoutRef StdGlobalsUniformLayout {
 		get {
 			ObjectDisposedException.ThrowIf(disposed, this);
-			return globalsUniformBindGroupLayoutWrap;
+			return field;
 		}
 	}
 
 	/// <summary>
-	/// Ref to the standard bind group layout used for the sampler + texture.
+	/// Standard bind group layout for a 2D color texture + sampler, describing a
+	/// <c>"float"</c>-sampled, 2D, non-multisampled color texture view at binding 0
+	/// and a filtering sampler at binding 1.
 	/// </summary>
-	public GPUBindGroupLayoutRef TextureBindGroupLayout {
+	/// <remarks>
+	/// Functionally equivalent to a bind group layout created with:
+	/// <code>
+	/// CreateBindGroupLayout([
+	/// 	new GPUBindGroupLayoutEntry(
+	/// 		Binding: 0,
+	/// 		Visibility: ShaderStage.Fragment,
+	/// 		Layout: new GPUTextureBindingLayout(
+	/// 			SampleType: TextureSampleType.Float,
+	/// 			ViewDimension: TextureViewDimension.Dimension2D,
+	/// 			Multisampled: false
+	/// 		)
+	/// 	),
+	/// 	new GPUBindGroupLayoutEntry(
+	/// 		Binding: 1,
+	/// 		Visibility: ShaderStage.Fragment,
+	/// 		Layout: new GPUSamplerBindingLayout(
+	/// 			Type: SamplerBindingType.Filtering
+	/// 		)
+	/// 	)
+	/// ]);
+	/// </code>
+	/// </remarks>
+	public GPUBindGroupLayoutRef StdColorTexture2DLayout {
 		get {
 			ObjectDisposedException.ThrowIf(disposed, this);
-			return textureBindGroupLayoutWrap;
+			return field;
+		}
+	}
+
+	/// <summary>
+	/// Standard bind group layout for a 2D depth texture + filtering sampler, describing a
+	/// <c>"depth"</c>-sampled, 2D, non-multisampled depth-only texture view at binding 0
+	/// and a filtering sampler at binding 1.
+	/// </summary>
+	/// <remarks>
+	/// Functionally equivalent to a bind group layout created with:
+	/// <code>
+	/// CreateBindGroupLayout([
+	/// 	new GPUBindGroupLayoutEntry(
+	/// 		Binding: 0,
+	/// 		Visibility: ShaderStage.Fragment,
+	/// 		Layout: new GPUTextureBindingLayout(
+	/// 			SampleType: TextureSampleType.Depth,
+	/// 			ViewDimension: TextureViewDimension.Dimension2D,
+	/// 			Multisampled: false
+	/// 		)
+	/// 	),
+	/// 	new GPUBindGroupLayoutEntry(
+	/// 		Binding: 1,
+	/// 		Visibility: ShaderStage.Fragment,
+	/// 		Layout: new GPUSamplerBindingLayout(
+	/// 			Type: SamplerBindingType.Filtering
+	/// 		)
+	/// 	)
+	/// ]);
+	/// </code>
+	/// </remarks>
+	public GPUBindGroupLayoutRef StdFilteringDepthTexture2DLayout {
+		get {
+			ObjectDisposedException.ThrowIf(disposed, this);
+			return field;
+		}
+	}
+
+	/// <summary>
+	/// Standard bind group layout for a 2D depth texture + comparison sampler, describing a
+	/// <c>"depth"</c>-sampled, 2D, non-multisampled depth-only texture view at binding 0
+	/// and a comparison sampler at binding 1.
+	/// </summary>
+	/// <remarks>
+	/// Functionally equivalent to a bind group layout created with:
+	/// <code>
+	/// CreateBindGroupLayout([
+	/// 	new GPUBindGroupLayoutEntry(
+	/// 		Binding: 0,
+	/// 		Visibility: ShaderStage.Fragment,
+	/// 		Layout: new GPUTextureBindingLayout(
+	/// 			SampleType: TextureSampleType.Depth,
+	/// 			ViewDimension: TextureViewDimension.Dimension2D,
+	/// 			Multisampled: false
+	/// 		)
+	/// 	),
+	/// 	new GPUBindGroupLayoutEntry(
+	/// 		Binding: 1,
+	/// 		Visibility: ShaderStage.Fragment,
+	/// 		Layout: new GPUSamplerBindingLayout(
+	/// 			Type: SamplerBindingType.Comparison
+	/// 		)
+	/// 	)
+	/// ]);
+	/// </code>
+	/// </remarks>
+	public GPUBindGroupLayoutRef StdComparisonDepthTexture2DLayout {
+		get {
+			ObjectDisposedException.ThrowIf(disposed, this);
+			return field;
 		}
 	}
 
@@ -82,14 +202,82 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		Adapter = requestAdapterBlocking(Instance, compatibleSurface);
 		Device = requestDeviceBlocking(Instance, Adapter);
 		Queue = Check(API.DeviceGetQueue(Device));
-		globalsUniformBindGroupLayout = mkGlobalsUniformBindGroupLayout();
-		globalsUniformBindGroupLayoutWrap = new GPUBindGroupLayoutRef(globalsUniformBindGroupLayout);
-		texBindGroupLayout = mkTexBindGroupLayout();
-		textureBindGroupLayoutWrap = new GPUBindGroupLayoutRef(texBindGroupLayout);
+
+		globalsUniformBindGroupLayout = CreateBindGroupLayout([
+			new GPUBindGroupLayoutEntry(
+				Binding: 0,
+				Visibility: ShaderStage.Vertex,
+				Layout: new GPUBufferBindingLayout(
+					Type: BufferBindingType.Uniform,
+					MinBindingSize: (ulong)sizeof(GlobalsUniform)
+				)
+			)
+		]);
+		StdGlobalsUniformLayout = globalsUniformBindGroupLayout.AsRef();
+
+		colorTex2DBindGroupLayout = CreateBindGroupLayout([
+			new GPUBindGroupLayoutEntry(
+				Binding: 0,
+				Visibility: ShaderStage.Fragment,
+				Layout: new GPUTextureBindingLayout(
+					SampleType: TextureSampleType.Float,
+					ViewDimension: TextureViewDimension.Dimension2D,
+					Multisampled: false
+				)
+			),
+			new GPUBindGroupLayoutEntry(
+				Binding: 1,
+				Visibility: ShaderStage.Fragment,
+				Layout: new GPUSamplerBindingLayout(
+					Type: SamplerBindingType.Filtering
+				)
+			)
+		]);
+		StdColorTexture2DLayout = colorTex2DBindGroupLayout.AsRef();
+
+		filteringDepthTex2DBindGroupLayout = CreateBindGroupLayout([
+			new GPUBindGroupLayoutEntry(
+				Binding: 0,
+				Visibility: ShaderStage.Fragment,
+				Layout: new GPUTextureBindingLayout(
+					SampleType: TextureSampleType.Depth,
+					ViewDimension: TextureViewDimension.Dimension2D,
+					Multisampled: false
+				)
+			),
+			new GPUBindGroupLayoutEntry(
+				Binding: 1,
+				Visibility: ShaderStage.Fragment,
+				Layout: new GPUSamplerBindingLayout(
+					Type: SamplerBindingType.Filtering
+				)
+			)
+		]);
+		StdFilteringDepthTexture2DLayout = filteringDepthTex2DBindGroupLayout.AsRef();
+
+		comparisonDepthTex2DBindGroupLayout = CreateBindGroupLayout([
+			new GPUBindGroupLayoutEntry(
+				Binding: 0,
+				Visibility: ShaderStage.Fragment,
+				Layout: new GPUTextureBindingLayout(
+					SampleType: TextureSampleType.Depth,
+					ViewDimension: TextureViewDimension.Dimension2D,
+					Multisampled: false
+				)
+			),
+			new GPUBindGroupLayoutEntry(
+				Binding: 1,
+				Visibility: ShaderStage.Fragment,
+				Layout: new GPUSamplerBindingLayout(
+					Type: SamplerBindingType.Comparison
+				)
+			)
+		]);
+		StdComparisonDepthTexture2DLayout = comparisonDepthTex2DBindGroupLayout.AsRef();
 	}
 
 	// ==========================================================================
-	// resource creation
+	// resource acquisition
 	private void waitRequest(Instance *instance, ref int done, string opName, int timeoutMs = 10000) {
 		SpinWait sw = new SpinWait();
 		long start = Environment.TickCount64;
@@ -161,72 +349,8 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		Volatile.Write(ref req.Done, 1);
 	}
 
-	private BindGroupLayout *mkGlobalsUniformBindGroupLayout() {
-		BindGroupLayoutEntry *bglEntries = stackalloc BindGroupLayoutEntry[1];
-		bglEntries[0] = new BindGroupLayoutEntry {
-			Binding = 0,
-			Visibility = ShaderStage.Vertex,
-			Buffer = new BufferBindingLayout {
-				Type = BufferBindingType.Uniform,
-				HasDynamicOffset = false,
-				MinBindingSize = (ulong)sizeof(GlobalsUniform)
-			}
-		};
-		BindGroupLayoutDescriptor bglDesc = new BindGroupLayoutDescriptor {
-			EntryCount = 1,
-			Entries = bglEntries
-		};
-		return Check(API.DeviceCreateBindGroupLayout(Device, &bglDesc));
-	}
-
-	private BindGroupLayout *mkTexBindGroupLayout() {
-		BindGroupLayoutEntry *bglEntries = stackalloc BindGroupLayoutEntry[2];
-		bglEntries[0] = new BindGroupLayoutEntry {
-			Binding = 0,
-			Visibility = ShaderStage.Fragment,
-			Texture = new TextureBindingLayout {
-				SampleType = TextureSampleType.Float,
-				ViewDimension = TextureViewDimension.Dimension2D, // TODO: support for texture arrays
-				Multisampled = false
-			}
-		};
-		bglEntries[1] = new BindGroupLayoutEntry {
-			Binding = 1,
-			Visibility = ShaderStage.Fragment,
-			Sampler = new SamplerBindingLayout {
-				Type = SamplerBindingType.Filtering
-			}
-		};
-		BindGroupLayoutDescriptor bglDesc = new BindGroupLayoutDescriptor {
-			EntryCount = 2,
-			Entries = bglEntries
-		};
-		return Check(API.DeviceCreateBindGroupLayout(Device, &bglDesc));
-	}
-
-	private GPUBindGroup createTexViewPlusSamplerBindGroup(TextureView *tv, Sampler *sampler) {
-		BindGroupEntry *entries = stackalloc BindGroupEntry[2];
-		entries[0] = new BindGroupEntry {
-			Binding = 0,
-			TextureView = tv
-		};
-		entries[1] = new BindGroupEntry {
-			Binding = 1,
-			Sampler = sampler
-		};
-
-		BindGroupDescriptor desc = new BindGroupDescriptor {
-			Layout = texBindGroupLayout,
-			EntryCount = 2,
-			Entries = entries
-		};
-
-		BindGroup *bg = Check(API.DeviceCreateBindGroup(Device, &desc));
-		return new GPUBindGroup(this, bg);
-	}
-
 	// ==========================================================================
-	// public api
+	// public api (core)
 
 	/// <summary>
 	/// Creates a GPU buffer, returning an owning object.
@@ -248,7 +372,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	}
 
 	/// <summary>
-	/// Writes a single unmanaged value into a GPU buffer using the queue.
+	/// Writes a single unmanaged value into a GPU buffer.
 	/// </summary>
 	/// <typeparam name="T">Unmanaged value type to upload.</typeparam>
 	/// <param name="buffer">Destination buffer.</param>
@@ -257,14 +381,14 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <remarks>
 	/// This is a queue write, not a mapped buffer write.
 	/// </remarks>
-	public void WriteToBuffer<T>(GPUBuffer buffer, ulong offset, in T val) where T : unmanaged {
+	public void WriteToBuffer<T>(GPUBufferHandle buffer, ulong offset, in T val) where T : unmanaged {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		fixed (T *p = &val)
 			API.QueueWriteBuffer(Queue, buffer.Buffer, offset, p, (nuint)sizeof(T));
 	}
 
 	/// <summary>
-	/// Writes data from a span into a GPU buffer using the queue.
+	/// Writes data from a span into a GPU buffer.
 	/// </summary>
 	/// <typeparam name="T">Unmanaged element type to upload.</typeparam>
 	/// <param name="buffer">Destination buffer.</param>
@@ -274,7 +398,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// This is a queue write, not a mapped buffer write. Empty spans are accepted and
 	/// are a no-op.
 	/// </remarks>
-	public void WriteToBuffer<T>(GPUBuffer buffer, ulong offset, ReadOnlySpan<T> data) where T : unmanaged {
+	public void WriteToBuffer<T>(GPUBufferHandle buffer, ulong offset, ReadOnlySpan<T> data) where T : unmanaged {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		if (data.IsEmpty)
 			return;
@@ -283,7 +407,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	}
 
 	/// <summary>
-	/// Writes data from a pointer into a GPU buffer using the queue.
+	/// Writes data from a pointer into a GPU buffer.
 	/// </summary>
 	/// <param name="buffer">Destination buffer.</param>
 	/// <param name="offset">Byte offset into <paramref name="buffer"/>.</param>
@@ -293,7 +417,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// This is a queue write, not a mapped buffer write. The pointer only needs to remain
 	/// valid for the duration of the call.
 	/// </remarks>
-	public void WriteToBuffer(GPUBuffer buffer, ulong offset, void *data, nuint size) {
+	public void WriteToBuffer(GPUBufferHandle buffer, ulong offset, void *data, nuint size) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		API.QueueWriteBuffer(Queue, buffer.Buffer, offset, data, size);
 	}
@@ -302,41 +426,51 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// Creates a texture and its default view, returning an owning object.
 	/// </summary>
 	/// <param name="params">Texture creation parameters.</param>
+	/// <exception cref="ArgumentException">
+	/// Thrown if the provided <see cref="GPUTextureCreateParams.ViewFormats"/> contains
+	/// the texture's <see cref="GPUTextureCreateParams.Format"/> or any duplicates.
+	/// </exception>
 	public GPUTexture CreateTexture(in GPUTextureCreateParams @params) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		TextureDescriptor desc = new TextureDescriptor {
-			Dimension = TextureDimension.Dimension2D,
-			Size = new Extent3D {
-				Width = @params.Width,
-				Height = @params.Height,
-				DepthOrArrayLayers = @params.ArrayLayerCount
-			},
-			Format = @params.Format,
-			MipLevelCount = @params.MipLevelCount,
-			SampleCount = @params.SampleCount,
-			Usage = @params.Usage
-		};
-		Texture *tex = Check(API.DeviceCreateTexture(Device, &desc));
-		TextureViewDescriptor viewDesc = new TextureViewDescriptor {
-			Format = @params.Format,
-			Dimension = @params.ArrayLayerCount > 1 ? TextureViewDimension.Dimension2DArray : TextureViewDimension.Dimension2D,
-			BaseMipLevel = 0,
-			MipLevelCount = @params.MipLevelCount,
-			BaseArrayLayer = 0,
-			ArrayLayerCount = @params.ArrayLayerCount,
-			Aspect = TextureAspect.All
-		};
-		TextureView *view = API.TextureCreateView(tex, &viewDesc);
-		if (view is null) {
-			API.TextureRelease(tex);
-			throw new WebGPUException("TextureCreateView", "WebGPU call returned null");
+		TextureFormat[] viewFormats = @params.ViewFormats.ToArray(); // intentionally copy out
+
+		HashSet<TextureFormat> tmp = new HashSet<TextureFormat>();
+		if (!viewFormats.All(tmp.Add))
+			throw new ArgumentException("ViewFormats must not contain duplicates", nameof(@params));
+		if (tmp.Contains(@params.Format))
+			throw new ArgumentException("ViewFormats must not contain the texture's format", nameof(@params));
+
+		fixed (TextureFormat *p = viewFormats) {
+			TextureDescriptor desc = new TextureDescriptor {
+				Size = new Extent3D {
+					Width = @params.Width,
+					Height = @params.Height,
+					DepthOrArrayLayers = @params.DepthOrArrayLayers
+				},
+				MipLevelCount = @params.MipLevelCount,
+				SampleCount = @params.SampleCount,
+				Dimension = @params.Dimension,
+				Format = @params.Format,
+				Usage = @params.Usage,
+				ViewFormatCount = (nuint)viewFormats.Length,
+				ViewFormats = p
+			};
+			Texture *tex = Check(API.DeviceCreateTexture(Device, &desc));
+			try {
+				// TODO: think about whether default view creation should be external
+				// so that the try-catch isn't necessary
+				return new GPUTexture(this, tex, @params.Width, @params.Height, @params.DepthOrArrayLayers,
+					@params.MipLevelCount, @params.SampleCount, @params.Dimension, @params.Format, @params.Usage,
+					viewFormats);
+			} catch (WebGPUException) {
+				API.TextureRelease(tex);
+				throw;
+			}
 		}
-		return new GPUTexture(this, tex, view, @params.Width, @params.Height, @params.Format, @params.Usage, @params.MipLevelCount,
-			@params.SampleCount, @params.ArrayLayerCount);
 	}
 
 	/// <summary>
-	/// Writes texel data into a texture using the queue.
+	/// Writes texel data into a texture.
 	/// </summary>
 	/// <typeparam name="T">Unmanaged source element type.</typeparam>
 	/// <param name="tex">Destination texture.</param>
@@ -357,7 +491,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// Empty spans are accepted and are a no-op.
 	/// </para>
 	/// </remarks>
-	public void WriteToTexture<T>(GPUTexture tex, in GPUTextureRegion dst, ReadOnlySpan<T> data, in GPUTextureLayout layout) where T : unmanaged {
+	public void WriteToTexture<T>(GPUTextureHandle tex, in GPUTextureRegion dst, ReadOnlySpan<T> data, in GPUTextureLayout layout) where T : unmanaged {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		if (data.IsEmpty)
 			return;
@@ -387,7 +521,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// The pointer only needs to remain valid for the duration of the call.
 	/// </para>
 	/// </remarks>
-	public void WriteToTexture(GPUTexture tex, in GPUTextureRegion dst, void *data, nuint size, in GPUTextureLayout layout) {
+	public void WriteToTexture(GPUTextureHandle tex, in GPUTextureRegion dst, void *data, nuint size, in GPUTextureLayout layout) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		ImageCopyTexture copyDst = new ImageCopyTexture {
 			Texture = tex.Texture,
@@ -416,189 +550,215 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// Creates a sampler, returning an owning object.
 	/// </summary>
 	/// <param name="params">Sampler creation parameters.</param>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <see cref="GPUSamplerCreateParams.MaxAnisotropy"/> is larger than 1 and
+	/// any of the filter modes is set to anything but linear filtering.
+	/// </exception>
 	public GPUSampler CreateSampler(in GPUSamplerCreateParams @params) {
 		ObjectDisposedException.ThrowIf(disposed, this);
+		if (@params.LodMinClamp < 0)
+			throw new ArgumentOutOfRangeException(nameof(@params), "LodMinClamp cannot be negative");
+		if (@params.LodMaxClamp < @params.LodMinClamp)
+			throw new ArgumentOutOfRangeException(nameof(@params), "LodMaxClamp cannot be smaller than LodMinClamp");
+		if (@params.MaxAnisotropy < 1)
+			throw new ArgumentOutOfRangeException(nameof(@params), "MaxAnisotropy must be at least 1");
+		if (@params.MaxAnisotropy > 1 &&
+			(@params.MinFilter != FilterMode.Linear || @params.MagFilter != FilterMode.Linear || @params.MipmapFilter != MipmapFilterMode.Linear))
+			throw new ArgumentException("MinFilter/MagFilter/MipMapFilter must be set to Linear if MaxAnisotropy > 1", nameof(@params));
 		SamplerDescriptor desc = new SamplerDescriptor {
-			MinFilter = @params.MinFilter,
-			MagFilter = @params.MagFilter,
-			MipmapFilter = @params.MipmapFilter,
 			AddressModeU = @params.AddressModeU,
 			AddressModeV = @params.AddressModeV,
 			AddressModeW = @params.AddressModeW,
-			MaxAnisotropy = 1
+			MagFilter = @params.MagFilter,
+			MinFilter = @params.MinFilter,
+			MipmapFilter = @params.MipmapFilter,
+			LodMinClamp = @params.LodMinClamp,
+			LodMaxClamp = @params.LodMaxClamp,
+			Compare = @params.Compare,
+			MaxAnisotropy = @params.MaxAnisotropy
+
 		};
 		Sampler *sampler = Check(API.DeviceCreateSampler(Device, &desc));
 		return new GPUSampler(this, sampler);
 	}
 
-	// TODO this needs to be changed to a more comprehensive api
-	// and also needs a doc comment
-	public GPUBindGroupLayout CreateSimpleBufferBindGroupLayout(ShaderStage visibility, ulong minBindingSize) {
-		BindGroupLayoutEntry *bglEntries = stackalloc BindGroupLayoutEntry[1];
-		bglEntries[0] = new BindGroupLayoutEntry {
-			Binding = 0,
-			Visibility = visibility,
-			Buffer = new BufferBindingLayout {
-				Type = BufferBindingType.Uniform,
-				HasDynamicOffset = false,
-				MinBindingSize = minBindingSize
-			}
+	private static BindGroupLayoutEntry toRawBindGroupLayoutEntry(in GPUBindGroupLayoutEntry entry) {
+		BindGroupLayoutEntry raw = new BindGroupLayoutEntry {
+			Binding = entry.Binding,
+			Visibility = entry.Visibility
 		};
-		BindGroupLayoutDescriptor bglDesc = new BindGroupLayoutDescriptor {
-			EntryCount = 1,
-			Entries = bglEntries
-		};
-		return new GPUBindGroupLayout(this, Check(API.DeviceCreateBindGroupLayout(Device, &bglDesc)));
+		switch (entry.Layout) {
+		case GPUBufferBindingLayout b:
+			raw.Buffer = new BufferBindingLayout {
+				Type = b.Type,
+				HasDynamicOffset = b.HasDynamicOffset,
+				MinBindingSize = b.MinBindingSize
+			};
+			return raw;
+		case GPUSamplerBindingLayout s:
+			raw.Sampler = new SamplerBindingLayout {
+				Type = s.Type
+			};
+			return raw;
+		case GPUStorageTextureBindingLayout st:
+			raw.StorageTexture = new StorageTextureBindingLayout {
+				Access = st.Access,
+				Format = st.Format,
+				ViewDimension = st.ViewDimension
+			};
+			return raw;
+		case GPUTextureBindingLayout t:
+			raw.Texture = new TextureBindingLayout {
+				SampleType = t.SampleType,
+				ViewDimension = t.ViewDimension,
+				Multisampled = t.Multisampled
+			};
+			return raw;
+		default:
+			throw new UnreachableException();
+		}
 	}
 
 	/// <summary>
-	/// Creates a bind group that binds a range of a buffer to a single buffer
-	/// binding in the given layout, returning an owning object.
+	/// Creates a bind group layout from the given entries, returning an owning object.
 	/// </summary>
-	/// <param name="layout">
-	/// Bind group layout whose buffer binding is being satisfied.
-	/// </param>
-	/// <param name="binding">
-	/// Binding index within <paramref name="layout"/> to bind the buffer range to.
-	/// </param>
-	/// <param name="buffer">
-	/// Buffer to be exposed through the binding.
-	/// </param>
-	/// <param name="offset">
-	/// Byte offset into <paramref name="buffer"/> where the exposed range begins.
-	/// </param>
-	/// <param name="size">
-	/// Size in bytes of the exposed range starting at <paramref name="offset"/>.
-	/// </param>
-	/// <remarks>
-	/// Typically used for uniform-buffer bindings.
-	/// The binding type in <paramref name="layout"/> must be compatible with
-	/// the intended use of the buffer range.
-	/// </remarks>
-	public GPUBindGroup CreateBufferBindGroup(GPUBindGroupLayoutHandle layout, uint binding, GPUBuffer buffer, ulong offset, ulong size) {
+	/// <param name="entries">Entries describing the bindings in the layout.</param>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if any entry has a <see langword="null"/> layout.
+	/// </exception>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="entries"/> is empty, contains duplicate binding indices,
+	/// or contains an unsupported entry layout type (e.g an unknown type that derives from
+	/// <see cref="GPUBindingLayout"/>).
+	/// </exception>
+	public GPUBindGroupLayout CreateBindGroupLayout(ReadOnlySpan<GPUBindGroupLayoutEntry> entries) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		BindGroupEntry *entries = stackalloc BindGroupEntry[1];
-		entries[0] = new BindGroupEntry {
-			Binding = binding,
-			Buffer = buffer.Buffer,
-			Offset = offset,
-			Size = size
+		if (entries.IsEmpty)
+			throw new ArgumentException("bind group layout must contain at least one entry", nameof(entries));
+
+		for (int i = 0; i < entries.Length; i++) {
+			ref readonly GPUBindGroupLayoutEntry e = ref entries[i];
+			ArgumentNullException.ThrowIfNull(e.Layout);
+
+			// O(n^2) on paper but it's honestly probably better than allocation/etc for
+			// a hashset when there's probably gonna be like only a few entries 99% of the time
+			for (int j = 0; j < i; j++)
+				if (entries[j].Binding == e.Binding)
+					throw new ArgumentException($"duplicate bind group layout binding {e.Binding}", nameof(entries));
+
+			switch (e.Layout) {
+			case GPUBufferBindingLayout:
+			case GPUSamplerBindingLayout:
+			case GPUTextureBindingLayout:
+			case GPUStorageTextureBindingLayout:
+				break;
+			default:
+				throw new ArgumentException($"unsupported bind group layout entry type {e.Layout.GetType().FullName}", nameof(entries));
+			}
+		}
+
+		BindGroupLayoutEntry *rawEntries = stackalloc BindGroupLayoutEntry[entries.Length];
+		for (int i = 0; i < entries.Length; i++)
+			rawEntries[i] = toRawBindGroupLayoutEntry(entries[i]);
+		BindGroupLayoutDescriptor desc = new BindGroupLayoutDescriptor {
+			EntryCount = (nuint)entries.Length,
+			Entries = rawEntries
 		};
+		return new GPUBindGroupLayout(this, Check(API.DeviceCreateBindGroupLayout(Device, &desc)));
+	}
+
+	private static BindGroupEntry toRawBindGroupEntry(in GPUBindGroupEntry entry) {
+		BindGroupEntry raw = new BindGroupEntry {
+			Binding = entry.Binding
+		};
+		switch (entry.Resource) {
+		case GPUBufferBindingResource b:
+			raw.Buffer = b.Buffer.Buffer;
+			raw.Offset = b.Offset;
+			raw.Size = b.Size ?? (b.Buffer.Size - b.Offset);
+			return raw;
+		case GPUSamplerBindingResource s:
+			raw.Sampler = s.Sampler.Sampler;
+			return raw;
+		case GPUTextureViewBindingResource v:
+			raw.TextureView = v.View.TextureView;
+			return raw;
+		default:
+			throw new UnreachableException();
+		}
+	}
+
+	/// <summary>
+	/// Creates a bind group from the given layout and entries, returning an owning object.
+	/// </summary>
+	/// <param name="layout">Bind group layout the created bind group must satisfy.</param>
+	/// <param name="entries">Binding entries to populate in the bind group.</param>
+	/// <remarks>
+	/// The caller is responsible for providing entries compatible with
+	/// <paramref name="layout"/>. This method catches obvious bugs such as
+	/// duplicate bindings and invalid buffer ranges, but does not attempt to
+	/// validate layout compatibility.
+	/// </remarks>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if <paramref name="layout"/> is <see langword="null"/> or if any
+	/// entry contains a <see langword="null"/> resource.
+	/// </exception>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="entries"/> is empty, contains duplicate binding indices,
+	/// contains an unsupported entry resource type (e.g an unknown type that derives from
+	/// <see cref="GPUBindingResource"/>), or contains an invalid/malformed entry resource.
+	/// </exception>
+	/// <exception cref="InvalidOperationException">
+	/// Thrown if a render target depth view was requested for a render target that has
+	/// no depth attachment.
+	/// </exception>
+	public GPUBindGroup CreateBindGroup(GPUBindGroupLayoutHandle layout, ReadOnlySpan<GPUBindGroupEntry> entries) {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		ArgumentNullException.ThrowIfNull(layout);
+		if (entries.IsEmpty)
+			throw new ArgumentException("bind group must contain at least one entry", nameof(entries));
+
+		for (int i = 0; i < entries.Length; i++) {
+			ref readonly GPUBindGroupEntry e = ref entries[i];
+			ArgumentNullException.ThrowIfNull(e.Resource);
+
+			// O(n^2) on paper but it's honestly probably better than allocation/etc for
+			// a hashset when there's probably gonna be like only a few entries 99% of the time
+			for (int j = 0; j < i; j++)
+				if (entries[j].Binding == e.Binding)
+					throw new ArgumentException($"duplicate bind group binding {e.Binding}", nameof(entries));
+
+			switch (e.Resource) {
+			case GPUBufferBindingResource b:
+				ArgumentNullException.ThrowIfNull(b.Buffer);
+				if (b.Offset > b.Buffer.Size)
+					throw new ArgumentException($"buffer binding {e.Binding} has an offset past the end of the buffer", nameof(entries));
+				ulong size = b.Size ?? (b.Buffer.Size - b.Offset);
+				if (size == 0)
+					throw new ArgumentException($"buffer binding {e.Binding} must expose a nonzero range", nameof(entries));
+				if (b.Offset + size > b.Buffer.Size)
+					throw new ArgumentException($"buffer binding {e.Binding} range extends past the end of the buffer", nameof(entries));
+				break;
+			case GPUSamplerBindingResource s:
+				ArgumentNullException.ThrowIfNull(s.Sampler);
+				break;
+			case GPUTextureViewBindingResource v:
+				ArgumentNullException.ThrowIfNull(v.View);
+				break;
+			default:
+				throw new ArgumentException($"unsupported bind group entry resource type {e.Resource.GetType().FullName}", nameof(entries));
+			}
+		}
+
+		BindGroupEntry *rawEntries = stackalloc BindGroupEntry[entries.Length];
+		for (int i = 0; i < entries.Length; i++)
+			rawEntries[i] = toRawBindGroupEntry(entries[i]);
 		BindGroupDescriptor desc = new BindGroupDescriptor {
 			Layout = layout.BindGroupLayout,
-			EntryCount = 1,
-			Entries = entries
+			EntryCount = (nuint)entries.Length,
+			Entries = rawEntries
 		};
-		BindGroup *bg = Check(API.DeviceCreateBindGroup(Device, &desc));
-		return new GPUBindGroup(this, bg);
-	}
-
-	/// <summary>
-	/// Creates a texture+sampler bind group, returning an owning object.
-	/// </summary>
-	/// <param name="texture">Texture whose default view will be sampled.</param>
-	/// <param name="sampler">Sampler to pair with the texture view.</param>
-	/// <remarks>
-	/// The returned bind group matches <see cref="TextureBindGroupLayout"/>.
-	/// </remarks>
-	public GPUBindGroup CreateTextureBindGroup(GPUTexture texture, GPUSampler sampler) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		return createTexViewPlusSamplerBindGroup(texture.View, sampler.Sampler);
-	}
-
-	/// <summary>
-	/// Creates a texture+sampler bind group for a render target's color view,
-	/// returning an owning object.
-	/// </summary>
-	/// <param name="rt">Render target whose color view will be sampled.</param>
-	/// <param name="sampler">Sampler to pair with the render target's color view.</param>
-	/// <remarks>
-	/// The returned bind group matches <see cref="TextureBindGroupLayout"/>.
-	/// </remarks>
-	public GPUBindGroup CreateRenderTargetColorBindGroup(GPURenderTarget rt, GPUSampler sampler) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		return createTexViewPlusSamplerBindGroup(rt.ColorView, sampler.Sampler);
-	}
-
-	/// <summary>
-	/// Creates an offscreen render target, returning an owning object.
-	/// </summary>
-	/// <param name="params">Render target creation parameters.</param>
-	/// <remarks>
-	/// The created color texture is configured for both render attachment use
-	/// and texture sampling so that the render target can later be sampled via
-	/// <see cref="CreateRenderTargetColorBindGroup(GPURenderTarget, GPUSampler)"/> and drawn.
-	/// </remarks>
-	public GPURenderTarget CreateRenderTarget(in GPURenderTargetCreateParams @params) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		TextureDescriptor colorDesc = new TextureDescriptor {
-			Dimension = TextureDimension.Dimension2D,
-			Size = new Extent3D {
-				Width = @params.Width,
-				Height = @params.Height,
-				DepthOrArrayLayers = 1
-			},
-			Format = @params.ColorFormat,
-			MipLevelCount = 1,
-			SampleCount = 1,
-			Usage = TextureUsage.RenderAttachment | TextureUsage.TextureBinding
-		};
-		Texture *colorTex = Check(API.DeviceCreateTexture(Device, &colorDesc));
-		TextureViewDescriptor colorViewDesc = new TextureViewDescriptor {
-			Format = @params.ColorFormat,
-			Dimension = TextureViewDimension.Dimension2D,
-			BaseMipLevel = 0,
-			MipLevelCount = 1,
-			BaseArrayLayer = 0,
-			ArrayLayerCount = 1,
-			Aspect = TextureAspect.All
-		};
-		TextureView *colorView = API.TextureCreateView(colorTex, &colorViewDesc);
-		if (colorView is null) {
-			API.TextureRelease(colorTex);
-			throw new WebGPUException("TextureCreateView", "WebGPU call returned null");
-		}
-
-		Texture *depthTex = null;
-		TextureView *depthView = null;
-		if (@params.DepthStencilFormat is TextureFormat fmt) {
-			TextureDescriptor depthDesc = new TextureDescriptor {
-				Dimension = TextureDimension.Dimension2D,
-				Size = new Extent3D {
-					Width = @params.Width,
-					Height = @params.Height,
-					DepthOrArrayLayers = 1
-				},
-				Format = fmt,
-				MipLevelCount = 1,
-				SampleCount = 1,
-				Usage = TextureUsage.RenderAttachment
-			};
-			depthTex = API.DeviceCreateTexture(Device, &depthDesc);
-			if (depthTex is null) {
-				API.TextureViewRelease(colorView);
-				API.TextureRelease(colorTex);
-				throw new WebGPUException("DeviceCreateTexture", "WebGPU call returned null");
-			}
-			TextureViewDescriptor depthViewDesc = new TextureViewDescriptor {
-				Format = fmt,
-				Dimension = TextureViewDimension.Dimension2D,
-				BaseMipLevel = 0,
-				MipLevelCount = 1,
-				BaseArrayLayer = 0,
-				ArrayLayerCount = 1,
-				Aspect = TextureAspect.DepthOnly
-			};
-			depthView = API.TextureCreateView(depthTex, &depthViewDesc);
-			if (depthView is null) {
-				API.TextureRelease(depthTex);
-				API.TextureViewRelease(colorView);
-				API.TextureRelease(colorTex);
-				throw new WebGPUException("TextureCreateView", "WebGPU call returned null");
-			}
-		}
-		return new GPURenderTarget(this, colorTex, colorView, depthTex, depthView,
-			@params.Width, @params.Height, @params.ColorFormat, @params.DepthStencilFormat);
+		return new GPUBindGroup(this, Check(API.DeviceCreateBindGroup(Device, &desc)));
 	}
 
 	/// <summary>
@@ -637,7 +797,6 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <exception cref="ArgumentException">Thrown if no layouts are provided.</exception>
 	public GPUPipelineLayout CreatePipelineLayout(ReadOnlySpan<GPUBindGroupLayoutHandle> layouts) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-
 		if (layouts.IsEmpty)
 			throw new ArgumentException("pipeline layout must contain at least one bind group layout");
 
@@ -764,12 +923,219 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			return;
 		disposed = true;
 
-		if (texBindGroupLayout is not null) API.BindGroupLayoutRelease(texBindGroupLayout);
-		if (globalsUniformBindGroupLayout is not null) API.BindGroupLayoutRelease(globalsUniformBindGroupLayout);
-		if (Queue is not null) API.QueueRelease(Queue);
-		if (Device is not null) API.DeviceRelease(Device);
-		if (Adapter is not null) API.AdapterRelease(Adapter);
-		if (Instance is not null) API.InstanceRelease(Instance);
+		filteringDepthTex2DBindGroupLayout.Dispose();
+		comparisonDepthTex2DBindGroupLayout.Dispose();
+		colorTex2DBindGroupLayout.Dispose();
+		globalsUniformBindGroupLayout.Dispose();
+		API.QueueRelease(Queue);
+		API.DeviceRelease(Device);
+		API.AdapterRelease(Adapter);
+		API.InstanceRelease(Instance);
 		API.Dispose();
+	}
+
+	// ==========================================================================
+	// public api (sugar/convenience)
+
+	/// <summary>
+	/// Creates a bind group layout with a single uniform buffer, returning
+	/// an owning object.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Convenience wrapper over <see cref="CreateBindGroupLayout(ReadOnlySpan{GPUBindGroupLayoutEntry})"/>; see
+	/// its docs for documentation.
+	/// </para>
+	/// <para>
+	/// Intended to be used together with <see cref="CreateUniformBufferBindGroup(GPUBindGroupLayoutHandle, GPUBufferHandle, ulong, ulong?, uint)"/>
+	/// for the simple common usecase of binding a single uniform with e.g shader parameters.
+	/// </para>
+	/// </remarks>
+	public GPUBindGroupLayout CreateUniformBufferBindGroupLayout(ShaderStage visibility,
+		ulong minBindingSize = 0, bool hasDynamicOffset = false, uint binding = 0) =>
+		CreateBindGroupLayout([
+			new GPUBindGroupLayoutEntry(
+				Binding: binding,
+				Visibility: visibility,
+				Layout: new GPUBufferBindingLayout(
+					Type: BufferBindingType.Uniform,
+					HasDynamicOffset: hasDynamicOffset,
+					MinBindingSize: minBindingSize
+				)
+			)
+		]);
+
+	/// <summary>
+	/// Creates a bind group with a single uniform buffer, returning an
+	/// owning object.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Convenience wrapper over <see cref="CreateBindGroup(GPUBindGroupLayoutHandle, ReadOnlySpan{GPUBindGroupEntry})"/>; see
+	/// its docs for documentation.
+	/// </para>
+	/// <para>
+	/// Intended to be used together with <see cref="CreateUniformBufferBindGroupLayout(ShaderStage, ulong, bool, uint)"/>
+	/// for the simple common usecase of binding a single uniform with e.g shader parameters.
+	/// </para>
+	/// </remarks>
+	public GPUBindGroup CreateUniformBufferBindGroup(GPUBindGroupLayoutHandle layout,
+		GPUBufferHandle buffer, ulong offset = 0, ulong? size = null, uint binding = 0) =>
+		CreateBindGroup(layout, [
+			new GPUBindGroupEntry(
+				Binding: binding,
+				Resource: new GPUBufferBindingResource(
+					Buffer: buffer,
+					Offset: offset,
+					Size: size
+				)
+			)
+		]);
+
+	/// <summary>
+	/// Creates a texture+sampler bind group for a 2D color texture view and a
+	/// filtering sampler, returning an owning object.
+	/// </summary>
+	/// <param name="view">2D non-multisampled color view to sample.</param>
+	/// <param name="sampler">Filtering sampler to pair with the view.</param>
+	/// <remarks>
+	/// <para>
+	/// Convenience wrapper over <see cref="CreateBindGroup(GPUBindGroupLayoutHandle, ReadOnlySpan{GPUBindGroupEntry})"/>.
+	/// The returned bind group matches <see cref="StdColorTexture2DLayout"/>.
+	/// </para>
+	/// <para>
+	/// No attempt to check if the view's color format's sample type is <c>"float"</c> or
+	/// to check if the sampler is a filtering sampler is made, so if it isn't, a WebGPU
+	/// validation error may happen.
+	/// </para>
+	/// </remarks>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if <paramref name="view"/> or <paramref name="sampler"/> is null.
+	/// </exception>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="view"/> is not a <see cref="TextureUsage.TextureBinding"/>-enabled,
+	/// 2D, non-multisampled, color view.
+	/// </exception>
+	public GPUBindGroup CreateStdColorTexture2DBindGroup(GPUTextureViewHandle view, GPUSamplerHandle sampler) {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		ArgumentNullException.ThrowIfNull(view);
+		ArgumentNullException.ThrowIfNull(sampler);
+		if ((view.Usage & TextureUsage.TextureBinding) == 0)
+			throw new ArgumentException("view must have TextureBinding set in its usages", nameof(view));
+		if (view.Dimension != TextureViewDimension.Dimension2D)
+			throw new ArgumentException("view must be 2D", nameof(view));
+		if (view.SampleCount != 1)
+			throw new ArgumentException("view must not be multisampled", nameof(view));
+		if (view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float
+			or TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32floatStencil8 or TextureFormat.Stencil8)
+			throw new ArgumentException("view must be a color format", nameof(view));
+		return CreateBindGroup(StdColorTexture2DLayout, [
+			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
+			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler))
+		]);
+	}
+
+	/// <summary>
+	/// Creates a texture+sampler bind group for a texture's default view, assuming
+	/// it is a 2D color view, and a filtering sampler, returning an owning object.
+	/// </summary>
+	/// <param name="texture">Texture whose default view will be used.</param>
+	/// <param name="sampler">Filtering sampler to pair with the view.</param>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if <paramref name="texture"/> or <paramref name="sampler"/> is null.
+	/// </exception>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="texture"/>'s <see cref="GPUTextureHandle.DefaultView"/> is
+	/// not a <see cref="TextureUsage.TextureBinding"/>-enabled, 2D, non-multisampled, color view.
+	/// </exception>
+	/// <inheritdoc cref="CreateStdColorTexture2DBindGroup(GPUTextureViewHandle, GPUSamplerHandle)"/>
+	public GPUBindGroup CreateStdColorTexture2DBindGroup(GPUTextureHandle texture, GPUSamplerHandle sampler) {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		ArgumentNullException.ThrowIfNull(texture);
+		return CreateStdColorTexture2DBindGroup(texture.DefaultView, sampler);
+	}
+
+	/// <summary>
+	/// Creates a texture+sampler bind group for a 2D depth-only texture view and a
+	/// filtering sampler, returning an owning object.
+	/// </summary>
+	/// <param name="view">2D non-multisampled depth-only view to sample.</param>
+	/// <param name="sampler">Filtering sampler to pair with the view.</param>
+	/// <remarks>
+	/// <para>
+	/// Convenience wrapper over <see cref="CreateBindGroup(GPUBindGroupLayoutHandle, ReadOnlySpan{GPUBindGroupEntry})"/>.
+	/// The returned bind group matches <see cref="StdFilteringDepthTexture2DLayout"/>.
+	/// </para>
+	/// <para>
+	/// No attempt to check if the view's color format's sample type is <c>"depth"</c> or
+	/// to check if the sampler is a filtering sampler is made, so if it isn't, a WebGPU
+	/// validation error may happen.
+	/// </para>
+	/// </remarks>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if <paramref name="view"/> or <paramref name="sampler"/> is null.
+	/// </exception>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="view"/> is not a <see cref="TextureUsage.TextureBinding"/>-enabled,
+	/// 2D, non-multisampled, depth-only view.
+	/// </exception>
+	public GPUBindGroup CreateStdFilteringDepthTexture2DBindGroup(GPUTextureViewHandle view, GPUSamplerHandle sampler) {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		ArgumentNullException.ThrowIfNull(view);
+		ArgumentNullException.ThrowIfNull(sampler);
+		if ((view.Usage & TextureUsage.TextureBinding) == 0)
+			throw new ArgumentException("view must have TextureBinding set in its usages", nameof(view));
+		if (view.Dimension != TextureViewDimension.Dimension2D)
+			throw new ArgumentException("view must be 2D", nameof(view));
+		if (view.SampleCount != 1)
+			throw new ArgumentException("view must not be multisampled", nameof(view));
+		if (!(view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float))
+			throw new ArgumentException("view must be a depth-only format", nameof(view));
+		return CreateBindGroup(StdFilteringDepthTexture2DLayout, [
+			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
+			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler))
+		]);
+	}
+
+	/// <summary>
+	/// Creates a texture+sampler bind group for a 2D depth-only texture view and a
+	/// comparison sampler, returning an owning object.
+	/// </summary>
+	/// <param name="view">2D non-multisampled depth-only view to sample.</param>
+	/// <param name="sampler">Comparison sampler to pair with the view.</param>
+	/// <remarks>
+	/// <para>
+	/// Convenience wrapper over <see cref="CreateBindGroup(GPUBindGroupLayoutHandle, ReadOnlySpan{GPUBindGroupEntry})"/>.
+	/// The returned bind group matches <see cref="StdComparisonDepthTexture2DLayout"/>.
+	/// </para>
+	/// <para>
+	/// No attempt to check if the view's color format's sample type is <c>"depth"</c> or
+	/// to check if the sampler is a comparison sampler is made, so if it isn't, a WebGPU
+	/// validation error may happen.
+	/// </para>
+	/// </remarks>
+	/// <exception cref="ArgumentNullException">
+	/// Thrown if <paramref name="view"/> or <paramref name="sampler"/> is null.
+	/// </exception>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="view"/> is not a <see cref="TextureUsage.TextureBinding"/>-enabled,
+	/// 2D, non-multisampled, depth-only view.
+	/// </exception>
+	public GPUBindGroup CreateStdComparisonDepthTexture2DBindGroup(GPUTextureViewHandle view, GPUSamplerHandle sampler) {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		ArgumentNullException.ThrowIfNull(view);
+		ArgumentNullException.ThrowIfNull(sampler);
+		if ((view.Usage & TextureUsage.TextureBinding) == 0)
+			throw new ArgumentException("view must have TextureBinding set in its usages", nameof(view));
+		if (view.Dimension != TextureViewDimension.Dimension2D)
+			throw new ArgumentException("view must be 2D", nameof(view));
+		if (view.SampleCount != 1)
+			throw new ArgumentException("view must not be multisampled", nameof(view));
+		if (!(view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float))
+			throw new ArgumentException("view must be a depth-only format", nameof(view));
+		return CreateBindGroup(StdComparisonDepthTexture2DLayout, [
+			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
+			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler))
+		]);
 	}
 }

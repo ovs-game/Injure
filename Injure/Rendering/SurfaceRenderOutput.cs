@@ -182,11 +182,11 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 		TextureViewDescriptor tvdesc = new TextureViewDescriptor {
 			Format = format,
 			Dimension = TextureViewDimension.Dimension2D,
+			Aspect = TextureAspect.All,
 			BaseMipLevel = 0,
 			MipLevelCount = 1,
 			BaseArrayLayer = 0,
-			ArrayLayerCount = 1,
-			Aspect = TextureAspect.All
+			ArrayLayerCount = 1
 		};
 		TextureView *backbufferView = device.API.TextureCreateView(currTex.Texture, &tvdesc);
 		if (backbufferView == null) {
@@ -200,7 +200,10 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 			device.API.TextureRelease(currTex.Texture);
 			throw new WebGPUException("DeviceCreateCommandEncoder", "WebGPU call returned null");
 		}
-		frame = new RenderFrame(device, currTex, backbufferView, enc, Present, Width, Height, Format);
+		GPUTextureView v = new GPUTextureView(device, backbufferView, tvdesc.Format, tvdesc.Dimension,
+			tvdesc.Aspect, config.Usage, tvdesc.BaseMipLevel, tvdesc.MipLevelCount,
+			tvdesc.BaseArrayLayer, tvdesc.ArrayLayerCount, config.Width, config.Height, 1, 1);
+		frame = new RenderFrame(device, currTex, v, enc, Present);
 		return true;
 	}
 

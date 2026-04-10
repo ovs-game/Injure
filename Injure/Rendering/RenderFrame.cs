@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Silk.NET.WebGPU;
 
 namespace Injure.Rendering;
@@ -24,37 +25,33 @@ namespace Injure.Rendering;
 /// can be registered with <see cref="DisposeAfterSubmit(IDisposable)"/>.
 /// </para>
 /// </remarks>
-public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture primaryTex, TextureView *primaryView, CommandEncoder *encoder,
-	Action present, uint primaryW, uint primaryH, TextureFormat primaryFormat) : IDisposable {
-	private readonly WebGPUDevice device = device;
-	private readonly SurfaceTexture primaryTex = primaryTex;
-	private readonly TextureView *primaryView = primaryView;
-	private readonly CommandEncoder *encoder = encoder;
-	private readonly Action present = present;
+public sealed unsafe class RenderFrame : IDisposable {
+	private readonly WebGPUDevice device;
+	private readonly SurfaceTexture primaryTex;
+	private readonly GPUTextureView primaryView;
+	private readonly CommandEncoder *encoder;
+	private readonly Action present;
 	private readonly List<IDisposable> deferred = new List<IDisposable>();
 	private bool activepass = false;
 	private bool done = false;
 
-	/// <summary>
-	/// The width of this frame's primary output in physical pixels.
-	/// </summary>
-	/// <remarks>
-	/// This is a snapshot and does not change for the lifetime of the frame.
-	/// </remarks>
-	public uint PrimaryWidth { get; } = primaryW;
+	internal RenderFrame(WebGPUDevice device, SurfaceTexture primaryTex, GPUTextureView primaryView, CommandEncoder *encoder, Action present) {
+		this.device = device;
+		this.primaryTex = primaryTex;
+		this.primaryView = primaryView;
+		PrimaryView = primaryView.AsRef();
+		this.encoder = encoder;
+		this.present = present;
+	}
 
 	/// <summary>
-	/// The height of this frame's primary output in physical pixels.
+	/// The color view for this frame's primary output.
 	/// </summary>
 	/// <remarks>
-	/// This is a snapshot and does not change for the lifetime of the frame.
+	/// The primary output is color-only. Passes that require depth/stencil
+	/// should use an offscreen render target instead.
 	/// </remarks>
-	public uint PrimaryHeight { get; } = primaryH;
-
-	/// <summary>
-	/// The color format of this frame's primary output.
-	/// </summary>
-	public TextureFormat PrimaryFormat { get; } = primaryFormat;
+	public GPUTextureViewRef PrimaryView => done ? throw new InvalidOperationException("frame already submitted/disposed") : field;
 
 	private void onPassFinished() {
 		if (!activepass)
@@ -112,114 +109,132 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 		return new RenderPass(device, passEnc, onPassFinished);
 	}
 
-	/// <summary>
-	/// Opens a render pass targeting the primary output.
-	/// </summary>
-	/// <param name="colorOps">Color attachment load/store operations.</param>
-	/// <remarks>
-	/// <para>
-	/// The primary output is color-only. Passes that require depth/stencil
-	/// should use an offscreen render target instead.
-	/// </para>
-	/// <para>
-	/// The returned <see cref="RenderPass"/> object must be disposed before the
-	/// frame can be submitted or disposed.
-	/// </para>
-	/// </remarks>
-	/// <exception cref="InvalidOperationException">
-	/// Thrown if the frame has already been submitted/disposed, or if another
-	/// render pass is already active.
-	/// </exception>
-	public RenderPass BeginPrimaryPass(in ColorAttachmentOps colorOps) {
-		return beginPass(encoder, primaryView, null, colorOps, null, null);
+	[StackTraceHidden]
+	private static void validateView(GPUTextureViewHandle view, string paramName) {
+		ArgumentNullException.ThrowIfNull(view);
+		if ((view.Usage & TextureUsage.RenderAttachment) == 0)
+			throw new ArgumentException("view must have RenderAttachment set in its usages", paramName);
+		if (view.Dimension != TextureViewDimension.Dimension2D)
+			throw new ArgumentException("view must be 2D", paramName);
+	}
+
+	[StackTraceHidden]
+	private static void validateColorView(GPUTextureViewHandle colorView, string paramName) {
+		validateView(colorView, paramName);
+		if (colorView.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float
+			or TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32floatStencil8 or TextureFormat.Stencil8)
+			throw new ArgumentException("color view must be a color format", paramName);
+	}
+
+	[StackTraceHidden]
+	private static void validateDepthView(GPUTextureViewHandle depthView, string paramName) {
+		validateView(depthView, paramName);
+		if (!(depthView.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float))
+			throw new ArgumentException("depth view must be a depth-only format (no stencil)", paramName);
+	}
+
+	[StackTraceHidden]
+	private static void validateDepthStencilView(GPUTextureViewHandle depthStencilView, string paramName) {
+		validateView(depthStencilView, paramName);
+		if (!(depthStencilView.Format is TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32floatStencil8))
+			throw new ArgumentException("depth+stencil view must be a depth+stencil format", paramName);
+	}
+
+	[StackTraceHidden]
+	private static void validateCompatibleAttachments(GPUTextureViewHandle a, GPUTextureViewHandle b) {
+		if (a.Width != b.Width || a.Height != b.Height)
+			throw new ArgumentException("attachment views must have equal dimensions");
+		if (a.SampleCount != b.SampleCount)
+			throw new ArgumentException("attachment views must have equal sample counts");
 	}
 
 	/// <summary>
-	/// Opens a render pass targeting the given offscreen render target with
-	/// no depth/stencil attachment.
+	/// Opens a render pass targeting a 2D color texture view.
 	/// </summary>
-	/// <param name="rt">Render target to use.</param>
+	/// <param name="colorView">Color texture view to use.</param>
 	/// <param name="colorOps">Color attachment load/store operations.</param>
 	/// <remarks>
 	/// The returned <see cref="RenderPass"/> object must be disposed before the
 	/// frame can be submitted or disposed.
 	/// </remarks>
 	/// <exception cref="ArgumentNullException">
-	/// Thrown if <paramref name="rt"/> is <see langword="null"/>.
+	/// Thrown if <paramref name="colorView"/> is <see langword="null"/>.
 	/// </exception>
 	/// <exception cref="ArgumentException">
-	/// Thrown if <paramref name="rt"/> has a depth/stencil attachment.
+	/// Thrown if <paramref name="colorView"/> doesn't have
+	/// <see cref="TextureUsage.RenderAttachment"/> set in its usages, isn't 2D, or
+	/// is a non-color format.
 	/// </exception>
 	/// <exception cref="InvalidOperationException">
 	/// Thrown if the frame has already been submitted/disposed, or if another
 	/// render pass is already active.
 	/// </exception>
-	public RenderPass BeginRenderTargetPass(GPURenderTarget rt, in ColorAttachmentOps colorOps) {
-		ArgumentNullException.ThrowIfNull(rt);
-		if (rt.HasDepth)
-			throw new ArgumentException("expected this render target to not have a depth/stencil attachment; use another overload of this method if it does", nameof(rt));
-		return beginPass(encoder, rt.ColorView, null, colorOps, null, null);
+	public RenderPass BeginColorPass(GPUTextureViewHandle colorView, in ColorAttachmentOps colorOps) {
+		validateColorView(colorView, nameof(colorView));
+		return beginPass(encoder, colorView.TextureView, null, in colorOps, null, null);
 	}
 
 	/// <summary>
-	/// Opens a render pass targeting the given offscreen render target with
-	/// a depth attachment and no stencil attachment.
+	/// Opens a render pass targeting a 2D color texture view and 2D depth texture view pair.
 	/// </summary>
-	/// <param name="rt">Render target to use.</param>
+	/// <param name="colorView">Color texture view to use.</param>
 	/// <param name="colorOps">Color attachment load/store operations.</param>
+	/// <param name="depthView">Depth texture view to use.</param>
 	/// <param name="depthOps">Depth attachment load/store operations.</param>
-	/// <remarks>
-	/// The returned <see cref="RenderPass"/> object must be disposed before the
-	/// frame can be submitted or disposed.
-	/// </remarks>
 	/// <exception cref="ArgumentNullException">
-	/// Thrown if <paramref name="rt"/> is <see langword="null"/>.
+	/// Thrown if <paramref name="colorView"/> or <paramref name="depthView"/> is
+	/// <see langword="null"/>.
 	/// </exception>
 	/// <exception cref="ArgumentException">
-	/// Thrown if <paramref name="rt"/> has no depth attachment, or if its
-	/// depth attachment includes stencil.
+	/// Thrown if <paramref name="colorView"/> or <paramref name="depthView"/> don't have
+	/// <see cref="TextureUsage.RenderAttachment"/> set in their usages, aren't 2D, have
+	/// unequal dimensions/sample counts, if <paramref name="colorView"/> is a non-color
+	/// format, or if <paramref name="depthView"/> is a non-depth-only format.
 	/// </exception>
-	/// <exception cref="InvalidOperationException">
-	/// Thrown if the frame has already been submitted/disposed, or if another
-	/// render pass is already active.
-	/// </exception>
-	public RenderPass BeginRenderTargetPass(GPURenderTarget rt, in ColorAttachmentOps colorOps, in DepthAttachmentOps depthOps) {
-		ArgumentNullException.ThrowIfNull(rt);
-		if (!rt.HasDepth)
-			throw new ArgumentException("expected this render target to have a depth attachment; use another overload of this method if it doesn't", nameof(rt));
-		if (rt.HasStencil)
-			throw new ArgumentException("expected this render target to not have a stencil attachment; use another overload of this method if it does", nameof(rt));
-		return beginPass(encoder, rt.ColorView, rt.DepthStencilView, colorOps, depthOps, null);
+	/// <inheritdoc cref="BeginColorPass(GPUTextureViewHandle, in ColorAttachmentOps)"/>
+	public RenderPass BeginColorDepthPass(GPUTextureViewHandle colorView, in ColorAttachmentOps colorOps,
+		GPUTextureViewHandle depthView, in DepthAttachmentOps depthOps) {
+		validateColorView(colorView, nameof(colorView));
+		validateDepthView(depthView, nameof(depthView));
+		validateCompatibleAttachments(colorView, depthView);
+		return beginPass(encoder, colorView.TextureView, depthView.TextureView, in colorOps, depthOps, null);
 	}
 
 	/// <summary>
-	/// Opens a render pass targeting the given offscreen render target with
-	/// a depth + stencil attachment.
+	/// Opens a render pass targeting a 2D color texture view and 2D depth+stencil texture view pair.
 	/// </summary>
-	/// <param name="rt">Render target to use.</param>
+	/// <param name="colorView">Color texture view to use.</param>
 	/// <param name="colorOps">Color attachment load/store operations.</param>
+	/// <param name="depthStencilView">Depth+stencil texture view to use.</param>
 	/// <param name="depthOps">Depth attachment load/store operations.</param>
 	/// <param name="stencilOps">Stencil attachment load/store operations.</param>
-	/// <remarks>
-	/// The returned <see cref="RenderPass"/> object must be disposed before the
-	/// frame can be submitted or disposed.
-	/// </remarks>
 	/// <exception cref="ArgumentNullException">
-	/// Thrown if <paramref name="rt"/> is <see langword="null"/>.
+	/// Thrown if <paramref name="colorView"/> or <paramref name="depthStencilView"/> is
+	/// <see langword="null"/>.
 	/// </exception>
 	/// <exception cref="ArgumentException">
-	/// Thrown if <paramref name="rt"/> has no depth attachment or no stencil attachment.
+	/// Thrown if <paramref name="colorView"/> or <paramref name="depthStencilView"/> don't have
+	/// <see cref="TextureUsage.RenderAttachment"/> set in their usages, aren't 2D, have
+	/// unequal dimensions/sample counts, if <paramref name="colorView"/> is a non-color
+	/// format, or <paramref name="depthStencilView"/> is a non-depth+stencil format.
 	/// </exception>
-	/// <exception cref="InvalidOperationException">
-	/// Thrown if the frame has already been submitted/disposed, or if another
-	/// render pass is already active.
-	/// </exception>
-	public RenderPass BeginRenderTargetPass(GPURenderTarget rt, in ColorAttachmentOps colorOps, in DepthAttachmentOps depthOps, in StencilAttachmentOps stencilOps) {
-		ArgumentNullException.ThrowIfNull(rt);
-		if (!rt.HasDepth || !rt.HasStencil)
-			throw new ArgumentException("expected this render target to have a depth + stencil attachment; use another overload of this method if it doesn't", nameof(rt));
-		return beginPass(encoder, rt.ColorView, rt.DepthStencilView, colorOps, depthOps, stencilOps);
+	/// <inheritdoc cref="BeginColorPass(GPUTextureViewHandle, in ColorAttachmentOps)"/>
+	public RenderPass BeginColorDepthStencilPass(GPUTextureViewHandle colorView, in ColorAttachmentOps colorOps,
+		GPUTextureViewHandle depthStencilView, in DepthAttachmentOps depthOps, in StencilAttachmentOps stencilOps) {
+		validateColorView(colorView, nameof(colorView));
+		validateDepthStencilView(depthStencilView, nameof(depthStencilView));
+		validateCompatibleAttachments(colorView, depthStencilView);
+		return beginPass(encoder, colorView.TextureView, depthStencilView.TextureView, in colorOps, depthOps, stencilOps);
 	}
+
+	/// <summary>
+	/// Convenience method to open a render pass targeting the primary output,
+	/// equivalent to <see cref="BeginColorPass(GPUTextureViewHandle, in ColorAttachmentOps)"/>
+	/// with <see cref="PrimaryView"/>.
+	/// </summary>
+	/// <inheritdoc cref="BeginColorPass(GPUTextureViewHandle, in ColorAttachmentOps)"/>
+	public RenderPass BeginPrimaryPass(in ColorAttachmentOps colorOps) =>
+		BeginColorPass(PrimaryView, in colorOps);
 
 	/// <summary>
 	/// Registers an <see cref="IDisposable"/> for cleanup after this frame is
@@ -269,7 +284,7 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 
 		device.API.CommandBufferRelease(cmdbuf);
 		device.API.CommandEncoderRelease(encoder);
-		device.API.TextureViewRelease(primaryView);
+		primaryView.Dispose();
 		device.API.TextureRelease(primaryTex.Texture);
 		foreach (IDisposable disp in deferred)
 			disp.Dispose();
@@ -303,7 +318,7 @@ public sealed unsafe class RenderFrame(WebGPUDevice device, SurfaceTexture prima
 
 		done = true;
 		device.API.CommandEncoderRelease(encoder);
-		device.API.TextureViewRelease(primaryView);
+		primaryView.Dispose();
 		device.API.TextureRelease(primaryTex.Texture);
 		foreach (IDisposable disp in deferred)
 			disp.Dispose();

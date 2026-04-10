@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-
+using System.Runtime.CompilerServices;
 using Injure.Assets;
 using Injure.Audio;
 using Injure.Graphics.Text;
+using Injure.Rendering;
 
 namespace Injure.Core;
 
 public sealed class GameServices {
+	private readonly WebGPUDevice gpuDevice;
 	private readonly ITickerRegistry tickers;
 	private readonly EngineResourceStore engineResources;
 	private readonly AssetStore? assets;
@@ -18,6 +20,7 @@ public sealed class GameServices {
 	private bool shutdown = false;
 
 	// required:
+	public WebGPUDevice GPUDevice { get => alive(gpuDevice); }
 	public ITickerRegistry Tickers { get => alive(tickers); }
 	public EngineResourceStore EngineResources { get => alive(engineResources); }
 
@@ -29,9 +32,11 @@ public sealed class GameServices {
 	public bool HaveAudio => audio is not null;
 	public bool HaveText => text is not null;
 
-	internal GameServices(ITickerRegistry tickers, EngineResourceStore engineResources, AssetStore? assets, AssetThreadContext? assetCtx, AudioEngine? audio, TextSystem? text) {
+	internal GameServices(WebGPUDevice gpuDevice, ITickerRegistry tickers, EngineResourceStore engineResources,
+			AssetStore? assets, AssetThreadContext? assetCtx, AudioEngine? audio, TextSystem? text) {
 		if ((assets is null) ^ (assetCtx is null))
 			throw new InternalStateException("was expecting either none of or both the asset store and asset thread context to be null");
+		this.gpuDevice = gpuDevice;
 		this.tickers = tickers;
 		this.engineResources = engineResources;
 		this.assets = assets;
@@ -40,12 +45,14 @@ public sealed class GameServices {
 		this.text = text;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private T alive<T>(T obj) {
 		if (shutdown)
 			throw new InvalidOperationException("game services are no longer available after shutdown");
 		return obj;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private T aliveAndNonnull<T>(T? obj, string msg) where T : class {
 		if (shutdown)
 			throw new InvalidOperationException("game services are no longer available after shutdown");
@@ -63,8 +70,5 @@ public sealed class GameServices {
 		if (shutdown)
 			return;
 		shutdown = true;
-		text?.Dispose();
-		audio?.Dispose();
-		assetCtx?.Dispose();
 	}
 }

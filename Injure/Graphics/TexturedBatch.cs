@@ -30,6 +30,11 @@ public enum TextureInterpretation {
 	/// <summary>
 	/// Interprets the texture as a signed distance field.
 	/// </summary>
+	/// <remarks>
+	/// Typically, whatever is exposing a <see cref="TextureInterpretation"/> enum
+	/// parameter will also expose some way to pass in a <see cref="SdfParams"/> struct,
+	/// as setting those parameters is required for this interpretation mode.
+	/// </remarks>
 	SDF
 }
 
@@ -89,13 +94,13 @@ public sealed class TexturedBatchSharedState : IDisposable {
 		};
 		_shader = device.CreateShaderWGSL(engineResources.GetText(shaderInfo.ResourceID));
 		if (interp != TextureInterpretation.SDF)
-			_localsBindGroupLayout = device.CreateSimpleBufferBindGroupLayout(ShaderStage.Vertex, (ulong)TexturedBatchLocalsUniformPlain.Size);
+			_localsBindGroupLayout = device.CreateUniformBufferBindGroupLayout(ShaderStage.Vertex, (ulong)TexturedBatchLocalsUniformPlain.Size);
 		else
-			_localsBindGroupLayout = device.CreateSimpleBufferBindGroupLayout(ShaderStage.Vertex | ShaderStage.Fragment, (ulong)TexturedBatchLocalsUniformSDF.Size);
+			_localsBindGroupLayout = device.CreateUniformBufferBindGroupLayout(ShaderStage.Vertex | ShaderStage.Fragment, (ulong)TexturedBatchLocalsUniformSDF.Size);
 		_pipelineLayout = device.CreatePipelineLayout([
-			device.GlobalsUniformBindGroupLayout,
+			device.StdGlobalsUniformLayout,
 			_localsBindGroupLayout,
-			device.TextureBindGroupLayout
+			device.StdColorTexture2DLayout
 		]);
 		_pipeline = device.CreateRenderPipeline(PipelineLayout, new GPURenderPipelineCreateParams(
 			Shader: Shader,
@@ -189,7 +194,6 @@ public sealed class TexturedBatch : IDisposable {
 			};
 			localsUniformBuffer = device.CreateBuffer((ulong)TexturedBatchLocalsUniformPlain.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
 			device.WriteToBuffer(localsUniformBuffer, 0, in l);
-			localsUniformBindGroup = device.CreateBufferBindGroup(shared.LocalsBindGroupLayout, 0, localsUniformBuffer, 0, (ulong)TexturedBatchLocalsUniformPlain.Size);
 		} else {
 			if (@params.SdfParams is not SdfParams p)
 				throw new ArgumentNullException(nameof(@params), "TexturedBatchSharedState has SDF texture interpretation but SdfParams is null");
@@ -203,9 +207,8 @@ public sealed class TexturedBatch : IDisposable {
 			};
 			localsUniformBuffer = device.CreateBuffer((ulong)TexturedBatchLocalsUniformSDF.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
 			device.WriteToBuffer(localsUniformBuffer, 0, in l);
-			localsUniformBindGroup = device.CreateBufferBindGroup(shared.LocalsBindGroupLayout, 0, localsUniformBuffer, 0, (ulong)TexturedBatchLocalsUniformSDF.Size);
 		}
-
+		localsUniformBindGroup = device.CreateUniformBufferBindGroup(shared.LocalsBindGroupLayout, localsUniformBuffer);
 		verts = new Vertex2DTextureColor[initialVertCapacity];
 		idxs = new uint[initialIndexCapacity];
 		runs = new Run[initialRunCapacity];

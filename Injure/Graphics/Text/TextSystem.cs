@@ -2,13 +2,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using FreeTypeSharp;
 using static FreeTypeSharp.FT;
 
 using Injure.Assets;
 using Injure.Rendering;
-using System.Diagnostics;
 
 namespace Injure.Graphics.Text;
 

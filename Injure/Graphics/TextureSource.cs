@@ -106,6 +106,8 @@ internal readonly ref struct ResolvedTextureSource {
 		ResolvedTextureSourceKind.LeasedTexture2D => lease.Value,
 		_ => throw new UnreachableException()
 	};
-	public bool RTAndSameColorTarget(RenderTarget2D rt) =>
-		Kind == ResolvedTextureSourceKind.RenderTarget2D && renderTarget!.Target.SameColorTarget(rt.Target);
+
+	// comparing color textures only is enough since every render target has its own one
+	public bool SameRenderTargetAs(RenderTarget2D rt) =>
+		Kind == ResolvedTextureSourceKind.RenderTarget2D && renderTarget!.ColorTexture.SameTexture(rt.ColorTexture);
 }

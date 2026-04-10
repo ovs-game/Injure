@@ -275,15 +275,18 @@ public enum CanvasSubmitMode {
 /// <param name="Transform">Transform matrix to be applied to draws.</param>
 /// <param name="SubmitMode">Submit policy for mixed primitive/textured draws.</param>
 /// <remarks>
+/// <para>
 /// Passing a scissor of kind <see cref="CanvasScissorKind.Intersect"/> is invalid for
 /// the base params.
-///
+/// </para>
+/// <para>
 /// Changing <paramref name="Target"/> or <paramref name="ColorAttachmentOps"/> is
 /// pass-affecting and causes the current pass to flush and reopen. Changing
 /// <paramref name="Transform"/>, <paramref name="Material"/>, or <paramref name="SubmitMode"/>
 /// is batch-affecting and causes current batches to flush. Changing <paramref name="Scissor"/>,
 /// while not inherently batch-affecting, causes current batches to flush before applying
 /// the scissor to avoid draw calls "leaking" into the new scissor state.
+/// </para>
 /// </remarks>
 public readonly record struct CanvasParams(
 	// pass-affecting
@@ -457,7 +460,7 @@ public sealed class Canvas : IDisposable {
 	private TextureFormat currentColorFormat {
 		get {
 			CanvasTarget t = CurrentParams.Target;
-			return t.IsPrimary ? frame.PrimaryFormat : t.RenderTarget.ColorFormat;
+			return t.IsPrimary ? frame.PrimaryView.Format : t.RenderTarget.ColorFormat;
 		}
 	}
 	
@@ -472,12 +475,12 @@ public sealed class Canvas : IDisposable {
 	/// <summary>
 	/// Gets the drawable width in pixels of the active target.
 	/// </summary>
-	public uint CurrentWidth => CurrentParams.Target.IsPrimary ? frame.PrimaryWidth : CurrentParams.Target.RenderTarget.Width;
+	public uint CurrentWidth => CurrentParams.Target.IsPrimary ? frame.PrimaryView.Width : CurrentParams.Target.RenderTarget.Width;
 
 	/// <summary>
 	/// Gets the drawable height in pixels of the active target.
 	/// </summary>
-	public uint CurrentHeight => CurrentParams.Target.IsPrimary ? frame.PrimaryHeight : CurrentParams.Target.RenderTarget.Height;
+	public uint CurrentHeight => CurrentParams.Target.IsPrimary ? frame.PrimaryView.Height : CurrentParams.Target.RenderTarget.Height;
 
 	/// <summary>
 	/// Creates a canvas bound to the given frame and base parameters.
@@ -788,7 +791,7 @@ public sealed class Canvas : IDisposable {
 	private void checkSelfDraw(in ResolvedTextureSource tex) {
 		if (CurrentParams.Target.IsPrimary)
 			return;
-		if (tex.RTAndSameColorTarget(CurrentParams.Target.RenderTarget))
+		if (tex.SameRenderTargetAs(CurrentParams.Target.RenderTarget))
 			throw new InvalidOperationException("attempt to draw a render target while it is the active canvas target (i.e draw it into itself)");
 	}
 
@@ -1144,8 +1147,8 @@ public sealed class Canvas : IDisposable {
 
 	private void applyScissor(RenderPass pass, in CanvasParams p) {
 		// XXX: yucky casts back and forth from int/uint
-		int w = (int)(p.Target.IsPrimary ? frame.PrimaryWidth : p.Target.RenderTarget.Width);
-		int h = (int)(p.Target.IsPrimary ? frame.PrimaryHeight : p.Target.RenderTarget.Height);
+		int w = (int)(p.Target.IsPrimary ? frame.PrimaryView.Width : p.Target.RenderTarget.Width);
+		int h = (int)(p.Target.IsPrimary ? frame.PrimaryView.Height : p.Target.RenderTarget.Height);
 		RectI full = new RectI(0, 0, w, h);
 		RectI effective = p.Scissor.Kind switch {
 			CanvasScissorKind.None => full,
@@ -1166,7 +1169,7 @@ public sealed class Canvas : IDisposable {
 		// see above on indirection
 		pass = p.Target.IsPrimary ?
 			frame.BeginPrimaryPass(p.ColorAttachmentOps) :
-			frame.BeginRenderTargetPass(p.Target.RenderTarget.Target, p.ColorAttachmentOps);
+			frame.BeginColorPass(p.Target.RenderTarget.ColorView, p.ColorAttachmentOps);
 		applyScissor(pass, in p);
 	}
 

@@ -21,7 +21,7 @@ public sealed class ViewGlobals : IDisposable {
 	public ViewGlobals(WebGPUDevice device, uint w, uint h) {
 		this.device = device;
 		buffer = device.CreateBuffer((ulong)GlobalsUniform.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
-		bindGroup = device.CreateBufferBindGroup(device.GlobalsUniformBindGroupLayout, 0, buffer, 0, buffer.Size);
+		bindGroup = device.CreateUniformBufferBindGroup(device.StdGlobalsUniformLayout, buffer);
 		Update(w, h);
 	}
 

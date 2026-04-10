@@ -20,7 +20,7 @@ public abstract unsafe class GPUBindGroupHandle {
 }
 
 /// <summary>
-/// Owning wrapper around a GPU bind group.
+/// Owning wrapper around a bind group.
 /// </summary>
 public sealed unsafe class GPUBindGroup(WebGPUDevice device, BindGroup *bindGroup) : GPUBindGroupHandle, IDisposable {
 	private readonly WebGPUDevice device = device;
@@ -44,7 +44,7 @@ public sealed unsafe class GPUBindGroup(WebGPUDevice device, BindGroup *bindGrou
 }
 
 /// <summary>
-/// Non-owning wrapper around a GPU bind group.
+/// Non-owning wrapper around a bind group.
 /// </summary>
 public sealed unsafe class GPUBindGroupRef : GPUBindGroupHandle {
 	private readonly GPUBindGroup? source = null;

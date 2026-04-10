@@ -165,6 +165,10 @@ public sealed class Texture2DAssetCreator(WebGPUDevice gpuDevice) : IAssetCreato
 			GPUTexture tex = gpuDevice.CreateTexture(new GPUTextureCreateParams(
 				Width: p.Width,
 				Height: p.Height,
+				DepthOrArrayLayers: 1,
+				MipLevelCount: 1,
+				SampleCount: 1,
+				Dimension: TextureDimension.Dimension2D,
 				Format: fmt,
 				Usage: TextureUsage.TextureBinding | TextureUsage.CopyDst
 			));

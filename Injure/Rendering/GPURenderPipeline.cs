@@ -6,7 +6,7 @@ using Silk.NET.WebGPU;
 namespace Injure.Rendering;
 
 /// <summary>
-/// Owning wrapper around a GPU render pipeline.
+/// Owning wrapper around a render pipeline.
 /// </summary>
 public sealed unsafe class GPURenderPipeline(WebGPUDevice device, RenderPipeline *pipeline) : IDisposable {
 	private readonly WebGPUDevice device = device;

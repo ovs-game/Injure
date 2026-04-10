@@ -36,9 +36,9 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 		ColorWriteMask colorWriteMask, TextureFormat colorTargetFormat) {
 		ColorTargetFormat = colorTargetFormat;
 		_shader = device.CreateShaderWGSL(engineResources.GetText(BuiltinShaders.Primitive2D.ResourceID));
-		_localsBindGroupLayout = device.CreateSimpleBufferBindGroupLayout(ShaderStage.Vertex, (ulong)PrimitiveBatchLocalsUniform.Size);
+		_localsBindGroupLayout = device.CreateUniformBufferBindGroupLayout(ShaderStage.Vertex, (ulong)PrimitiveBatchLocalsUniform.Size);
 		_pipelineLayout = device.CreatePipelineLayout([
-			device.GlobalsUniformBindGroupLayout,
+			device.StdGlobalsUniformLayout,
 			_localsBindGroupLayout
 		]);
 		_pipeline = device.CreateRenderPipeline(PipelineLayout, new GPURenderPipelineCreateParams(
@@ -117,7 +117,7 @@ public sealed class PrimitiveBatch : IDisposable {
 			Transform = MatrixUtil.To4x4(@params.Transform)
 		};
 		device.WriteToBuffer(localsUniformBuffer, 0, in l);
-		localsUniformBindGroup = device.CreateBufferBindGroup(shared.LocalsBindGroupLayout, 0, localsUniformBuffer, 0, (ulong)PrimitiveBatchLocalsUniform.Size);
+		localsUniformBindGroup = device.CreateUniformBufferBindGroup(shared.LocalsBindGroupLayout, localsUniformBuffer);
 
 		verts = new Vertex2DColor[initialVertCapacity];
 		idxs = new uint[initialIndexCapacity];

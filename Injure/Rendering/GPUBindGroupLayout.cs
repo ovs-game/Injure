@@ -22,11 +22,16 @@ public abstract unsafe class GPUBindGroupLayoutHandle {
 /// <summary>
 /// Owning wrapper around a bind group layout.
 /// </summary>
-public sealed unsafe class GPUBindGroupLayout(WebGPUDevice device, BindGroupLayout *bindGroup) : GPUBindGroupLayoutHandle, IDisposable {
-	private readonly WebGPUDevice device = device;
-	private BindGroupLayout *p = bindGroup;
+public sealed unsafe class GPUBindGroupLayout : GPUBindGroupLayoutHandle, IDisposable {
+	private readonly WebGPUDevice device;
+	private BindGroupLayout *bindGroupLayout;
 
-	internal override BindGroupLayout *BindGroupLayout => p;
+	internal GPUBindGroupLayout(WebGPUDevice device, BindGroupLayout *bindGroupLayout) {
+		this.device = device;
+		this.bindGroupLayout = bindGroupLayout;
+	}
+
+	internal override BindGroupLayout *BindGroupLayout => bindGroupLayout;
 
 	/// <summary>
 	/// Creates a non-owning view of this bind group layout.
@@ -37,9 +42,9 @@ public sealed unsafe class GPUBindGroupLayout(WebGPUDevice device, BindGroupLayo
 	/// Releases the underlying WebGPU bind group layout.
 	/// </summary>
 	public void Dispose() {
-		if (p is not null)
-			device.API.BindGroupLayoutRelease(p);
-		p = null;
+		if (bindGroupLayout is not null)
+			device.API.BindGroupLayoutRelease(bindGroupLayout);
+		bindGroupLayout = null;
 	}
 }
 
@@ -47,22 +52,10 @@ public sealed unsafe class GPUBindGroupLayout(WebGPUDevice device, BindGroupLayo
 /// Non-owning wrapper around a bind group layout.
 /// </summary>
 public sealed unsafe class GPUBindGroupLayoutRef : GPUBindGroupLayoutHandle {
-	private readonly GPUBindGroupLayout? source = null;
-	private readonly BindGroupLayout *p = null;
-
-	/// <summary>
-	/// Creates a source-backed bind group layout ref.
-	/// </summary>
-	public GPUBindGroupLayoutRef(GPUBindGroupLayout source) {
+	private readonly GPUBindGroupLayout source;
+	internal GPUBindGroupLayoutRef(GPUBindGroupLayout source) {
 		this.source = source;
 	}
 
-	/// <summary>
-	/// Creates a pointer-backed bind group layout ref.
-	/// </summary>
-	public GPUBindGroupLayoutRef(BindGroupLayout *p) {
-		this.p = p;
-	}
-
-	internal override BindGroupLayout *BindGroupLayout => (source is not null) ? source.BindGroupLayout : p;
+	internal override BindGroupLayout *BindGroupLayout => source.BindGroupLayout;
 }

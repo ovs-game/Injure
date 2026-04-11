@@ -578,8 +578,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			MaxAnisotropy = @params.MaxAnisotropy
 
 		};
-		Sampler *sampler = Check(API.DeviceCreateSampler(Device, &desc));
-		return new GPUSampler(this, sampler);
+		return new GPUSampler(this, Check(API.DeviceCreateSampler(Device, &desc)));
 	}
 
 	private static BindGroupLayoutEntry toRawBindGroupLayoutEntry(in GPUBindGroupLayoutEntry entry) {
@@ -765,7 +764,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// Creates a shader module from WGSL source code, returning an owning object.
 	/// </summary>
 	/// <param name="code">WGSL source code.</param>
-	public GPUShader CreateShaderWGSL(string code) {
+	public GPUShaderModule CreateShaderModuleWGSL(string code) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		byte *p = (byte *)SilkMarshal.StringToPtr(code, NativeStringEncoding.UTF8);
 		try {
@@ -779,8 +778,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			ShaderModuleDescriptor desc = new ShaderModuleDescriptor {
 				NextInChain = (ChainedStruct *)&src
 			};
-			ShaderModule *module = Check(API.DeviceCreateShaderModule(Device, &desc));
-			return new GPUShader(this, module);
+			return new GPUShaderModule(this, Check(API.DeviceCreateShaderModule(Device, &desc)));
 		} finally {
 			SilkMarshal.Free((IntPtr)p);
 		}
@@ -823,7 +821,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// Pipelines are color-target-format-specific. Code rendering to multiple
 	/// target formats typically needs a separate pipeline per format.
 	/// </remarks>
-	public GPURenderPipeline CreateRenderPipeline(GPUPipelineLayout layout, in GPURenderPipelineCreateParams @params) {
+	public GPURenderPipeline CreateRenderPipeline(GPUPipelineLayoutHandle layout, in GPURenderPipelineCreateParams @params) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 
 		VertexAttribute *attrs = stackalloc VertexAttribute[@params.VertexAttributes.Length];
@@ -841,7 +839,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		byte *fsEntry = (byte *)SilkMarshal.StringToPtr(@params.FragShaderEntryPoint, NativeStringEncoding.UTF8);
 		try {
 			VertexState vert = new VertexState {
-				Module = @params.Shader.ShaderModule,
+				Module = @params.ShaderModule.ShaderModule,
 				EntryPoint = vsEntry,
 				BufferCount = 1,
 				Buffers = vbuffers
@@ -862,7 +860,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			};
 
 			FragmentState frag = new FragmentState {
-				Module = @params.Shader.ShaderModule,
+				Module = @params.ShaderModule.ShaderModule,
 				EntryPoint = fsEntry,
 				TargetCount = 1,
 				Targets = targets

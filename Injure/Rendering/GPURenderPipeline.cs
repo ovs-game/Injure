@@ -6,33 +6,64 @@ using Silk.NET.WebGPU;
 namespace Injure.Rendering;
 
 /// <summary>
-/// Owning wrapper around a render pipeline.
+/// Common base type for render pipeline wrappers, allowing APIs to accept both
+/// owning and non-owning wrappers.
 /// </summary>
-public sealed unsafe class GPURenderPipeline(WebGPUDevice device, RenderPipeline *pipeline) : IDisposable {
-	private readonly WebGPUDevice device = device;
-
-	internal RenderPipeline *Pipeline { get; private set; } = pipeline;
+public abstract unsafe class GPURenderPipelineHandle {
+	internal abstract RenderPipeline *RenderPipeline { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="RenderPipeline"/>, bypassing
+	/// Returns the underlying <see cref="Silk.NET.WebGPU.RenderPipeline"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public RenderPipeline *DangerousGetPtr() => Pipeline;
+	public RenderPipeline *DangerousGetPtr() => RenderPipeline;
+}
+
+/// <summary>
+/// Owning wrapper around a render pipeline.
+/// </summary>
+public sealed unsafe class GPURenderPipeline : GPURenderPipelineHandle, IDisposable {
+	private readonly WebGPUDevice device;
+	private RenderPipeline *renderPipeline;
+
+	internal GPURenderPipeline(WebGPUDevice device, RenderPipeline *renderPipeline) {
+		this.device = device;
+		this.renderPipeline = renderPipeline;
+	}
+
+	internal override RenderPipeline *RenderPipeline => renderPipeline;
+
+	/// <summary>
+	/// Creates a non-owning view of this render pipeline.
+	/// </summary>
+	public GPURenderPipelineRef AsRef() => new GPURenderPipelineRef(this);
 
 	/// <summary>
 	/// Releases the underlying WebGPU render pipeline.
 	/// </summary>
 	public void Dispose() {
-		if (Pipeline is not null)
-			device.API.RenderPipelineRelease(Pipeline);
-		Pipeline = null;
+		if (renderPipeline is not null)
+			device.API.RenderPipelineRelease(renderPipeline);
+		renderPipeline = null;
 	}
+}
+
+/// <summary>
+/// Non-owning wrapper around a render pipeline.
+/// </summary>
+public sealed unsafe class GPURenderPipelineRef : GPURenderPipelineHandle {
+	private readonly GPURenderPipeline source;
+	internal GPURenderPipelineRef(GPURenderPipeline source) {
+		this.source = source;
+	}
+
+	internal override RenderPipeline *RenderPipeline => source.RenderPipeline;
 }
 
 /// <summary>
 /// Parameters used to create a <see cref="GPURenderPipeline"/>.
 /// </summary>
-/// <param name="Shader">Shader module supplying the vertex and fragment shaders.</param>
+/// <param name="ShaderModule">Shader module supplying the vertex and fragment shaders.</param>
 /// <param name="VertShaderEntryPoint">Vertex shader entry point name.</param>
 /// <param name="FragShaderEntryPoint">Fragment shader entry point name.</param>
 /// <param name="VertexStride">Stride of one vertex in bytes.</param>
@@ -50,7 +81,7 @@ public sealed unsafe class GPURenderPipeline(WebGPUDevice device, RenderPipeline
 /// formats typically requires separate pipelines.
 /// </remarks>
 public readonly record struct GPURenderPipelineCreateParams(
-	GPUShader Shader,
+	GPUShaderModuleHandle ShaderModule,
 	string VertShaderEntryPoint,
 	string FragShaderEntryPoint,
 	ulong VertexStride,

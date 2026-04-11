@@ -169,12 +169,28 @@ public sealed unsafe class GPUTextureViewRef : GPUTextureViewHandle {
 /// Parameters used to create a <see cref="GPUTextureView"/>.
 /// </summary>
 /// <param name="Format">
+/// <para>
 /// If <see cref="Aspect"/> is <see cref="TextureAspect.All"/>, this must be either
 /// the texture's format or one of its <see cref="GPUTextureCreateParams.ViewFormats"/>.
 /// If <see cref="Aspect"/> is <see cref="TextureAspect.DepthOnly"/> or
 /// <see cref="TextureAspect.StencilOnly"/>, this must be the corresponding
 /// aspect-specific format of the texture's depth/stencil format.
-/// If <see langword="null"/>, WebGPU's default view format resolution is used.
+/// </para>
+/// <para>
+/// Can be <see langword="null"/> to use the default of:
+/// <list type="bullet">
+/// <item><description>The texture's format for <see cref="TextureAspect.All"/>.</description></item>
+/// <item><description>
+/// <see cref="TextureFormat.Depth24Plus"/> or <see cref="TextureFormat.Depth32float"/>
+/// for depth-only views of combined depth+stencil textures.
+/// </description></item>
+/// <item><description>
+/// <see cref="TextureFormat.Stencil8"/> for stencil-only views of combined
+/// depth+stencil textures.
+/// </description></item>
+/// </list>
+/// Any other omitted-format combination is invalid and causes view creation to throw.
+/// </para>
 /// </param>
 /// <param name="Dimension">
 /// The dimension to view the texture as, or <see langword="null"/> to derive the
@@ -189,7 +205,7 @@ public sealed unsafe class GPUTextureViewRef : GPUTextureViewHandle {
 /// <param name="BaseArrayLayer">First array layer accessible to the view.</param>
 /// <param name="ArrayLayerCount">
 /// How many array layers, starting with <paramref name="BaseArrayLayer"/>, are
-/// accessible to the view, or <see langword="null"/> to use:
+/// accessible to the view, or <see langword="null"/> to use the default of:
 /// <list type="bullet">
 /// <item><description><c>1</c> for <c>1d</c>, <c>2d</c>, or <c>3d</c> views.</description></item>
 /// <item><description><c>6</c> for <c>cube</c> views.</description></item>

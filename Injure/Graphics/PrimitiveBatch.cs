@@ -21,13 +21,13 @@ public struct PrimitiveBatchLocalsUniform {
 
 public sealed class PrimitiveBatchSharedState : IDisposable {
 	public readonly TextureFormat ColorTargetFormat;
-	private readonly GPUShader _shader;
+	private readonly GPUShaderModule _shader;
 	private readonly GPUBindGroupLayout _localsBindGroupLayout;
 	private readonly GPUPipelineLayout _pipelineLayout;
 	private readonly GPURenderPipeline _pipeline;
 	private bool disposed = false;
 
-	public GPUShader Shader { get { ObjectDisposedException.ThrowIf(disposed, this); return _shader; } }
+	public GPUShaderModule Shader { get { ObjectDisposedException.ThrowIf(disposed, this); return _shader; } }
 	public GPUBindGroupLayoutRef LocalsBindGroupLayout { get { ObjectDisposedException.ThrowIf(disposed, this); return _localsBindGroupLayout.AsRef(); } }
 	public GPUPipelineLayout PipelineLayout { get { ObjectDisposedException.ThrowIf(disposed, this); return _pipelineLayout; } }
 	public GPURenderPipeline Pipeline { get { ObjectDisposedException.ThrowIf(disposed, this); return _pipeline; } }
@@ -35,14 +35,14 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 	public PrimitiveBatchSharedState(WebGPUDevice device, EngineResourceStore engineResources, BlendState? blend,
 		ColorWriteMask colorWriteMask, TextureFormat colorTargetFormat) {
 		ColorTargetFormat = colorTargetFormat;
-		_shader = device.CreateShaderWGSL(engineResources.GetText(BuiltinShaders.Primitive2D.ResourceID));
+		_shader = device.CreateShaderModuleWGSL(engineResources.GetText(BuiltinShaders.Primitive2D.ResourceID));
 		_localsBindGroupLayout = device.CreateUniformBufferBindGroupLayout(ShaderStage.Vertex, (ulong)PrimitiveBatchLocalsUniform.Size);
 		_pipelineLayout = device.CreatePipelineLayout([
 			device.StdGlobalsUniformLayout,
 			_localsBindGroupLayout
 		]);
 		_pipeline = device.CreateRenderPipeline(PipelineLayout, new GPURenderPipelineCreateParams(
-			Shader: Shader,
+			ShaderModule: Shader,
 			VertShaderEntryPoint: BuiltinShaders.Primitive2D.VSEntry,
 			FragShaderEntryPoint: BuiltinShaders.Primitive2D.FSEntry,
 			VertexStride: (ulong)Vertex2DColor.Size,

@@ -143,37 +143,40 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 	public override ReadOnlySpan<TextureFormat> ViewFormats => viewFormats;
 
 	public override GPUTextureView CreateView(in GPUTextureViewCreateParams @params) {
-		TextureViewDescriptor desc = new TextureViewDescriptor {
-			Format = @params.Format ?? default,
-			Dimension = @params.Dimension ?? default,
-			Aspect = @params.Aspect,
-			BaseMipLevel = @params.BaseMipLevel,
-			MipLevelCount = @params.MipLevelCount ?? default,
-			BaseArrayLayer = @params.BaseArrayLayer,
-			ArrayLayerCount = @params.ArrayLayerCount ?? default
+		TextureFormat fmt = @params.Format ?? (Format, @params.Aspect) switch {
+			(TextureFormat.Depth24PlusStencil8, TextureAspect.DepthOnly) => TextureFormat.Depth24Plus,
+			(TextureFormat.Depth24PlusStencil8, TextureAspect.StencilOnly) => TextureFormat.Stencil8,
+			(TextureFormat.Depth32floatStencil8, TextureAspect.DepthOnly) => TextureFormat.Depth32float,
+			(TextureFormat.Depth32floatStencil8, TextureAspect.StencilOnly) => TextureFormat.Stencil8,
+			(_, TextureAspect.All) => Format,
+			_ => throw new ArgumentException("texture format/aspect combination has no aspect-specific view format", nameof(@params))
 		};
 		TextureViewDimension dim = @params.Dimension ?? DefaultViewDimension;
+		uint mipLvCount = @params.MipLevelCount ?? (MipLevelCount - @params.BaseMipLevel);
+		uint arrLayerCount = @params.ArrayLayerCount ?? dim switch {
+			TextureViewDimension.Dimension1D or TextureViewDimension.Dimension2D or TextureViewDimension.Dimension3D => 1,
+			TextureViewDimension.DimensionCube => 6,
+			TextureViewDimension.Dimension2DArray or TextureViewDimension.DimensionCubeArray => DepthOrArrayLayers - @params.BaseArrayLayer,
+			_ => throw new UnreachableException()
+		};
+		TextureViewDescriptor desc = new TextureViewDescriptor {
+			Format = fmt,
+			Dimension = dim,
+			Aspect = @params.Aspect,
+			BaseMipLevel = @params.BaseMipLevel,
+			MipLevelCount = mipLvCount,
+			BaseArrayLayer = @params.BaseArrayLayer,
+			ArrayLayerCount = arrLayerCount
+		};
 		return new GPUTextureView(device, WebGPUException.Check(device.API.TextureCreateView(Texture, &desc)),
-			@params.Format ?? (Format, @params.Aspect) switch {
-				(TextureFormat.Depth24PlusStencil8, TextureAspect.DepthOnly) => TextureFormat.Depth24Plus,
-				(TextureFormat.Depth24PlusStencil8, TextureAspect.StencilOnly) => TextureFormat.Stencil8,
-				(TextureFormat.Depth32floatStencil8, TextureAspect.DepthOnly) => TextureFormat.Depth32float,
-				(TextureFormat.Depth32floatStencil8, TextureAspect.StencilOnly) => TextureFormat.Stencil8,
-				(_, TextureAspect.All) => Format,
-				_ => throw new ArgumentException("texture format/aspect combination has no aspect-specific view format", nameof(@params))
-			},
+			fmt,
 			dim,
 			@params.Aspect,
 			Usage,
 			@params.BaseMipLevel,
-			@params.MipLevelCount ?? (MipLevelCount - @params.BaseMipLevel),
+			mipLvCount,
 			@params.BaseArrayLayer,
-			@params.ArrayLayerCount ?? dim switch {
-				TextureViewDimension.Dimension1D or TextureViewDimension.Dimension2D or TextureViewDimension.Dimension3D => 1,
-				TextureViewDimension.DimensionCube => 6,
-				TextureViewDimension.Dimension2DArray or TextureViewDimension.DimensionCubeArray => DepthOrArrayLayers - @params.BaseArrayLayer,
-				_ => throw new UnreachableException()
-			},
+			arrLayerCount,
 			Math.Max(1u, Width >> (int)@params.BaseMipLevel),
 			dim == TextureViewDimension.Dimension1D ? 1u : Math.Max(1u, Height >> (int)@params.BaseMipLevel),
 			dim != TextureViewDimension.Dimension3D ? 1u : Math.Max(1u, DepthOrArrayLayers >> (int)@params.BaseMipLevel),

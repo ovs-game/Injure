@@ -22,11 +22,16 @@ public abstract unsafe class GPUBindGroupHandle {
 /// <summary>
 /// Owning wrapper around a bind group.
 /// </summary>
-public sealed unsafe class GPUBindGroup(WebGPUDevice device, BindGroup *bindGroup) : GPUBindGroupHandle, IDisposable {
-	private readonly WebGPUDevice device = device;
-	private BindGroup *p = bindGroup;
+public sealed unsafe class GPUBindGroup : GPUBindGroupHandle, IDisposable {
+	private readonly WebGPUDevice device;
+	private BindGroup *bindGroup;
 
-	internal override BindGroup *BindGroup => p;
+	internal GPUBindGroup(WebGPUDevice device, BindGroup *bindGroup) {
+		this.device = device;
+		this.bindGroup = bindGroup;
+	}
+
+	internal override BindGroup *BindGroup => bindGroup;
 
 	/// <summary>
 	/// Creates a non-owning view of this bind group.
@@ -37,9 +42,9 @@ public sealed unsafe class GPUBindGroup(WebGPUDevice device, BindGroup *bindGrou
 	/// Releases the underlying WebGPU bind group.
 	/// </summary>
 	public void Dispose() {
-		if (p is not null)
-			device.API.BindGroupRelease(p);
-		p = null;
+		if (bindGroup is not null)
+			device.API.BindGroupRelease(bindGroup);
+		bindGroup = null;
 	}
 }
 
@@ -47,22 +52,10 @@ public sealed unsafe class GPUBindGroup(WebGPUDevice device, BindGroup *bindGrou
 /// Non-owning wrapper around a bind group.
 /// </summary>
 public sealed unsafe class GPUBindGroupRef : GPUBindGroupHandle {
-	private readonly GPUBindGroup? source = null;
-	private readonly BindGroup *p = null;
-
-	/// <summary>
-	/// Creates a source-backed bind group ref.
-	/// </summary>
-	public GPUBindGroupRef(GPUBindGroup source) {
+	private readonly GPUBindGroup source;
+	internal GPUBindGroupRef(GPUBindGroup source) {
 		this.source = source;
 	}
 
-	/// <summary>
-	/// Creates a pointer-backed bind group ref.
-	/// </summary>
-	public GPUBindGroupRef(BindGroup *p) {
-		this.p = p;
-	}
-
-	internal override BindGroup *BindGroup => (source is not null) ? source.BindGroup : p;
+	internal override BindGroup *BindGroup => source.BindGroup;
 }

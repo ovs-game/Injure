@@ -5,16 +5,22 @@ using Silk.NET.WebGPU;
 
 namespace Injure.Rendering;
 
-public sealed unsafe class RenderPass(WebGPUDevice device, RenderPassEncoder *passEnc, Action onFinished) : IDisposable {
+public sealed unsafe class RenderPass : IDisposable {
 	private const ulong WholeSize = ulong.MaxValue;
-	private readonly WebGPUDevice device = device;
-	private readonly RenderPassEncoder *passEnc = passEnc;
-	private readonly Action onFinished = onFinished;
+	private readonly WebGPUDevice device;
+	private readonly RenderPassEncoder *passEnc;
+	private readonly Action onFinished;
 	private bool disposed = false;
 
-	public void SetPipeline(GPURenderPipeline pipeline) {
+	internal RenderPass(WebGPUDevice device, RenderPassEncoder *passEnc, Action onFinished) {
+		this.device = device;
+		this.passEnc = passEnc;
+		this.onFinished = onFinished;
+	}
+
+	public void SetPipeline(GPURenderPipelineHandle pipeline) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		device.API.RenderPassEncoderSetPipeline(passEnc, pipeline.Pipeline);
+		device.API.RenderPassEncoderSetPipeline(passEnc, pipeline.RenderPipeline);
 	}
 
 	public void SetBindGroup(uint index, GPUBindGroupHandle bindGroup) {
@@ -22,12 +28,12 @@ public sealed unsafe class RenderPass(WebGPUDevice device, RenderPassEncoder *pa
 		device.API.RenderPassEncoderSetBindGroup(passEnc, index, bindGroup.BindGroup, 0, null);
 	}
 
-	public void SetVertexBuffer(uint slot, GPUBuffer buffer, ulong offset = 0, ulong size = WholeSize) {
+	public void SetVertexBuffer(uint slot, GPUBufferHandle buffer, ulong offset = 0, ulong size = WholeSize) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		device.API.RenderPassEncoderSetVertexBuffer(passEnc, slot, buffer.Buffer, offset, size);
 	}
 
-	public void SetIndexBuffer(GPUBuffer buffer, IndexFormat format, ulong offset = 0, ulong size = WholeSize) {
+	public void SetIndexBuffer(GPUBufferHandle buffer, IndexFormat format, ulong offset = 0, ulong size = WholeSize) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		device.API.RenderPassEncoderSetIndexBuffer(passEnc, buffer.Buffer, format, offset, size);
 	}

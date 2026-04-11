@@ -12,7 +12,6 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 ----------
 TODO:
 
-- [this one is next-up] test if it actually Works since the latest commit
 - [this one is next-up] finish the Big fat rendering stack refactor
 - [this one is next-up] public optimized swizzle/convert api
 - [this one is next-up] high-level texture creation / upload api

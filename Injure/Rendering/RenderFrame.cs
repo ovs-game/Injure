@@ -3,7 +3,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Silk.NET.WebGPU;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -27,21 +28,21 @@ namespace Injure.Rendering;
 /// </remarks>
 public sealed unsafe class RenderFrame : IDisposable {
 	private readonly WebGPUDevice device;
-	private readonly SurfaceTexture primaryTex;
+	private readonly WGPUSurfaceTexture primaryTex;
 	private readonly GPUTextureView primaryView;
-	private readonly CommandEncoder *encoder;
-	private readonly Action present;
+	private readonly WGPUCommandEncoder encoder;
+	private readonly Action presentCallback;
 	private readonly List<IDisposable> deferred = new List<IDisposable>();
 	private bool activepass = false;
 	private bool done = false;
 
-	internal RenderFrame(WebGPUDevice device, SurfaceTexture primaryTex, GPUTextureView primaryView, CommandEncoder *encoder, Action present) {
+	internal RenderFrame(WebGPUDevice device, WGPUSurfaceTexture primaryTex, GPUTextureView primaryView, WGPUCommandEncoder encoder, Action presentCallback) {
 		this.device = device;
 		this.primaryTex = primaryTex;
 		this.primaryView = primaryView;
 		PrimaryView = primaryView.AsRef();
 		this.encoder = encoder;
-		this.present = present;
+		this.presentCallback = presentCallback;
 	}
 
 	/// <summary>
@@ -59,54 +60,54 @@ public sealed unsafe class RenderFrame : IDisposable {
 		activepass = false;
 	}
 
-	private RenderPass beginPass(CommandEncoder *enc, TextureView *colorView, TextureView *depthStencilView,
+	private RenderPass beginPass(WGPUCommandEncoder enc, WGPUTextureView colorView, WGPUTextureView depthStencilView,
 		in ColorAttachmentOps colorOps, in DepthAttachmentOps? depthOps, in StencilAttachmentOps? stencilOps) {
 		if (done)
 			throw new InvalidOperationException("frame already submitted/disposed");
 		if (activepass)
 			throw new InvalidOperationException("frame already has an active pass");
 
-		RenderPassColorAttachment *colorAttachments = stackalloc RenderPassColorAttachment[1];
-		colorAttachments[0] = new RenderPassColorAttachment {
-			View = colorView,
-			LoadOp = colorOps.LoadOp,
-			StoreOp = colorOps.StoreOp,
-			ClearValue = colorOps.ClearValue.ToWebGPUColor()
+		WGPURenderPassColorAttachment *colorAttachments = stackalloc WGPURenderPassColorAttachment[1];
+		colorAttachments[0] = new WGPURenderPassColorAttachment {
+			view = colorView,
+			loadOp = colorOps.LoadOp.ToWebGPUType(),
+			storeOp = colorOps.StoreOp.ToWebGPUType(),
+			clearValue = colorOps.ClearValue.ToWebGPUColor(),
+			depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
 		};
 
-		RenderPassDescriptor desc = new RenderPassDescriptor {
-			ColorAttachmentCount = 1,
-			ColorAttachments = colorAttachments
+		WGPURenderPassDescriptor desc = new WGPURenderPassDescriptor {
+			colorAttachmentCount = 1,
+			colorAttachments = colorAttachments
 		};
 
-		// alloc here so it doesn't go out of scope after the if block
-		RenderPassDepthStencilAttachment *depthStencilAttachment = stackalloc RenderPassDepthStencilAttachment[1];
-		if (depthStencilView is not null) {
+		if (depthStencilView.IsNotNull) {
+			WGPURenderPassDepthStencilAttachment *depthStencilAttachment = stackalloc WGPURenderPassDepthStencilAttachment[1];
 			DepthAttachmentOps d = depthOps ?? throw new ArgumentNullException(nameof(depthOps));
-			depthStencilAttachment[0] = new RenderPassDepthStencilAttachment {
-				View = depthStencilView,
-				DepthLoadOp = d.LoadOp,
-				DepthStoreOp = d.StoreOp,
-				DepthClearValue = d.ClearValue,
-				DepthReadOnly = false
+			depthStencilAttachment[0] = new WGPURenderPassDepthStencilAttachment {
+				view = depthStencilView,
+				depthLoadOp = d.LoadOp.ToWebGPUType(),
+				depthStoreOp = d.StoreOp.ToWebGPUType(),
+				depthClearValue = d.ClearValue,
+				depthReadOnly = false
 			};
 			if (stencilOps is StencilAttachmentOps st) {
-				depthStencilAttachment[0].StencilLoadOp = st.LoadOp;
-				depthStencilAttachment[0].StencilStoreOp = st.StoreOp;
-				depthStencilAttachment[0].StencilClearValue = st.ClearValue;
-				depthStencilAttachment[0].StencilReadOnly = false;
+				depthStencilAttachment[0].stencilLoadOp = st.LoadOp.ToWebGPUType();
+				depthStencilAttachment[0].stencilStoreOp = st.StoreOp.ToWebGPUType();
+				depthStencilAttachment[0].stencilClearValue = st.ClearValue;
+				depthStencilAttachment[0].stencilReadOnly = false;
 			} else {
-				depthStencilAttachment[0].StencilLoadOp = LoadOp.Undefined;
-				depthStencilAttachment[0].StencilStoreOp = StoreOp.Undefined;
-				depthStencilAttachment[0].StencilClearValue = 0;
-				depthStencilAttachment[0].StencilReadOnly = true;
+				depthStencilAttachment[0].stencilLoadOp = WGPULoadOp.Undefined;
+				depthStencilAttachment[0].stencilStoreOp = WGPUStoreOp.Undefined;
+				depthStencilAttachment[0].stencilClearValue = 0;
+				depthStencilAttachment[0].stencilReadOnly = true;
 			}
-			desc.DepthStencilAttachment = depthStencilAttachment;
+			desc.depthStencilAttachment = depthStencilAttachment;
 		}
 
-		RenderPassEncoder *passEnc = WebGPUException.Check(device.API.CommandEncoderBeginRenderPass(enc, &desc));
+		WGPURenderPassEncoder passEnc = WebGPUException.Check(wgpuCommandEncoderBeginRenderPass(enc, &desc));
 		activepass = true;
-		return new RenderPass(device, passEnc, onPassFinished);
+		return new RenderPass(passEnc, onPassFinished);
 	}
 
 	[StackTraceHidden]
@@ -121,22 +122,22 @@ public sealed unsafe class RenderFrame : IDisposable {
 	[StackTraceHidden]
 	private static void validateColorView(GPUTextureViewHandle colorView, string paramName) {
 		validateView(colorView, paramName);
-		if (colorView.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float
-			or TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32floatStencil8 or TextureFormat.Stencil8)
+		if (colorView.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float
+			or TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32FloatStencil8 or TextureFormat.Stencil8)
 			throw new ArgumentException("color view must be a color format", paramName);
 	}
 
 	[StackTraceHidden]
 	private static void validateDepthView(GPUTextureViewHandle depthView, string paramName) {
 		validateView(depthView, paramName);
-		if (!(depthView.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float))
+		if (!(depthView.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float))
 			throw new ArgumentException("depth view must be a depth-only format (no stencil)", paramName);
 	}
 
 	[StackTraceHidden]
 	private static void validateDepthStencilView(GPUTextureViewHandle depthStencilView, string paramName) {
 		validateView(depthStencilView, paramName);
-		if (!(depthStencilView.Format is TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32floatStencil8))
+		if (!(depthStencilView.Format is TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32FloatStencil8))
 			throw new ArgumentException("depth+stencil view must be a depth+stencil format", paramName);
 	}
 
@@ -171,7 +172,7 @@ public sealed unsafe class RenderFrame : IDisposable {
 	/// </exception>
 	public RenderPass BeginColorPass(GPUTextureViewHandle colorView, in ColorAttachmentOps colorOps) {
 		validateColorView(colorView, nameof(colorView));
-		return beginPass(encoder, colorView.TextureView, null, in colorOps, null, null);
+		return beginPass(encoder, colorView.WGPUTextureView, default, in colorOps, null, null);
 	}
 
 	/// <summary>
@@ -197,7 +198,7 @@ public sealed unsafe class RenderFrame : IDisposable {
 		validateColorView(colorView, nameof(colorView));
 		validateDepthView(depthView, nameof(depthView));
 		validateCompatibleAttachments(colorView, depthView);
-		return beginPass(encoder, colorView.TextureView, depthView.TextureView, in colorOps, depthOps, null);
+		return beginPass(encoder, colorView.WGPUTextureView, depthView.WGPUTextureView, in colorOps, depthOps, null);
 	}
 
 	/// <summary>
@@ -224,7 +225,7 @@ public sealed unsafe class RenderFrame : IDisposable {
 		validateColorView(colorView, nameof(colorView));
 		validateDepthStencilView(depthStencilView, nameof(depthStencilView));
 		validateCompatibleAttachments(colorView, depthStencilView);
-		return beginPass(encoder, colorView.TextureView, depthStencilView.TextureView, in colorOps, depthOps, stencilOps);
+		return beginPass(encoder, colorView.WGPUTextureView, depthStencilView.WGPUTextureView, in colorOps, depthOps, stencilOps);
 	}
 
 	/// <summary>
@@ -276,16 +277,16 @@ public sealed unsafe class RenderFrame : IDisposable {
 		if (activepass)
 			throw new InvalidOperationException("frame still has an active render pass");
 
-		CommandBufferDescriptor desc;
-		CommandBuffer *cmdbuf = WebGPUException.Check(device.API.CommandEncoderFinish(encoder, &desc));
+		WGPUCommandBufferDescriptor desc;
+		WGPUCommandBuffer cmdbuf = WebGPUException.Check(wgpuCommandEncoderFinish(encoder, &desc));
 
 		device.Submit(cmdbuf);
-		present();
+		presentCallback();
 
-		device.API.CommandBufferRelease(cmdbuf);
-		device.API.CommandEncoderRelease(encoder);
+		wgpuCommandBufferRelease(cmdbuf);
+		wgpuCommandEncoderRelease(encoder);
 		primaryView.Dispose();
-		device.API.TextureRelease(primaryTex.Texture);
+		wgpuTextureRelease(primaryTex.texture);
 		foreach (IDisposable disp in deferred)
 			disp.Dispose();
 		deferred.Clear();
@@ -317,9 +318,9 @@ public sealed unsafe class RenderFrame : IDisposable {
 			throw new InvalidOperationException("frame still has an active render pass - this could be automatically cleaned up, but if it happened you probably have a bug");
 
 		done = true;
-		device.API.CommandEncoderRelease(encoder);
+		wgpuCommandEncoderRelease(encoder);
 		primaryView.Dispose();
-		device.API.TextureRelease(primaryTex.Texture);
+		wgpuTextureRelease(primaryTex.texture);
 		foreach (IDisposable disp in deferred)
 			disp.Dispose();
 		deferred.Clear();

@@ -7,7 +7,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Silk.NET.WebGPU;
 using StbImageSharp;
 
 using Injure.Graphics;
@@ -139,7 +138,7 @@ public sealed class Texture2DAssetCreator(WebGPUDevice gpuDevice) : IAssetCreato
 		if (info.Prepared is not Texture2DAssetPreparedData p)
 			return AssetCreateResult<Texture2D>.NotHandled();
 		try {
-			TextureFormat fmt = p.Metadata.SRGB ? TextureFormat.Rgba8UnormSrgb : TextureFormat.Rgba8Unorm;
+			TextureFormat fmt = p.Metadata.SRGB ? TextureFormat.RGBA8UnormSrgb : TextureFormat.RGBA8Unorm;
 			GPUSamplerCreateParams smpParams = p.Metadata.SamplerMode switch {
 				Texture2DSamplerMode.NearestClamp => SamplerStates.NearestClamp,
 				Texture2DSamplerMode.LinearClamp => SamplerStates.LinearClamp,

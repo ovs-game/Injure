@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-using Silk.NET.WebGPU;
+using WebGPU;
 
 namespace Injure.Rendering;
 
@@ -9,21 +9,21 @@ namespace Injure.Rendering;
 /// </summary>
 /// <remarks>
 /// This type exists so a single stack-allocated value can hold both the root
-/// <see cref="SurfaceDescriptor"/> and any platform-specific descriptor structs
-/// chained from it, since the simple approach to returning a <see cref="SurfaceDescriptor"/>
+/// <see cref="WGPUSurfaceDescriptor"/> and any platform-specific descriptor structs
+/// chained from it, since the simple approach to returning a <see cref="WGPUSurfaceDescriptor"/>
 /// would have a dangling pointer bug.
 ///
-/// Implementations of <see cref="ISurfaceHost"/> should populate exactly the
+/// Implementors of <see cref="ISurfaceHost"/> should populate exactly the
 /// fields required for the current platform and set up the descriptor chain so
-/// that <see cref="SurfaceDescriptor"/> is ready to pass to
-/// <see cref="WebGPU.InstanceCreateSurface(Instance*, SurfaceDescriptor*)"/>.
+/// that <see cref="WGPUSurfaceDescriptor"/> is ready to pass to
+/// <see cref="WebGPU.WebGPU.wgpuInstanceCreateSurface(WGPUInstance, WGPUSurfaceDescriptor*)"/>.
 /// </remarks>
-public struct SurfaceDescriptorContainer {
-	public SurfaceDescriptor Desc;
-	internal SurfaceDescriptorFromWindowsHWND WindowsHWND;
-	internal SurfaceDescriptorFromMetalLayer MetalLayer;
-	internal SurfaceDescriptorFromXlibWindow XlibWindow;
-	internal SurfaceDescriptorFromWaylandSurface WaylandSurface;
+public struct WGPUSurfaceDescriptorContainer {
+	public WGPUSurfaceDescriptor Desc;
+	internal WGPUSurfaceSourceWindowsHWND WindowsHWND;
+	internal WGPUSurfaceSourceMetalLayer MetalLayer;
+	internal WGPUSurfaceSourceXlibWindow XlibWindow;
+	internal WGPUSurfaceSourceWaylandSurface WaylandSurface;
 }
 
 /// <summary>
@@ -31,13 +31,13 @@ public struct SurfaceDescriptorContainer {
 /// </summary>
 public unsafe interface ISurfaceHost {
 	/// <summary>
-	/// Creates a <see cref="SurfaceDescriptor"/> for the surface.
+	/// Creates a <see cref="WGPUSurfaceDescriptor"/> for the surface.
 	/// </summary>
 	/// <param name="container">
-	/// Destination storage for the <see cref="SurfaceDescriptor"/> and any
+	/// Destination storage for the <see cref="WGPUSurfaceDescriptor"/> and any
 	/// chained platform-specific descriptor structs.
 	/// </param>
-	void CreateSurfaceDesc(SurfaceDescriptorContainer *container);
+	void CreateSurfaceDesc(WGPUSurfaceDescriptorContainer *container);
 
 	/// <summary>
 	/// Gets the current drawable size of the host surface in physical pixels.

@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-using Silk.NET.WebGPU;
-
 namespace Injure.Rendering;
 
 /// <summary>

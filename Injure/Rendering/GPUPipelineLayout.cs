@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using Silk.NET.WebGPU;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -9,29 +10,31 @@ namespace Injure.Rendering;
 /// Common base type for pipeline layout wrappers, allowing APIs to accept both
 /// owning and non-owning wrappers.
 /// </summary>
-public abstract unsafe class GPUPipelineLayoutHandle {
-	internal abstract PipelineLayout *PipelineLayout { get; }
+public abstract class GPUPipelineLayoutHandle {
+	internal abstract WGPUPipelineLayout WGPUPipelineLayout { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="Silk.NET.WebGPU.PipelineLayout"/>, bypassing
+	/// Returns the underlying <see cref="WebGPU.WGPUPipelineLayout"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public PipelineLayout *DangerousGetPtr() => PipelineLayout;
+	/// <remarks>
+	/// <b>The return type is not a stable API and may change without notice.</b>
+	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// </remarks>
+	public WGPUPipelineLayout DangerousGetNative() => WGPUPipelineLayout;
 }
 
 /// <summary>
 /// Owning wrapper around a pipeline layout.
 /// </summary>
-public sealed unsafe class GPUPipelineLayout : GPUPipelineLayoutHandle, IDisposable {
-	private readonly WebGPUDevice device;
-	private PipelineLayout *pipelineLayout;
+public sealed class GPUPipelineLayout : GPUPipelineLayoutHandle, IDisposable {
+	private WGPUPipelineLayout pipelineLayout;
 
-	internal GPUPipelineLayout(WebGPUDevice device, PipelineLayout *pipelineLayout) {
-		this.device = device;
+	internal GPUPipelineLayout(WGPUPipelineLayout pipelineLayout) {
 		this.pipelineLayout = pipelineLayout;
 	}
 
-	internal override PipelineLayout *PipelineLayout => pipelineLayout;
+	internal override WGPUPipelineLayout WGPUPipelineLayout => pipelineLayout;
 
 	/// <summary>
 	/// Creates a non-owning view of this pipeline layout.
@@ -42,20 +45,20 @@ public sealed unsafe class GPUPipelineLayout : GPUPipelineLayoutHandle, IDisposa
 	/// Releases the underlying WebGPU pipeline layout.
 	/// </summary>
 	public void Dispose() {
-		if (pipelineLayout is not null)
-			device.API.PipelineLayoutRelease(pipelineLayout);
-		pipelineLayout = null;
+		if (pipelineLayout.IsNotNull)
+			wgpuPipelineLayoutRelease(pipelineLayout);
+		pipelineLayout = default;
 	}
 }
 
 /// <summary>
 /// Non-owning wrapper around a pipeline layout.
 /// </summary>
-public sealed unsafe class GPUPipelineLayoutRef : GPUPipelineLayoutHandle {
+public sealed class GPUPipelineLayoutRef : GPUPipelineLayoutHandle {
 	private readonly GPUPipelineLayout source;
 	internal GPUPipelineLayoutRef(GPUPipelineLayout source) {
 		this.source = source;
 	}
 
-	internal override PipelineLayout *PipelineLayout => source.PipelineLayout;
+	internal override WGPUPipelineLayout WGPUPipelineLayout => source.WGPUPipelineLayout;
 }

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 
 using System;
+using System.Collections.Immutable;
 using System.Diagnostics;
-using Silk.NET.WebGPU;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -10,14 +12,18 @@ namespace Injure.Rendering;
 /// Common base type for texture wrappers, allowing APIs to accept both
 /// owning and non-owning wrappers.
 /// </summary>
-public abstract unsafe class GPUTextureHandle {
-	internal abstract Texture *Texture { get; }
+public abstract class GPUTextureHandle {
+	internal abstract WGPUTexture WGPUTexture { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="Silk.NET.WebGPU.Texture"/>, bypassing
+	/// Returns the underlying <see cref="WebGPU.WGPUTexture"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public Texture *DangerousGetPtr() => Texture;
+	/// <remarks>
+	/// <b>The return type is not a stable API and may change without notice.</b>
+	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// </remarks>
+	public WGPUTexture DangerousGetNative() => WGPUTexture;
 
 	/// <summary>
 	/// Checks if another <see cref="GPUTextureHandle"/> points to the same
@@ -28,7 +34,7 @@ public abstract unsafe class GPUTextureHandle {
 	/// as such had the pointers to their underlying resources nulled out, always
 	/// returns false even though <c>null == null</c> is technically true.
 	/// </remarks>
-	public bool SameTexture(GPUTextureHandle other) => other.Texture is not null && Texture == other.Texture;
+	public bool SameTexture(GPUTextureHandle other) => other.WGPUTexture.IsNotNull && WGPUTexture.Handle == other.WGPUTexture.Handle;
 
 	/// <summary>
 	/// Gets the default texture view.
@@ -100,15 +106,12 @@ public abstract unsafe class GPUTextureHandle {
 /// Owning wrapper around a GPU texture and its default view.
 /// </summary>
 public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
-	private readonly WebGPUDevice device;
 	private readonly GPUTextureView defaultView;
 	private readonly TextureFormat[] viewFormats;
-	private Texture *tex;
+	private WGPUTexture tex;
 
-	internal GPUTexture(WebGPUDevice device, Texture *tex, uint width, uint height, uint depthOrArrayLayers,
-		uint mipLevelCount, uint sampleCount, TextureDimension dimension, TextureFormat format, TextureUsage usage,
-		TextureFormat[] viewFormats) {
-		this.device = device;
+	internal GPUTexture(WGPUTexture tex, uint width, uint height, uint depthOrArrayLayers, uint mipLevelCount,
+		uint sampleCount, TextureDimension dimension, TextureFormat format, TextureUsage usage, TextureFormat[] viewFormats) {
 		this.tex = tex;
 		Width = width;
 		Height = height;
@@ -129,7 +132,7 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 		DefaultView = defaultView.AsRef();
 	}
 
-	internal override Texture *Texture => tex;
+	internal override WGPUTexture WGPUTexture => tex;
 	public override GPUTextureViewRef DefaultView { get; }
 	public override uint Width { get; }
 	public override uint Height { get; }
@@ -146,29 +149,29 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 		TextureFormat fmt = @params.Format ?? (Format, @params.Aspect) switch {
 			(TextureFormat.Depth24PlusStencil8, TextureAspect.DepthOnly) => TextureFormat.Depth24Plus,
 			(TextureFormat.Depth24PlusStencil8, TextureAspect.StencilOnly) => TextureFormat.Stencil8,
-			(TextureFormat.Depth32floatStencil8, TextureAspect.DepthOnly) => TextureFormat.Depth32float,
-			(TextureFormat.Depth32floatStencil8, TextureAspect.StencilOnly) => TextureFormat.Stencil8,
+			(TextureFormat.Depth32FloatStencil8, TextureAspect.DepthOnly) => TextureFormat.Depth32Float,
+			(TextureFormat.Depth32FloatStencil8, TextureAspect.StencilOnly) => TextureFormat.Stencil8,
 			(_, TextureAspect.All) => Format,
 			_ => throw new ArgumentException("texture format/aspect combination has no aspect-specific view format", nameof(@params))
 		};
 		TextureViewDimension dim = @params.Dimension ?? DefaultViewDimension;
-		uint mipLvCount = @params.MipLevelCount ?? (MipLevelCount - @params.BaseMipLevel);
+		uint mipLvCount = @params.MipLevelCount ?? checked(MipLevelCount - @params.BaseMipLevel);
 		uint arrLayerCount = @params.ArrayLayerCount ?? dim switch {
 			TextureViewDimension.Dimension1D or TextureViewDimension.Dimension2D or TextureViewDimension.Dimension3D => 1,
 			TextureViewDimension.DimensionCube => 6,
 			TextureViewDimension.Dimension2DArray or TextureViewDimension.DimensionCubeArray => DepthOrArrayLayers - @params.BaseArrayLayer,
 			_ => throw new UnreachableException()
 		};
-		TextureViewDescriptor desc = new TextureViewDescriptor {
-			Format = fmt,
-			Dimension = dim,
-			Aspect = @params.Aspect,
-			BaseMipLevel = @params.BaseMipLevel,
-			MipLevelCount = mipLvCount,
-			BaseArrayLayer = @params.BaseArrayLayer,
-			ArrayLayerCount = arrLayerCount
+		WGPUTextureViewDescriptor desc = new WGPUTextureViewDescriptor {
+			format = fmt.ToWebGPUType(),
+			dimension = dim.ToWebGPUType(),
+			aspect = @params.Aspect.ToWebGPUType(),
+			baseMipLevel = @params.BaseMipLevel,
+			mipLevelCount = mipLvCount,
+			baseArrayLayer = @params.BaseArrayLayer,
+			arrayLayerCount = arrLayerCount
 		};
-		return new GPUTextureView(device, WebGPUException.Check(device.API.TextureCreateView(Texture, &desc)),
+		return new GPUTextureView(WebGPUException.Check(wgpuTextureCreateView(WGPUTexture, &desc)),
 			fmt,
 			dim,
 			@params.Aspect,
@@ -194,22 +197,22 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 	/// </summary>
 	public void Dispose() {
 		defaultView.Dispose();
-		if (tex is not null)
-			device.API.TextureRelease(tex);
-		tex = null;
+		if (tex.IsNotNull)
+			wgpuTextureRelease(tex);
+		tex = default;
 	}
 }
 
 /// <summary>
 /// Non-owning wrapper around a GPU texture and its default view.
 /// </summary>
-public sealed unsafe class GPUTextureRef : GPUTextureHandle {
+public sealed class GPUTextureRef : GPUTextureHandle {
 	private readonly GPUTexture source;
 	internal GPUTextureRef(GPUTexture source) {
 		this.source = source;
 	}
 
-	internal override Texture *Texture => source.Texture;
+	internal override WGPUTexture WGPUTexture => source.WGPUTexture;
 	public override GPUTextureViewRef DefaultView => source.DefaultView;
 	public override uint Width => source.Width;
 	public override uint Height => source.Height;
@@ -245,7 +248,7 @@ public readonly record struct GPUTextureCreateParams(
 	TextureDimension Dimension,
 	TextureFormat Format,
 	TextureUsage Usage,
-	ReadOnlyMemory<TextureFormat> ViewFormats = default
+	ImmutableArray<TextureFormat> ViewFormats = default
 );
 
 /// <summary>

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using Silk.NET.WebGPU;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -9,50 +10,52 @@ namespace Injure.Rendering;
 /// Common base type for sampler wrappers, allowing APIs to accept both
 /// owning and non-owning wrappers.
 /// </summary>
-public abstract unsafe class GPUSamplerHandle {
-	internal abstract Sampler *Sampler { get; }
+public abstract class GPUSamplerHandle {
+	internal abstract WGPUSampler WGPUSampler { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="Silk.NET.WebGPU.Sampler"/>, bypassing
+	/// Returns the underlying <see cref="WebGPU.WGPUSampler"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public Sampler *DangerousGetPtr() => Sampler;
+	/// <remarks>
+	/// <b>The return type is not a stable API and may change without notice.</b>
+	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// </remarks>
+	public WGPUSampler DangerousGetNative() => WGPUSampler;
 }
 
 /// <summary>
 /// Owning wrapper around a sampler.
 /// </summary>
-public sealed unsafe class GPUSampler : GPUSamplerHandle, IDisposable {
-	private readonly WebGPUDevice device;
-	private Sampler *sampler;
+public sealed class GPUSampler : GPUSamplerHandle, IDisposable {
+	private WGPUSampler sampler;
 
-	internal GPUSampler(WebGPUDevice device, Sampler *sampler) {
-		this.device = device;
+	internal GPUSampler(WGPUSampler sampler) {
 		this.sampler = sampler;
 	}
 
-	internal override Sampler *Sampler => sampler;
+	internal override WGPUSampler WGPUSampler => sampler;
 
 	/// <summary>
 	/// Releases the underlying WebGPU sampler object.
 	/// </summary>
 	public void Dispose() {
-		if (sampler is not null)
-			device.API.SamplerRelease(sampler);
-		sampler = null;
+		if (sampler.IsNotNull)
+			wgpuSamplerRelease(sampler);
+		sampler = default;
 	}
 }
 
 /// <summary>
 /// Non-owning wrapper around a sampler.
 /// </summary>
-public sealed unsafe class GPUSamplerRef : GPUSamplerHandle {
+public sealed class GPUSamplerRef : GPUSamplerHandle {
 	private readonly GPUSampler source;
 	internal GPUSamplerRef(GPUSampler source) {
 		this.source = source;
 	}
 
-	internal override Sampler *Sampler => source.Sampler;
+	internal override WGPUSampler WGPUSampler => source.WGPUSampler;
 }
 
 /// <summary>

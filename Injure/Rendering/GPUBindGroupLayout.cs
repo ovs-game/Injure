@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using Silk.NET.WebGPU;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -9,29 +10,31 @@ namespace Injure.Rendering;
 /// Common base type for bind group layout wrappers, allowing APIs to accept both
 /// owning and non-owning wrappers.
 /// </summary>
-public abstract unsafe class GPUBindGroupLayoutHandle {
-	internal abstract BindGroupLayout *BindGroupLayout { get; }
+public abstract class GPUBindGroupLayoutHandle {
+	internal abstract WGPUBindGroupLayout WGPUBindGroupLayout { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="Silk.NET.WebGPU.BindGroupLayout"/>, bypassing
+	/// Returns the underlying <see cref="WebGPU.WGPUBindGroupLayout"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public BindGroupLayout *DangerousGetPtr() => BindGroupLayout;
+	/// <remarks>
+	/// <b>The return type is not a stable API and may change without notice.</b>
+	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// </remarks>
+	public WGPUBindGroupLayout DangerousGetNative() => WGPUBindGroupLayout;
 }
 
 /// <summary>
 /// Owning wrapper around a bind group layout.
 /// </summary>
-public sealed unsafe class GPUBindGroupLayout : GPUBindGroupLayoutHandle, IDisposable {
-	private readonly WebGPUDevice device;
-	private BindGroupLayout *bindGroupLayout;
+public sealed class GPUBindGroupLayout : GPUBindGroupLayoutHandle, IDisposable {
+	private WGPUBindGroupLayout bindGroupLayout;
 
-	internal GPUBindGroupLayout(WebGPUDevice device, BindGroupLayout *bindGroupLayout) {
-		this.device = device;
+	internal GPUBindGroupLayout(WGPUBindGroupLayout bindGroupLayout) {
 		this.bindGroupLayout = bindGroupLayout;
 	}
 
-	internal override BindGroupLayout *BindGroupLayout => bindGroupLayout;
+	internal override WGPUBindGroupLayout WGPUBindGroupLayout => bindGroupLayout;
 
 	/// <summary>
 	/// Creates a non-owning view of this bind group layout.
@@ -42,20 +45,20 @@ public sealed unsafe class GPUBindGroupLayout : GPUBindGroupLayoutHandle, IDispo
 	/// Releases the underlying WebGPU bind group layout.
 	/// </summary>
 	public void Dispose() {
-		if (bindGroupLayout is not null)
-			device.API.BindGroupLayoutRelease(bindGroupLayout);
-		bindGroupLayout = null;
+		if (bindGroupLayout.IsNotNull)
+			wgpuBindGroupLayoutRelease(bindGroupLayout);
+		bindGroupLayout = default;
 	}
 }
 
 /// <summary>
 /// Non-owning wrapper around a bind group layout.
 /// </summary>
-public sealed unsafe class GPUBindGroupLayoutRef : GPUBindGroupLayoutHandle {
+public sealed class GPUBindGroupLayoutRef : GPUBindGroupLayoutHandle {
 	private readonly GPUBindGroupLayout source;
 	internal GPUBindGroupLayoutRef(GPUBindGroupLayout source) {
 		this.source = source;
 	}
 
-	internal override BindGroupLayout *BindGroupLayout => source.BindGroupLayout;
+	internal override WGPUBindGroupLayout WGPUBindGroupLayout => source.WGPUBindGroupLayout;
 }

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using Silk.NET.WebGPU;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -9,29 +10,31 @@ namespace Injure.Rendering;
 /// Common base type for render pipeline wrappers, allowing APIs to accept both
 /// owning and non-owning wrappers.
 /// </summary>
-public abstract unsafe class GPURenderPipelineHandle {
-	internal abstract RenderPipeline *RenderPipeline { get; }
+public abstract class GPURenderPipelineHandle {
+	internal abstract WGPURenderPipeline WGPURenderPipeline { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="Silk.NET.WebGPU.RenderPipeline"/>, bypassing
+	/// Returns the underlying <see cref="WebGPU.WGPURenderPipeline"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public RenderPipeline *DangerousGetPtr() => RenderPipeline;
+	/// <remarks>
+	/// <b>The return type is not a stable API and may change without notice.</b>
+	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// </remarks>
+	public WGPURenderPipeline DangerousGetNative() => WGPURenderPipeline;
 }
 
 /// <summary>
 /// Owning wrapper around a render pipeline.
 /// </summary>
-public sealed unsafe class GPURenderPipeline : GPURenderPipelineHandle, IDisposable {
-	private readonly WebGPUDevice device;
-	private RenderPipeline *renderPipeline;
+public sealed class GPURenderPipeline : GPURenderPipelineHandle, IDisposable {
+	private WGPURenderPipeline renderPipeline;
 
-	internal GPURenderPipeline(WebGPUDevice device, RenderPipeline *renderPipeline) {
-		this.device = device;
+	internal GPURenderPipeline(WGPURenderPipeline renderPipeline) {
 		this.renderPipeline = renderPipeline;
 	}
 
-	internal override RenderPipeline *RenderPipeline => renderPipeline;
+	internal override WGPURenderPipeline WGPURenderPipeline => renderPipeline;
 
 	/// <summary>
 	/// Creates a non-owning view of this render pipeline.
@@ -42,56 +45,48 @@ public sealed unsafe class GPURenderPipeline : GPURenderPipelineHandle, IDisposa
 	/// Releases the underlying WebGPU render pipeline.
 	/// </summary>
 	public void Dispose() {
-		if (renderPipeline is not null)
-			device.API.RenderPipelineRelease(renderPipeline);
-		renderPipeline = null;
+		if (renderPipeline.IsNotNull)
+			wgpuRenderPipelineRelease(renderPipeline);
+		renderPipeline = default;
 	}
 }
 
 /// <summary>
 /// Non-owning wrapper around a render pipeline.
 /// </summary>
-public sealed unsafe class GPURenderPipelineRef : GPURenderPipelineHandle {
+public sealed class GPURenderPipelineRef : GPURenderPipelineHandle {
 	private readonly GPURenderPipeline source;
 	internal GPURenderPipelineRef(GPURenderPipeline source) {
 		this.source = source;
 	}
 
-	internal override RenderPipeline *RenderPipeline => source.RenderPipeline;
+	internal override WGPURenderPipeline WGPURenderPipeline => source.WGPURenderPipeline;
 }
 
 /// <summary>
 /// Parameters used to create a <see cref="GPURenderPipeline"/>.
 /// </summary>
-/// <param name="ShaderModule">Shader module supplying the vertex and fragment shaders.</param>
-/// <param name="VertShaderEntryPoint">Vertex shader entry point name.</param>
-/// <param name="FragShaderEntryPoint">Fragment shader entry point name.</param>
-/// <param name="VertexStride">Stride of one vertex in bytes.</param>
-/// <param name="VertexStepMode">Whether the vertex buffer advances per vertex or per instance.</param>
-/// <param name="VertexAttributes">Vertex attribute declarations for the vertex buffer.</param>
-/// <param name="PrimitiveTopology">Primitive topology used by the pipeline.</param>
-/// <param name="FrontFace">Front-face winding rule.</param>
-/// <param name="CullMode">Face-culling mode.</param>
-/// <param name="ColorTargetFormat">Color attachment format this pipeline targets.</param>
-/// <param name="Blend">Optional color blend state.</param>
-/// <param name="ColorWriteMask">Color write mask, selecting the enabled color channels for writes.</param>
-/// <param name="DepthStencil">Optional depth/stencil state.</param>
-/// <remarks>
-/// Pipelines are color-target-format-specific; rendering to different color
-/// formats typically requires separate pipelines.
-/// </remarks>
+/// <param name="Layout">Layout for this pipeline.</param>
+/// <param name="Vertex">Vertex state.</param>
+/// <param name="Fragment">
+/// Fragment state; may be <see langword="null"/> for vertex-only pipelines.
+/// </param>
+/// <param name="Primitive">
+/// Primitive state, or <see langword="null"/> for the default value of
+/// <c>new PrimitiveState()</c>.
+/// </param>
+/// <param name="DepthStencil">
+/// Depth/stencil state; may be <see langword="null"/> for color-only pipelines.
+/// </param>
+/// <param name="Multisample">
+/// Multisample state, or <see langword="null"/> for the default value of
+/// <c>new MultisampleState()</c>.
+/// </param>
 public readonly record struct GPURenderPipelineCreateParams(
-	GPUShaderModuleHandle ShaderModule,
-	string VertShaderEntryPoint,
-	string FragShaderEntryPoint,
-	ulong VertexStride,
-	VertexStepMode VertexStepMode,
-	VertexAttribute[] VertexAttributes,
-	PrimitiveTopology PrimitiveTopology,
-	FrontFace FrontFace,
-	CullMode CullMode,
-	TextureFormat ColorTargetFormat,
-	BlendState? Blend = null,
-	ColorWriteMask ColorWriteMask = ColorWriteMask.All,
-	DepthStencilState? DepthStencil = null
+	GPUPipelineLayoutHandle Layout,
+	VertexState Vertex,
+	FragmentState? Fragment = null,
+	PrimitiveState? Primitive = null,
+	DepthStencilState? DepthStencil = null,
+	MultisampleState? Multisample = null
 );

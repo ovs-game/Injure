@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
-using Silk.NET.WebGPU;
 
 using Injure.Assets;
 using Injure.Rendering;

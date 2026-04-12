@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-using Silk.NET.WebGPU;
-
 namespace Injure.Rendering;
 
 public readonly record struct ColorAttachmentOps(

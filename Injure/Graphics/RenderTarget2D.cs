@@ -4,7 +4,6 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using Silk.NET.WebGPU;
 
 using Injure.Rendering;
 
@@ -207,7 +206,7 @@ public sealed class RenderTarget2D : IDisposable {
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static bool formatHasStencil(TextureFormat format) =>
-		format is TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32floatStencil8 or TextureFormat.Stencil8;
+		format is TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32FloatStencil8 or TextureFormat.Stencil8;
 
 	/// <summary>
 	/// Releases the owned GPU resources.
@@ -241,7 +240,7 @@ public sealed class RenderTarget2D : IDisposable {
 public readonly record struct RenderTarget2DCreateParams(
 	uint Width,
 	uint Height,
-	TextureFormat ColorFormat = TextureFormat.Rgba8Unorm,
+	TextureFormat ColorFormat = TextureFormat.RGBA8Unorm,
 	TextureFormat? DepthStencilFormat = null,
 	GPUSamplerCreateParams? ColorSampler = null
 );

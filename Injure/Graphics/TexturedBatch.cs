@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Silk.NET.WebGPU;
 
 using Injure.Assets;
 using Injure.Assets.Builtin;
@@ -102,35 +101,50 @@ public sealed class TexturedBatchSharedState : IDisposable {
 			_localsBindGroupLayout,
 			device.StdColorTexture2DLayout
 		]);
-		_pipeline = device.CreateRenderPipeline(PipelineLayout, new GPURenderPipelineCreateParams(
-			ShaderModule: Shader,
-			VertShaderEntryPoint: shaderInfo.VSEntry,
-			FragShaderEntryPoint: shaderInfo.FSEntry,
-			VertexStride: (ulong)Vertex2DTextureColor.Size,
-			VertexStepMode: VertexStepMode.Vertex,
-			VertexAttributes: [
-				new VertexAttribute {
-					Format = VertexFormat.Float32x2,
-					Offset = 0,
-					ShaderLocation = 0
-				},
-				new VertexAttribute {
-					Format = VertexFormat.Float32x2,
-					Offset = 8,
-					ShaderLocation = 1
-				},
-				new VertexAttribute {
-					Format = VertexFormat.Unorm8x4,
-					Offset = 16,
-					ShaderLocation = 2
-				}
-			],
-			PrimitiveTopology: PrimitiveTopology.TriangleList,
-			FrontFace: FrontFace.Ccw,
-			CullMode: CullMode.None,
-			ColorTargetFormat: colorTargetFormat,
-			Blend: blend,
-			ColorWriteMask: colorWriteMask
+		_pipeline = device.CreateRenderPipeline(new GPURenderPipelineCreateParams(
+			Layout: PipelineLayout,
+			Vertex: new VertexState(
+				ShaderModule: Shader,
+				EntryPoint: shaderInfo.VSEntry,
+				Buffers: [
+					new VertexBufferLayout(
+						ArrayStride: (ulong)Vertex2DTextureColor.Size,
+						Attributes: [
+							new VertexAttribute(
+								Format: VertexFormat.Float32x2,
+								Offset: 0,
+								ShaderLocation: 0
+							),
+							new VertexAttribute(
+								Format: VertexFormat.Float32x2,
+								Offset: 8,
+								ShaderLocation: 1
+							),
+							new VertexAttribute(
+								Format: VertexFormat.Unorm8x4,
+								Offset: 16,
+								ShaderLocation: 2
+							)
+						]
+					)
+				]
+			),
+			Fragment: new FragmentState(
+				ShaderModule: Shader,
+				EntryPoint: shaderInfo.FSEntry,
+				Targets: [
+					new ColorTargetState(
+						Format: colorTargetFormat,
+						Blend: blend,
+						WriteMask: colorWriteMask
+					)
+				]
+			),
+			Primitive: new PrimitiveState(
+				Topology: PrimitiveTopology.TriangleList,
+				FrontFace: FrontFace.CCW,
+				CullMode: CullMode.None
+			)
 		));
 	}
 

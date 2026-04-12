@@ -186,7 +186,7 @@ bootstrapCancelled:
 		gpuDevice = bootstrap.Result;
 		sfOutput = new SurfaceRenderOutput(gpuDevice, SDLOwner.SurfaceHost!, rconf.PresentMode switch {
 			PresentMode.TearFree => SurfacePresentModePolicy.AutoMailbox,
-			PresentMode.Adaptive => SurfacePresentModePolicy.AutoRelaxedFifo,
+			PresentMode.Adaptive => SurfacePresentModePolicy.AutoFifoRelaxed,
 			PresentMode.LowLatency => SurfacePresentModePolicy.AutoImmediate,
 			_ => throw new UnreachableException()
 		});

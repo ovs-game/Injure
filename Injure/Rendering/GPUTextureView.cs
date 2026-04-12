@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using Silk.NET.WebGPU;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -9,14 +10,18 @@ namespace Injure.Rendering;
 /// Common base type for texture view wrappers, allowing APIs to accept both
 /// owning and non-owning wrappers.
 /// </summary>
-public abstract unsafe class GPUTextureViewHandle {
-	internal abstract TextureView *TextureView { get; }
+public abstract class GPUTextureViewHandle {
+	internal abstract WGPUTextureView WGPUTextureView { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="Silk.NET.WebGPU.TextureView"/>, bypassing
+	/// Returns the underlying <see cref="WebGPU.WGPUTextureView"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public TextureView *DangerousGetPtr() => TextureView;
+	/// <remarks>
+	/// <b>The return type is not a stable API and may change without notice.</b>
+	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// </remarks>
+	public WGPUTextureView DangerousGetNative() => WGPUTextureView;
 
 	/// <summary>
 	/// Format of the view.
@@ -37,8 +42,8 @@ public abstract unsafe class GPUTextureViewHandle {
 	/// Allowed usages for this view.
 	/// </summary>
 	/// <remarks>
-	/// Currently simply mirrors the texture's usages due to binding limitations; a
-	/// switch to a different binding is planned.
+	/// Currently simply mirrors the texture's usages; proper support is
+	/// planned.
 	/// </remarks>
 	public abstract TextureUsage Usage { get; }
 
@@ -88,15 +93,12 @@ public abstract unsafe class GPUTextureViewHandle {
 /// <summary>
 /// Owning wrapper around a texture view.
 /// </summary>
-public sealed unsafe class GPUTextureView : GPUTextureViewHandle, IDisposable {
-	private readonly WebGPUDevice device;
-	private TextureView *texView;
+public sealed class GPUTextureView : GPUTextureViewHandle, IDisposable {
+	private WGPUTextureView texView;
 
-	internal GPUTextureView(WebGPUDevice device, TextureView *texView,
-		TextureFormat format, TextureViewDimension dimension, TextureAspect aspect, TextureUsage usage,
-		uint baseMipLevel, uint mipLevelCount, uint baseArrayLayer, uint arrayLayerCount,
+	internal GPUTextureView(WGPUTextureView texView, TextureFormat format, TextureViewDimension dimension,
+		TextureAspect aspect, TextureUsage usage, uint baseMipLevel, uint mipLevelCount, uint baseArrayLayer, uint arrayLayerCount,
 		uint width, uint height, uint depth, uint sampleCount) {
-		this.device = device;
 		this.texView = texView;
 		Format = format;
 		Dimension = dimension;
@@ -112,7 +114,7 @@ public sealed unsafe class GPUTextureView : GPUTextureViewHandle, IDisposable {
 		SampleCount = sampleCount;
 	}
 
-	internal override TextureView *TextureView => texView;
+	internal override WGPUTextureView WGPUTextureView => texView;
 	public override TextureFormat Format { get; }
 	public override TextureViewDimension Dimension { get; }
 	public override TextureAspect Aspect { get; }
@@ -135,22 +137,22 @@ public sealed unsafe class GPUTextureView : GPUTextureViewHandle, IDisposable {
 	/// Releases the underlying WebGPU texture view.
 	/// </summary>
 	public void Dispose() {
-		if (texView is not null)
-			device.API.TextureViewRelease(texView);
-		texView = null;
+		if (texView.IsNotNull)
+			wgpuTextureViewRelease(texView);
+		texView = default;
 	}
 }
 
 /// <summary>
 /// Non-owning wrapper around a texture view.
 /// </summary>
-public sealed unsafe class GPUTextureViewRef : GPUTextureViewHandle {
+public sealed class GPUTextureViewRef : GPUTextureViewHandle {
 	private readonly GPUTextureView source;
 	internal GPUTextureViewRef(GPUTextureView source) {
 		this.source = source;
 	}
 
-	internal override TextureView *TextureView => source.TextureView;
+	internal override WGPUTextureView WGPUTextureView => source.WGPUTextureView;
 	public override TextureFormat Format => source.Format;
 	public override TextureViewDimension Dimension => source.Dimension;
 	public override TextureAspect Aspect => source.Aspect;
@@ -181,7 +183,7 @@ public sealed unsafe class GPUTextureViewRef : GPUTextureViewHandle {
 /// <list type="bullet">
 /// <item><description>The texture's format for <see cref="TextureAspect.All"/>.</description></item>
 /// <item><description>
-/// <see cref="TextureFormat.Depth24Plus"/> or <see cref="TextureFormat.Depth32float"/>
+/// <see cref="TextureFormat.Depth24Plus"/> or <see cref="TextureFormat.Depth32Float"/>
 /// for depth-only views of combined depth+stencil textures.
 /// </description></item>
 /// <item><description>
@@ -213,8 +215,7 @@ public sealed unsafe class GPUTextureViewRef : GPUTextureViewHandle {
 /// </list>
 /// </param>
 /// <remarks>
-/// Usage flags are currently not settable due to binding limitations; a switch
-/// to a different binding is planned.
+/// Usage flags are currently not settable; proper support is planned.
 /// </remarks>
 public readonly record struct GPUTextureViewCreateParams(
 	TextureFormat? Format = null,
@@ -224,4 +225,6 @@ public readonly record struct GPUTextureViewCreateParams(
 	uint? MipLevelCount = null,
 	uint BaseArrayLayer = 0,
 	uint? ArrayLayerCount = null
-);
+) {
+	public GPUTextureViewCreateParams() : this(null) {}
+};

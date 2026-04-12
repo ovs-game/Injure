@@ -10,9 +10,9 @@ public sealed class WebGPUException(string op, string message) : Exception($"{op
 	public readonly string Operation = op;
 
 	[StackTraceHidden]
-	public static unsafe T* Check<T>(T *p, [CallerArgumentExpression(nameof(p))] string? expr = null) where T : unmanaged {
-		if (p is not null)
-			return p;
+	public static T Check<T>(T v, [CallerArgumentExpression(nameof(v))] string? expr = null) where T : unmanaged, IEquatable<T> {
+		if (!v.Equals(default))
+			return v;
 		throw new WebGPUException(getfnname(expr), "WebGPU call returned null");
 	}
 

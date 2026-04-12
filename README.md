@@ -12,12 +12,13 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 ----------
 TODO:
 
-- [this one is next-up] finish the Big fat rendering stack refactor
+- [active] add an uncaptured error callback and an error scope api into `Rendering`, right now something like a validation error triggers a panic in `wgpu-native` and then it can't unwind across an ffi boundary so it just aborts the entire process
 - [this one is next-up] public optimized swizzle/convert api
 - [this one is next-up] high-level texture creation / upload api
-- [next-up afterwards] FIX THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
-- [next-up afterwards #2] layers system
-- [next-up afterwards #2] clocks, clock filtering, etc.
+- [next-up afterwards] game-facing renderer config api and some way to adjust the adjustable config settings on the fly
+- [next-up afterwards #2] ~~FIX~~ WRITE THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
+- [next-up afterwards #3] layers system
+- [next-up afterwards #4] clocks, clock filtering, etc.
 - [really priority] dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
 - [Idk when but this should be done] stop having the todo here and use github issues
 - the text renderer

@@ -5,10 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using FreeTypeSharp;
-using Silk.NET.WebGPU;
 using static FreeTypeSharp.FT;
-
-using Buffer = System.Buffer;
 
 using Injure.Rendering;
 

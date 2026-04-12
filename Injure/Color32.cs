@@ -21,7 +21,7 @@ public readonly struct Color32(byte r, byte g, byte b, byte a = 255) : IEquatabl
 	public static bool operator !=(Color32 left, Color32 right) => !left.Equals(right);
 
 	public Vector4 ToVector4() => new Vector4(R / 255f, G / 255f, B / 255f, A / 255f);
-	public Silk.NET.WebGPU.Color ToWebGPUColor() => new Silk.NET.WebGPU.Color(R / 255f, G / 255f, B / 255f, A / 255f);
+	internal WebGPU.WGPUColor ToWebGPUColor() => new WebGPU.WGPUColor(R / 255.0, G / 255.0, B / 255.0, A / 255.0);
 	public static Color32 FromHex(string hex) {
 		static byte conv(char c) {
 			c = char.ToLower(c);

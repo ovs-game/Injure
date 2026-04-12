@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using Silk.NET.WebGPU;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -9,29 +10,31 @@ namespace Injure.Rendering;
 /// Common base type for bind group wrappers, allowing APIs to accept both
 /// owning and non-owning wrappers.
 /// </summary>
-public abstract unsafe class GPUBindGroupHandle {
-	internal abstract BindGroup *BindGroup { get; }
+public abstract class GPUBindGroupHandle {
+	internal abstract WGPUBindGroup WGPUBindGroup { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="Silk.NET.WebGPU.BindGroup"/>, bypassing
+	/// Returns the underlying <see cref="WebGPU.WGPUBindGroup"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public BindGroup *DangerousGetPtr() => BindGroup;
+	/// <remarks>
+	/// <b>The return type is not a stable API and may change without notice.</b>
+	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// </remarks>
+	public WGPUBindGroup DangerousGetNative() => WGPUBindGroup;
 }
 
 /// <summary>
-/// Owning wrapper around a bind group.
+/// Owning wrapper around a bind group .
 /// </summary>
-public sealed unsafe class GPUBindGroup : GPUBindGroupHandle, IDisposable {
-	private readonly WebGPUDevice device;
-	private BindGroup *bindGroup;
+public sealed class GPUBindGroup : GPUBindGroupHandle, IDisposable {
+	private WGPUBindGroup bindGroup;
 
-	internal GPUBindGroup(WebGPUDevice device, BindGroup *bindGroup) {
-		this.device = device;
+	internal GPUBindGroup(WGPUBindGroup bindGroup) {
 		this.bindGroup = bindGroup;
 	}
 
-	internal override BindGroup *BindGroup => bindGroup;
+	internal override WGPUBindGroup WGPUBindGroup => bindGroup;
 
 	/// <summary>
 	/// Creates a non-owning view of this bind group.
@@ -42,20 +45,20 @@ public sealed unsafe class GPUBindGroup : GPUBindGroupHandle, IDisposable {
 	/// Releases the underlying WebGPU bind group.
 	/// </summary>
 	public void Dispose() {
-		if (bindGroup is not null)
-			device.API.BindGroupRelease(bindGroup);
-		bindGroup = null;
+		if (bindGroup.IsNotNull)
+			wgpuBindGroupRelease(bindGroup);
+		bindGroup = default;
 	}
 }
 
 /// <summary>
 /// Non-owning wrapper around a bind group.
 /// </summary>
-public sealed unsafe class GPUBindGroupRef : GPUBindGroupHandle {
+public sealed class GPUBindGroupRef : GPUBindGroupHandle {
 	private readonly GPUBindGroup source;
 	internal GPUBindGroupRef(GPUBindGroup source) {
 		this.source = source;
 	}
 
-	internal override BindGroup *BindGroup => source.BindGroup;
+	internal override WGPUBindGroup WGPUBindGroup => source.WGPUBindGroup;
 }

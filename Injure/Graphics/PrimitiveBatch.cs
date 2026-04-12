@@ -4,7 +4,6 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Numerics;
-using Silk.NET.WebGPU;
 
 using Injure.Assets;
 using Injure.Assets.Builtin;
@@ -41,30 +40,45 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 			device.StdGlobalsUniformLayout,
 			_localsBindGroupLayout
 		]);
-		_pipeline = device.CreateRenderPipeline(PipelineLayout, new GPURenderPipelineCreateParams(
-			ShaderModule: Shader,
-			VertShaderEntryPoint: BuiltinShaders.Primitive2D.VSEntry,
-			FragShaderEntryPoint: BuiltinShaders.Primitive2D.FSEntry,
-			VertexStride: (ulong)Vertex2DColor.Size,
-			VertexStepMode: VertexStepMode.Vertex,
-			VertexAttributes: [
-				new VertexAttribute {
-					Format = VertexFormat.Float32x2,
-					Offset = 0,
-					ShaderLocation = 0
-				},
-				new VertexAttribute {
-					Format = VertexFormat.Unorm8x4,
-					Offset = 8,
-					ShaderLocation = 1
-				}
-			],
-			PrimitiveTopology: PrimitiveTopology.TriangleList,
-			FrontFace: FrontFace.Ccw,
-			CullMode: CullMode.None,
-			ColorTargetFormat: colorTargetFormat,
-			Blend: blend,
-			ColorWriteMask: colorWriteMask
+		_pipeline = device.CreateRenderPipeline(new GPURenderPipelineCreateParams(
+			Layout: PipelineLayout,
+			Vertex: new VertexState(
+				ShaderModule: Shader,
+				EntryPoint: BuiltinShaders.Primitive2D.VSEntry,
+				Buffers: [
+					new VertexBufferLayout(
+						ArrayStride: (ulong)Vertex2DColor.Size,
+						Attributes: [
+							new VertexAttribute(
+								Format: VertexFormat.Float32x2,
+								Offset: 0,
+								ShaderLocation: 0
+							),
+							new VertexAttribute(
+								Format: VertexFormat.Unorm8x4,
+								Offset: 8,
+								ShaderLocation: 1
+							)
+						]
+					)
+				]
+			),
+			Fragment: new FragmentState(
+				ShaderModule: Shader,
+				EntryPoint: BuiltinShaders.Primitive2D.FSEntry,
+				Targets: [
+					new ColorTargetState(
+						Format: colorTargetFormat,
+						Blend: blend,
+						WriteMask: colorWriteMask
+					)
+				]
+			),
+			Primitive: new PrimitiveState(
+				Topology: PrimitiveTopology.TriangleList,
+				FrontFace: FrontFace.CCW,
+				CullMode: CullMode.None
+			)
 		));
 	}
 

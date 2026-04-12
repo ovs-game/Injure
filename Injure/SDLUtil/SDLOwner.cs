@@ -20,6 +20,9 @@ public static unsafe class SDLOwner {
 
 	[MemberNotNull(nameof(Window), nameof(SurfaceHost))]
 	public static void InitSDL(string title, int x, int y, int w, int h, SDLWindowFlags flags) {
+		if (OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") is not null)
+			SDL.SetHint(SDL.SDL_HINT_VIDEODRIVER, "wayland");
+
 		if (SDL.Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS) < 0)
 			throw new InvalidOperationException($"SDL_Init: {SDL.GetErrorS()}");
 

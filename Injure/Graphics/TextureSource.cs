@@ -3,7 +3,6 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using Silk.NET.WebGPU;
 
 using Injure.Assets;
 using Injure.Rendering;

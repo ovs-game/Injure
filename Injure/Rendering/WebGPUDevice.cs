@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: MIT
 
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Runtime.CompilerServices;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
-using Silk.NET.Core.Native;
-using Silk.NET.WebGPU;
-
-using Buffer = Silk.NET.WebGPU.Buffer;
-using Surface = Silk.NET.WebGPU.Surface;
-using Texture = Silk.NET.WebGPU.Texture;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 using static Injure.Rendering.WebGPUException;
 
@@ -34,27 +31,33 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	// ==========================================================================
 	// internal types
 	private sealed class Request<TStatus, TObject> where TStatus : unmanaged, Enum where TObject : unmanaged {
-		public int Done;
 		public TStatus Status;
-		public TObject *Object;
-		public string Message = "<no message available>";
+		public TObject Object;
+		public string? Message;
+		public readonly ManualResetEventSlim Done = new ManualResetEventSlim(false);
+	}
+
+	private sealed class DeviceLostCallbackState {
+		public required WebGPUDevice Owner;
 	}
 
 	// ==========================================================================
 	// internal objects / properties
-	internal readonly WebGPU API;
+	internal readonly WGPUInstance Instance;
+	internal readonly WGPUAdapter Adapter;
+	internal readonly WGPUDevice Device;
+	internal readonly WGPUQueue Queue;
 
-	internal readonly Instance *Instance;
-	internal readonly Adapter *Adapter;
-	internal readonly Device *Device;
-	internal readonly Queue *Queue;
+	private readonly GCHandle deviceLostCallbackStateHandle;
 
 	private readonly GPUBindGroupLayout globalsUniformBindGroupLayout;
 	private readonly GPUBindGroupLayout colorTex2DBindGroupLayout;
 	private readonly GPUBindGroupLayout filteringDepthTex2DBindGroupLayout;
 	private readonly GPUBindGroupLayout comparisonDepthTex2DBindGroupLayout;
 
-	private bool disposed = false;
+	private int disposed = 0;
+	private int lost = 0;
+	private DeviceLostInfo? lostInfo = null;
 
 	// ==========================================================================
 	// public properties and ctor
@@ -79,12 +82,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// ]);
 	/// </code>
 	/// </remarks>
-	public GPUBindGroupLayoutRef StdGlobalsUniformLayout {
-		get {
-			ObjectDisposedException.ThrowIf(disposed, this);
-			return field;
-		}
-	}
+	public GPUBindGroupLayoutRef StdGlobalsUniformLayout { get { chk(); return field; } }
 
 	/// <summary>
 	/// Standard bind group layout for a 2D color texture + sampler, describing a
@@ -114,12 +112,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// ]);
 	/// </code>
 	/// </remarks>
-	public GPUBindGroupLayoutRef StdColorTexture2DLayout {
-		get {
-			ObjectDisposedException.ThrowIf(disposed, this);
-			return field;
-		}
-	}
+	public GPUBindGroupLayoutRef StdColorTexture2DLayout { get { chk(); return field; } }
 
 	/// <summary>
 	/// Standard bind group layout for a 2D depth texture + filtering sampler, describing a
@@ -149,12 +142,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// ]);
 	/// </code>
 	/// </remarks>
-	public GPUBindGroupLayoutRef StdFilteringDepthTexture2DLayout {
-		get {
-			ObjectDisposedException.ThrowIf(disposed, this);
-			return field;
-		}
-	}
+	public GPUBindGroupLayoutRef StdFilteringDepthTexture2DLayout { get { chk(); return field; } }
 
 	/// <summary>
 	/// Standard bind group layout for a 2D depth texture + comparison sampler, describing a
@@ -184,24 +172,22 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// ]);
 	/// </code>
 	/// </remarks>
-	public GPUBindGroupLayoutRef StdComparisonDepthTexture2DLayout {
-		get {
-			ObjectDisposedException.ThrowIf(disposed, this);
-			return field;
-		}
-	}
+	public GPUBindGroupLayoutRef StdComparisonDepthTexture2DLayout { get { chk(); return field; } }
 
 	/// <summary>
 	/// Creates a <see cref="WebGPUDevice"/>.
 	/// </summary>
 	/// <param name="compatibleSurface"><c>compatibleSurface</c> to pass to adapter creation.</param>
-	public WebGPUDevice(Surface *compatibleSurface = null) {
-		API = WebGPU.GetApi();
-		InstanceDescriptor instDesc = default;
-		Instance = Check(API.CreateInstance(&instDesc));
-		Adapter = requestAdapterBlocking(Instance, compatibleSurface);
-		Device = requestDeviceBlocking(Instance, Adapter);
-		Queue = Check(API.DeviceGetQueue(Device));
+	/// <param name="powerPreference"><c>powerPreference</c> to pass to adapter creation.</param>
+	/// <param name="backendType"><c>backendType</c> to pass to adapter creation.</param>
+	public WebGPUDevice(WGPUSurface compatibleSurface = default,
+		WGPUPowerPreference powerPreference = WGPUPowerPreference.HighPerformance,
+		WGPUBackendType backendType = WGPUBackendType.Undefined) {
+		WGPUInstanceDescriptor instDesc = default;
+		Instance = Check(wgpuCreateInstance(&instDesc));
+		Adapter = requestAdapterBlocking(Instance, compatibleSurface, powerPreference, backendType);
+		Device = requestDeviceBlocking(this, Adapter, out deviceLostCallbackStateHandle);
+		Queue = Check(wgpuDeviceGetQueue(Device));
 
 		globalsUniformBindGroupLayout = CreateBindGroupLayout([
 			new GPUBindGroupLayoutEntry(
@@ -278,75 +264,91 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 
 	// ==========================================================================
 	// resource acquisition
-	private void waitRequest(Instance *instance, ref int done, string opName, int timeoutMs = 10000) {
-		SpinWait sw = new SpinWait();
-		long start = Environment.TickCount64;
-		while (Volatile.Read(ref done) == 0) {
-			API.InstanceProcessEvents(instance);
-			if (Environment.TickCount64 - start > timeoutMs)
-				throw new WebGPUException(opName, $"waiting for callback timed out (waited {timeoutMs} ms)");
-			if (sw.NextSpinWillYield)
-				Thread.Sleep(1);
-			else
-				sw.SpinOnce();
-		}
-	}
-
-	private Adapter *requestAdapterBlocking(Instance *instance, Surface *compatibleSurface) {
-		Request<RequestAdapterStatus, Adapter> req = new Request<RequestAdapterStatus, Adapter>();
+	private static WGPUAdapter requestAdapterBlocking(WGPUInstance instance, WGPUSurface compatibleSurface,
+		WGPUPowerPreference powerPreference, WGPUBackendType backendType) {
+		Request<WGPURequestAdapterStatus, WGPUAdapter> req = new Request<WGPURequestAdapterStatus, WGPUAdapter>();
 		GCHandle h = GCHandle.Alloc(req);
 		try {
-			RequestAdapterOptions opts = default;
-			opts.CompatibleSurface = compatibleSurface;
-			opts.PowerPreference = PowerPreference.HighPerformance;
-
-			PfnRequestAdapterCallback cb =
-				(delegate *unmanaged[Cdecl] <RequestAdapterStatus, Adapter *, byte *, void *, void>)&adapterRequestedCallback;
-			API.InstanceRequestAdapter(instance, &opts, cb, (void *)GCHandle.ToIntPtr(h));
-			waitRequest(instance, ref req.Done, "InstanceRequestAdapter");
-			if (req.Status != RequestAdapterStatus.Success || req.Object is null)
-				throw new WebGPUException("InstanceRequestAdapter", req.Message);
+			WGPURequestAdapterOptions opts = new WGPURequestAdapterOptions {
+				compatibleSurface = compatibleSurface,
+				powerPreference = powerPreference,
+				backendType = backendType
+			};
+			WGPURequestAdapterCallbackInfo cb = new WGPURequestAdapterCallbackInfo {
+				mode = WGPUCallbackMode.AllowSpontaneous,
+				callback = &adapterRequestCallback,
+				userdata1 = (void *)GCHandle.ToIntPtr(h)
+			};
+			WGPUFuture future = wgpuInstanceRequestAdapter(instance, &opts, cb);
+			req.Done.Wait();
+			if (req.Status != WGPURequestAdapterStatus.Success || req.Object.IsNull)
+				throw new WebGPUException("wgpuInstanceRequestAdapter", req.Message ?? req.Status.ToString());
 			return req.Object;
 		} finally {
 			h.Free();
 		}
 	}
 
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	private static void adapterRequestedCallback(RequestAdapterStatus status, Adapter *adapter, byte *message, void *userdata) {
-		GCHandle h = GCHandle.FromIntPtr((IntPtr)userdata);
-		Request<RequestAdapterStatus, Adapter> req = (Request<RequestAdapterStatus, Adapter>)h.Target!;
+	[UnmanagedCallersOnly]
+	private static void adapterRequestCallback(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message,
+		void *userdata1, void *userdata2) {
+		GCHandle h = GCHandle.FromIntPtr((IntPtr)userdata1);
+		Request<WGPURequestAdapterStatus, WGPUAdapter> req = (Request<WGPURequestAdapterStatus, WGPUAdapter>)h.Target!;
 		req.Status = status;
 		req.Object = adapter;
-		req.Message = (message is not null ? SilkMarshal.PtrToString((IntPtr)message) : null) ?? "<no message available>";
-		Volatile.Write(ref req.Done, 1);
+		req.Message = message.ToString();
+		req.Done.Set();
 	}
 
-	private Device *requestDeviceBlocking(Instance *instance, Adapter *adapter) {
-		Request<RequestDeviceStatus, Device> req = new Request<RequestDeviceStatus, Device>();
-		GCHandle h = GCHandle.Alloc(req);
+	private static WGPUDevice requestDeviceBlocking(WebGPUDevice owner, WGPUAdapter adapter, out GCHandle lostCallbackStateHandle) {
+		Request<WGPURequestDeviceStatus, WGPUDevice> req = new Request<WGPURequestDeviceStatus, WGPUDevice>();
+		DeviceLostCallbackState st = new DeviceLostCallbackState { Owner = owner };
+		GCHandle reqHandle = GCHandle.Alloc(req);
+		GCHandle stHandle = GCHandle.Alloc(st);
 		try {
-			DeviceDescriptor desc = default;
-			PfnRequestDeviceCallback cb =
-				(delegate *unmanaged[Cdecl] <RequestDeviceStatus, Device *, byte *, void *, void>)&deviceRequestedCallback;
-			API.AdapterRequestDevice(adapter, &desc, cb, (void *)GCHandle.ToIntPtr(h));
-			waitRequest(instance, ref req.Done, "AdapterRequestDevice");
-			if (req.Status != RequestDeviceStatus.Success || req.Object is null)
-				throw new WebGPUException("AdapterRequestDevice", req.Message);
+			WGPUDeviceDescriptor desc = new WGPUDeviceDescriptor {
+				deviceLostCallbackInfo = new WGPUDeviceLostCallbackInfo {
+					mode = WGPUCallbackMode.AllowSpontaneous,
+					callback = &deviceLostCallback,
+					userdata1 = (void *)GCHandle.ToIntPtr(stHandle)
+				}
+			};
+			WGPURequestDeviceCallbackInfo cb = new WGPURequestDeviceCallbackInfo {
+				mode = WGPUCallbackMode.AllowSpontaneous,
+				callback = &deviceRequestCallback,
+				userdata1 = (void *)GCHandle.ToIntPtr(reqHandle)
+			};
+			WGPUFuture future = wgpuAdapterRequestDevice(adapter, &desc, cb);
+			req.Done.Wait();
+			if (req.Status != WGPURequestDeviceStatus.Success || req.Object.IsNull)
+				throw new WebGPUException("wgpuAdapterRequestDevice", req.Message ?? req.Status.ToString());
+			lostCallbackStateHandle = stHandle;
+			stHandle = default;
 			return req.Object;
 		} finally {
-			h.Free();
+			if (stHandle.IsAllocated)
+				stHandle.Free();
+			reqHandle.Free();
 		}
 	}
 
-	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-	private static void deviceRequestedCallback(RequestDeviceStatus status, Device *device, byte *message, void *userdata) {
-		GCHandle h = GCHandle.FromIntPtr((IntPtr)userdata);
-		Request<RequestDeviceStatus, Device> req = (Request<RequestDeviceStatus, Device>)h.Target!;
+	[UnmanagedCallersOnly]
+	private static void deviceRequestCallback(WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message,
+		void *userdata1, void *userdata2) {
+		GCHandle h = GCHandle.FromIntPtr((IntPtr)userdata1);
+		Request<WGPURequestDeviceStatus, WGPUDevice> req = (Request<WGPURequestDeviceStatus, WGPUDevice>)h.Target!;
 		req.Status = status;
 		req.Object = device;
-		req.Message = (message is not null ? SilkMarshal.PtrToString((IntPtr)message) : null) ?? "<no message available>";
-		Volatile.Write(ref req.Done, 1);
+		req.Message = message.ToString();
+		req.Done.Set();
+	}
+
+	[UnmanagedCallersOnly]
+	private static void deviceLostCallback(WGPUDevice *device, WGPUDeviceLostReason reason, WGPUStringView message,
+		void *userdata1, void *userdata2) {
+		GCHandle h = GCHandle.FromIntPtr((nint)userdata1);
+		DeviceLostCallbackState st = (DeviceLostCallbackState)h.Target!;
+		st.Owner.NotifyLost(new DeviceLostInfo(DeviceLossInfoKind.Final, (DeviceLossEventReason)(int)reason, message.ToString()));
 	}
 
 	// ==========================================================================
@@ -361,14 +363,13 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// Whether the buffer should be mapped immediately on creation.
 	/// </param>
 	public GPUBuffer CreateBuffer(ulong size, BufferUsage usage, bool mappedAtCreation = false) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		BufferDescriptor desc = new BufferDescriptor {
-			Size = size,
-			Usage = usage,
-			MappedAtCreation = mappedAtCreation
+		chk();
+		WGPUBufferDescriptor desc = new WGPUBufferDescriptor {
+			size = size,
+			usage = usage.ToWebGPUType(),
+			mappedAtCreation = mappedAtCreation
 		};
-		Buffer *buffer = Check(API.DeviceCreateBuffer(Device, &desc));
-		return new GPUBuffer(this, buffer, size, usage);
+		return new GPUBuffer(Check(wgpuDeviceCreateBuffer(Device, &desc)), size, usage);
 	}
 
 	/// <summary>
@@ -379,12 +380,12 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <param name="offset">Byte offset into <paramref name="buffer"/>.</param>
 	/// <param name="val">Value to upload.</param>
 	/// <remarks>
-	/// This is a queue write, not a mapped buffer write.
+	/// This is a queue write, not a mapped-buffer write.
 	/// </remarks>
 	public void WriteToBuffer<T>(GPUBufferHandle buffer, ulong offset, in T val) where T : unmanaged {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		fixed (T *p = &val)
-			API.QueueWriteBuffer(Queue, buffer.Buffer, offset, p, (nuint)sizeof(T));
+			wgpuQueueWriteBuffer(Queue, buffer.WGPUBuffer, offset, p, (nuint)sizeof(T));
 	}
 
 	/// <summary>
@@ -395,15 +396,15 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <param name="offset">Byte offset into <paramref name="buffer"/>.</param>
 	/// <param name="data">Data to upload.</param>
 	/// <remarks>
-	/// This is a queue write, not a mapped buffer write. Empty spans are accepted and
+	/// This is a queue write, not a mapped-buffer write. Empty spans are accepted and
 	/// are a no-op.
 	/// </remarks>
 	public void WriteToBuffer<T>(GPUBufferHandle buffer, ulong offset, ReadOnlySpan<T> data) where T : unmanaged {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		if (data.IsEmpty)
 			return;
 		fixed (T *p = data)
-			API.QueueWriteBuffer(Queue, buffer.Buffer, offset, p, (nuint)(data.Length * sizeof(T)));
+			wgpuQueueWriteBuffer(Queue, buffer.WGPUBuffer, offset, p, (nuint)(data.Length * sizeof(T)));
 	}
 
 	/// <summary>
@@ -414,12 +415,12 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <param name="data">Pointer to the data to upload.</param>
 	/// <param name="size">Number of bytes to upload from <paramref name="data"/>.</param>
 	/// <remarks>
-	/// This is a queue write, not a mapped buffer write. The pointer only needs to remain
+	/// This is a queue write, not a mapped-buffer write. The pointer only needs to remain
 	/// valid for the duration of the call.
 	/// </remarks>
 	public void WriteToBuffer(GPUBufferHandle buffer, ulong offset, void *data, nuint size) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		API.QueueWriteBuffer(Queue, buffer.Buffer, offset, data, size);
+		chk();
+		wgpuQueueWriteBuffer(Queue, buffer.WGPUBuffer, offset, data, size);
 	}
 
 	/// <summary>
@@ -431,39 +432,46 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// the texture's <see cref="GPUTextureCreateParams.Format"/> or any duplicates.
 	/// </exception>
 	public GPUTexture CreateTexture(in GPUTextureCreateParams @params) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		TextureFormat[] viewFormats = @params.ViewFormats.ToArray(); // intentionally copy out
+		chk();
 
-		HashSet<TextureFormat> tmp = new HashSet<TextureFormat>();
-		if (!viewFormats.All(tmp.Add))
-			throw new ArgumentException("ViewFormats must not contain duplicates", nameof(@params));
-		if (tmp.Contains(@params.Format))
-			throw new ArgumentException("ViewFormats must not contain the texture's format", nameof(@params));
+		ReadOnlySpan<TextureFormat> viewFormats = @params.ViewFormats.IsDefault ? ReadOnlySpan<TextureFormat>.Empty : @params.ViewFormats.AsSpan();
+		WGPUTextureFormat[] wgpuViewFormats;
+		if (viewFormats.Length > 0) {
+			wgpuViewFormats = new WGPUTextureFormat[viewFormats.Length];
+			HashSet<TextureFormat> tmp = new HashSet<TextureFormat>(viewFormats.Length);
+			for (int i = 0; i < viewFormats.Length; i++) {
+				if (viewFormats[i] == @params.Format)
+					throw new ArgumentException("ViewFormats must not contain the texture's format", nameof(@params));
+				if (!tmp.Add(viewFormats[i]))
+					throw new ArgumentException("ViewFormats must not contain duplicates", nameof(@params));
+				wgpuViewFormats[i] = viewFormats[i].ToWebGPUType();
+			}
+		}
 
-		fixed (TextureFormat *p = viewFormats) {
-			TextureDescriptor desc = new TextureDescriptor {
-				Size = new Extent3D {
-					Width = @params.Width,
-					Height = @params.Height,
-					DepthOrArrayLayers = @params.DepthOrArrayLayers
+		fixed (WGPUTextureFormat *p = wgpuViewFormats) {
+			WGPUTextureDescriptor desc = new WGPUTextureDescriptor {
+				size = new WGPUExtent3D {
+					width = @params.Width,
+					height = @params.Height,
+					depthOrArrayLayers = @params.DepthOrArrayLayers
 				},
-				MipLevelCount = @params.MipLevelCount,
-				SampleCount = @params.SampleCount,
-				Dimension = @params.Dimension,
-				Format = @params.Format,
-				Usage = @params.Usage,
-				ViewFormatCount = (nuint)viewFormats.Length,
-				ViewFormats = p
+				mipLevelCount = @params.MipLevelCount,
+				sampleCount = @params.SampleCount,
+				dimension = @params.Dimension.ToWebGPUType(),
+				format = @params.Format.ToWebGPUType(),
+				usage = @params.Usage.ToWebGPUType(),
+				viewFormatCount = (nuint)viewFormats.Length,
+				viewFormats = p
 			};
-			Texture *tex = Check(API.DeviceCreateTexture(Device, &desc));
+			WGPUTexture tex = Check(wgpuDeviceCreateTexture(Device, &desc));
 			try {
 				// TODO: think about whether default view creation should be external
 				// so that the try-catch isn't necessary
-				return new GPUTexture(this, tex, @params.Width, @params.Height, @params.DepthOrArrayLayers,
+				return new GPUTexture(tex, @params.Width, @params.Height, @params.DepthOrArrayLayers,
 					@params.MipLevelCount, @params.SampleCount, @params.Dimension, @params.Format, @params.Usage,
-					viewFormats);
+					viewFormats.ToArray());
 			} catch (WebGPUException) {
-				API.TextureRelease(tex);
+				wgpuTextureRelease(tex);
 				throw;
 			}
 		}
@@ -492,7 +500,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// </para>
 	/// </remarks>
 	public void WriteToTexture<T>(GPUTextureHandle tex, in GPUTextureRegion dst, ReadOnlySpan<T> data, in GPUTextureLayout layout) where T : unmanaged {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		if (data.IsEmpty)
 			return;
 		fixed (T *p = data)
@@ -522,28 +530,28 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// </para>
 	/// </remarks>
 	public void WriteToTexture(GPUTextureHandle tex, in GPUTextureRegion dst, void *data, nuint size, in GPUTextureLayout layout) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		ImageCopyTexture copyDst = new ImageCopyTexture {
-			Texture = tex.Texture,
-			MipLevel = dst.MipLevel,
-			Origin = new Origin3D {
-				X = dst.X,
-				Y = dst.Y,
-				Z = dst.Z
+		chk();
+		WGPUTexelCopyTextureInfo copyDst = new WGPUTexelCopyTextureInfo {
+			texture = tex.WGPUTexture,
+			mipLevel = dst.MipLevel,
+			origin = new WGPUOrigin3D {
+				x = dst.X,
+				y = dst.Y,
+				z = dst.Z,
 			},
-			Aspect = dst.Aspect
+			aspect = dst.Aspect.ToWebGPUType()
 		};
-		TextureDataLayout dataLayout = new TextureDataLayout {
-			Offset = layout.Offset,
-			BytesPerRow = layout.BytesPerRow,
-			RowsPerImage = layout.RowsPerImage
+		WGPUTexelCopyBufferLayout dataLayout = new WGPUTexelCopyBufferLayout {
+			offset = layout.Offset,
+			bytesPerRow = layout.BytesPerRow,
+			rowsPerImage = layout.RowsPerImage
 		};
-		Extent3D texSize = new Extent3D {
-			Width = dst.Width,
-			Height = dst.Height,
-			DepthOrArrayLayers = dst.DepthOrArrayLayers
+		WGPUExtent3D texSize = new WGPUExtent3D {
+			width = dst.Width,
+			height = dst.Height,
+			depthOrArrayLayers = dst.DepthOrArrayLayers
 		};
-		API.QueueWriteTexture(Queue, &copyDst, data, size, &dataLayout, &texSize);
+		wgpuQueueWriteTexture(Queue, &copyDst, data, size, &dataLayout, &texSize);
 	}
 
 	/// <summary>
@@ -555,7 +563,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// any of the filter modes is set to anything but linear filtering.
 	/// </exception>
 	public GPUSampler CreateSampler(in GPUSamplerCreateParams @params) {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		if (@params.LodMinClamp < 0)
 			throw new ArgumentOutOfRangeException(nameof(@params), "LodMinClamp cannot be negative");
 		if (@params.LodMaxClamp < @params.LodMinClamp)
@@ -565,52 +573,51 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		if (@params.MaxAnisotropy > 1 &&
 			(@params.MinFilter != FilterMode.Linear || @params.MagFilter != FilterMode.Linear || @params.MipmapFilter != MipmapFilterMode.Linear))
 			throw new ArgumentException("MinFilter/MagFilter/MipMapFilter must be set to Linear if MaxAnisotropy > 1", nameof(@params));
-		SamplerDescriptor desc = new SamplerDescriptor {
-			AddressModeU = @params.AddressModeU,
-			AddressModeV = @params.AddressModeV,
-			AddressModeW = @params.AddressModeW,
-			MagFilter = @params.MagFilter,
-			MinFilter = @params.MinFilter,
-			MipmapFilter = @params.MipmapFilter,
-			LodMinClamp = @params.LodMinClamp,
-			LodMaxClamp = @params.LodMaxClamp,
-			Compare = @params.Compare,
-			MaxAnisotropy = @params.MaxAnisotropy
-
+		WGPUSamplerDescriptor desc = new WGPUSamplerDescriptor {
+			addressModeU = @params.AddressModeU.ToWebGPUType(),
+			addressModeV = @params.AddressModeV.ToWebGPUType(),
+			addressModeW = @params.AddressModeW.ToWebGPUType(),
+			magFilter = @params.MagFilter.ToWebGPUType(),
+			minFilter = @params.MinFilter.ToWebGPUType(),
+			mipmapFilter = @params.MipmapFilter.ToWebGPUType(),
+			lodMinClamp = @params.LodMinClamp,
+			lodMaxClamp = @params.LodMaxClamp,
+			compare = @params.Compare.ToWebGPUType(),
+			maxAnisotropy = @params.MaxAnisotropy
 		};
-		return new GPUSampler(this, Check(API.DeviceCreateSampler(Device, &desc)));
+		return new GPUSampler(Check(wgpuDeviceCreateSampler(Device, &desc)));
 	}
 
-	private static BindGroupLayoutEntry toRawBindGroupLayoutEntry(in GPUBindGroupLayoutEntry entry) {
-		BindGroupLayoutEntry raw = new BindGroupLayoutEntry {
-			Binding = entry.Binding,
-			Visibility = entry.Visibility
+	private static WGPUBindGroupLayoutEntry toRawBindGroupLayoutEntry(in GPUBindGroupLayoutEntry entry) {
+		WGPUBindGroupLayoutEntry raw = new WGPUBindGroupLayoutEntry {
+			binding = entry.Binding,
+			visibility = entry.Visibility.ToWebGPUType()
 		};
 		switch (entry.Layout) {
 		case GPUBufferBindingLayout b:
-			raw.Buffer = new BufferBindingLayout {
-				Type = b.Type,
-				HasDynamicOffset = b.HasDynamicOffset,
-				MinBindingSize = b.MinBindingSize
+			raw.buffer = new WGPUBufferBindingLayout {
+				type = b.Type.ToWebGPUType(),
+				hasDynamicOffset = b.HasDynamicOffset,
+				minBindingSize = b.MinBindingSize
 			};
 			return raw;
 		case GPUSamplerBindingLayout s:
-			raw.Sampler = new SamplerBindingLayout {
-				Type = s.Type
+			raw.sampler = new WGPUSamplerBindingLayout {
+				type = s.Type.ToWebGPUType()
 			};
 			return raw;
 		case GPUStorageTextureBindingLayout st:
-			raw.StorageTexture = new StorageTextureBindingLayout {
-				Access = st.Access,
-				Format = st.Format,
-				ViewDimension = st.ViewDimension
+			raw.storageTexture = new WGPUStorageTextureBindingLayout {
+				access = st.Access.ToWebGPUType(),
+				format = st.Format.ToWebGPUType(),
+				viewDimension = st.ViewDimension.ToWebGPUType()
 			};
 			return raw;
 		case GPUTextureBindingLayout t:
-			raw.Texture = new TextureBindingLayout {
-				SampleType = t.SampleType,
-				ViewDimension = t.ViewDimension,
-				Multisampled = t.Multisampled
+			raw.texture = new WGPUTextureBindingLayout {
+				sampleType = t.SampleType.ToWebGPUType(),
+				viewDimension = t.ViewDimension.ToWebGPUType(),
+				multisampled = t.Multisampled
 			};
 			return raw;
 		default:
@@ -631,7 +638,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// <see cref="GPUBindingLayout"/>).
 	/// </exception>
 	public GPUBindGroupLayout CreateBindGroupLayout(ReadOnlySpan<GPUBindGroupLayoutEntry> entries) {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		if (entries.IsEmpty)
 			throw new ArgumentException("bind group layout must contain at least one entry", nameof(entries));
 
@@ -656,31 +663,31 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			}
 		}
 
-		BindGroupLayoutEntry *rawEntries = stackalloc BindGroupLayoutEntry[entries.Length];
+		WGPUBindGroupLayoutEntry *rawEntries = stackalloc WGPUBindGroupLayoutEntry[entries.Length];
 		for (int i = 0; i < entries.Length; i++)
 			rawEntries[i] = toRawBindGroupLayoutEntry(entries[i]);
-		BindGroupLayoutDescriptor desc = new BindGroupLayoutDescriptor {
-			EntryCount = (nuint)entries.Length,
-			Entries = rawEntries
+		WGPUBindGroupLayoutDescriptor desc = new WGPUBindGroupLayoutDescriptor {
+			entryCount = (nuint)entries.Length,
+			entries = rawEntries
 		};
-		return new GPUBindGroupLayout(this, Check(API.DeviceCreateBindGroupLayout(Device, &desc)));
+		return new GPUBindGroupLayout(Check(wgpuDeviceCreateBindGroupLayout(Device, &desc)));
 	}
 
-	private static BindGroupEntry toRawBindGroupEntry(in GPUBindGroupEntry entry) {
-		BindGroupEntry raw = new BindGroupEntry {
-			Binding = entry.Binding
+	private static WGPUBindGroupEntry toRawBindGroupEntry(in GPUBindGroupEntry entry) {
+		WGPUBindGroupEntry raw = new WGPUBindGroupEntry {
+			binding = entry.Binding
 		};
 		switch (entry.Resource) {
 		case GPUBufferBindingResource b:
-			raw.Buffer = b.Buffer.Buffer;
-			raw.Offset = b.Offset;
-			raw.Size = b.Size ?? (b.Buffer.Size - b.Offset);
+			raw.buffer = b.Buffer.WGPUBuffer;
+			raw.offset = b.Offset;
+			raw.size = b.Size ?? (b.Buffer.Size - b.Offset);
 			return raw;
 		case GPUSamplerBindingResource s:
-			raw.Sampler = s.Sampler.Sampler;
+			raw.sampler = s.Sampler.WGPUSampler;
 			return raw;
 		case GPUTextureViewBindingResource v:
-			raw.TextureView = v.View.TextureView;
+			raw.textureView = v.View.WGPUTextureView;
 			return raw;
 		default:
 			throw new UnreachableException();
@@ -712,7 +719,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// no depth attachment.
 	/// </exception>
 	public GPUBindGroup CreateBindGroup(GPUBindGroupLayoutHandle layout, ReadOnlySpan<GPUBindGroupEntry> entries) {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		ArgumentNullException.ThrowIfNull(layout);
 		if (entries.IsEmpty)
 			throw new ArgumentException("bind group must contain at least one entry", nameof(entries));
@@ -749,39 +756,93 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			}
 		}
 
-		BindGroupEntry *rawEntries = stackalloc BindGroupEntry[entries.Length];
+		WGPUBindGroupEntry *rawEntries = stackalloc WGPUBindGroupEntry[entries.Length];
 		for (int i = 0; i < entries.Length; i++)
 			rawEntries[i] = toRawBindGroupEntry(entries[i]);
-		BindGroupDescriptor desc = new BindGroupDescriptor {
-			Layout = layout.BindGroupLayout,
-			EntryCount = (nuint)entries.Length,
-			Entries = rawEntries
+		WGPUBindGroupDescriptor desc = new WGPUBindGroupDescriptor {
+			layout = layout.WGPUBindGroupLayout,
+			entryCount = (nuint)entries.Length,
+			entries = rawEntries
 		};
-		return new GPUBindGroup(this, Check(API.DeviceCreateBindGroup(Device, &desc)));
+		return new GPUBindGroup(Check(wgpuDeviceCreateBindGroup(Device, &desc)));
 	}
 
 	/// <summary>
 	/// Creates a shader module from WGSL source code, returning an owning object.
 	/// </summary>
-	/// <param name="code">WGSL source code.</param>
-	public GPUShaderModule CreateShaderModuleWGSL(string code) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		byte *p = (byte *)SilkMarshal.StringToPtr(code, NativeStringEncoding.UTF8);
-		try {
-			ShaderModuleWGSLDescriptor src = new ShaderModuleWGSLDescriptor {
-				Chain = new ChainedStruct {
-					SType = SType.ShaderModuleWgslDescriptor,
-					Next = null
+	/// <param name="source">WGSL source code.</param>
+	/// <exception cref="ArgumentException">Thrown if <paramref name="source"/> is empty.</exception>
+	public GPUShaderModule CreateShaderModuleWGSL(ReadOnlySpan<char> source) {
+		chk();
+		if (source.IsEmpty)
+			throw new ArgumentException("WGSL source code must not be empty", nameof(source));
+
+		int bytes = Encoding.UTF8.GetByteCount(source);
+		Span<byte> utf8 = bytes <= 1024 ? stackalloc byte[bytes] : new byte[bytes];
+		int written = Encoding.UTF8.GetBytes(source, utf8);
+		fixed (byte *p = utf8) {
+			WGPUShaderSourceWGSL src = new WGPUShaderSourceWGSL {
+				chain = new WGPUChainedStruct {
+					sType = WGPUSType.ShaderSourceWGSL,
+					next = null
 				},
-				Code = p
+				code = new WGPUStringView(p, written)
 			};
-			ShaderModuleDescriptor desc = new ShaderModuleDescriptor {
-				NextInChain = (ChainedStruct *)&src
+			WGPUShaderModuleDescriptor desc = new WGPUShaderModuleDescriptor {
+				nextInChain = &src.chain
 			};
-			return new GPUShaderModule(this, Check(API.DeviceCreateShaderModule(Device, &desc)));
-		} finally {
-			SilkMarshal.Free((IntPtr)p);
+			return new GPUShaderModule(Check(wgpuDeviceCreateShaderModule(Device, &desc)));
 		}
+	}
+
+	/// <summary>
+	/// Creates a shader module from SPIR-V code, returning an owning object.
+	/// </summary>
+	/// <param name="code">SPIR-V code as 32-bit words.</param>
+	/// <exception cref="ArgumentException">Thrown if <paramref name="code"/> is empty.</exception>
+	public GPUShaderModule CreateShaderModuleSPIRV(ReadOnlySpan<uint> code) {
+		chk();
+		if (code.IsEmpty)
+			throw new ArgumentException("SPIR-V code must not be empty", nameof(code));
+
+		fixed (uint *p = code) {
+			WGPUShaderSourceSPIRV src = new WGPUShaderSourceSPIRV {
+				chain = new WGPUChainedStruct {
+					sType = WGPUSType.ShaderSourceSPIRV,
+					next = null
+				},
+				codeSize = (uint)code.Length,
+				code = p
+			};
+			WGPUShaderModuleDescriptor desc = new WGPUShaderModuleDescriptor {
+				nextInChain = &src.chain
+			};
+			return new GPUShaderModule(Check(wgpuDeviceCreateShaderModule(Device, &desc)));
+		}
+	}
+
+	/// <summary>
+	/// Creates a shader module from SPIR-V code, returning an owning object.
+	/// </summary>
+	/// <param name="code">
+	/// SPIR-V code as 32-bit words encoded in little-endian byte order.
+	/// Bytes 0..3 encode word 0, bytes 4..7 encode word 1, and so on.
+	/// </param>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="code"/> is empty or if its length is not a
+	/// multiple of 4.
+	/// </exception>
+	public GPUShaderModule CreateShaderModuleSPIRV(ReadOnlySpan<byte> code) {
+		chk();
+		if (code.IsEmpty)
+			throw new ArgumentException("SPIR-V code must not be empty", nameof(code));
+		if ((code.Length & 0b11) != 0)
+			throw new ArgumentException("byte length of SPIR-V code encoded as bytes must be a multiple of 4", nameof(code));
+
+		Span<uint> words = (code.Length <= 1024) ? stackalloc uint[code.Length >> 2] : new uint[code.Length >> 2];
+		for (int i = 0; i < words.Length; i++)
+			words[i] = BinaryPrimitives.ReadUInt32LittleEndian(code.Slice(i << 2, 4));
+		return CreateShaderModuleSPIRV(words);
 	}
 
 	/// <summary>
@@ -794,142 +855,165 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// </remarks>
 	/// <exception cref="ArgumentException">Thrown if no layouts are provided.</exception>
 	public GPUPipelineLayout CreatePipelineLayout(ReadOnlySpan<GPUBindGroupLayoutHandle> layouts) {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		if (layouts.IsEmpty)
 			throw new ArgumentException("pipeline layout must contain at least one bind group layout");
 
-		BindGroupLayout **bgLayouts = stackalloc BindGroupLayout *[layouts.Length];
+		WGPUBindGroupLayout *bgLayouts = stackalloc WGPUBindGroupLayout[layouts.Length];
 		for (int i = 0; i < layouts.Length; i++) {
 			ArgumentNullException.ThrowIfNull(layouts[i]);
-			bgLayouts[i] = layouts[i].BindGroupLayout;
+			bgLayouts[i] = layouts[i].WGPUBindGroupLayout;
 		}
 
-		PipelineLayoutDescriptor desc = new PipelineLayoutDescriptor {
-			BindGroupLayoutCount = (nuint)layouts.Length,
-			BindGroupLayouts = bgLayouts
+		WGPUPipelineLayoutDescriptor desc = new WGPUPipelineLayoutDescriptor {
+			bindGroupLayoutCount = (nuint)layouts.Length,
+			bindGroupLayouts = bgLayouts
 		};
-		PipelineLayout *layout = Check(API.DeviceCreatePipelineLayout(Device, &desc));
-		return new GPUPipelineLayout(this, layout);
+		return new GPUPipelineLayout(Check(wgpuDeviceCreatePipelineLayout(Device, &desc)));
 	}
 
 	/// <summary>
 	/// Creates a render pipeline, returning an owning object.
 	/// </summary>
-	/// <param name="layout">Pipeline layout, describing the expected bind groups.</param>
 	/// <param name="params">Render pipeline creation parameters.</param>
-	/// <remarks>
-	/// Pipelines are color-target-format-specific. Code rendering to multiple
-	/// target formats typically needs a separate pipeline per format.
-	/// </remarks>
-	public GPURenderPipeline CreateRenderPipeline(GPUPipelineLayoutHandle layout, in GPURenderPipelineCreateParams @params) {
-		ObjectDisposedException.ThrowIf(disposed, this);
+	public GPURenderPipeline CreateRenderPipeline(in GPURenderPipelineCreateParams @params) {
+		// -----------------------------------------------------------------
+		// validation
+		chk();
 
-		VertexAttribute *attrs = stackalloc VertexAttribute[@params.VertexAttributes.Length];
-		@params.VertexAttributes.AsSpan().CopyTo(new Span<VertexAttribute>(attrs, @params.VertexAttributes.Length));
+		ArgumentNullException.ThrowIfNull(@params.Layout);
+		ArgumentNullException.ThrowIfNull(@params.Vertex.ShaderModule);
+		ArgumentException.ThrowIfNullOrWhiteSpace(@params.Vertex.EntryPoint);
 
-		VertexBufferLayout *vbuffers = stackalloc VertexBufferLayout[1];
-		vbuffers[0] = new VertexBufferLayout {
-			ArrayStride = @params.VertexStride,
-			StepMode = @params.VertexStepMode,
-			AttributeCount = (uint)@params.VertexAttributes.Length,
-			Attributes = attrs
+		bool haveFrag = false;
+		VertexState vert = @params.Vertex;
+		FragmentState frag = @params.Fragment ?? default;
+		PrimitiveState prim = @params.Primitive ?? new PrimitiveState();
+		MultisampleState ms = @params.Multisample ?? new MultisampleState();
+
+		if (@params.Fragment is FragmentState f) {
+			haveFrag = true;
+			frag = f;
+			ArgumentNullException.ThrowIfNull(f.ShaderModule);
+			ArgumentException.ThrowIfNullOrWhiteSpace(f.EntryPoint);
+			if (f.Targets.IsEmpty)
+				throw new ArgumentException("fragment state must have at least one color target", nameof(@params));
+		}
+
+		bool stripTopo = prim.Topology is PrimitiveTopology.LineStrip or PrimitiveTopology.TriangleStrip;
+		if (stripTopo && prim.StripIndexFormat == IndexFormat.Undefined)
+			throw new ArgumentException("strip topologies must specify a strip index format", nameof(@params));
+		if (!stripTopo && prim.StripIndexFormat != IndexFormat.Undefined)
+			throw new ArgumentException("strip index format is only valid for strip topologies", nameof(@params));
+
+		// -----------------------------------------------------------------
+		// upfront allocations, as a workaround for CS8346
+		ReadOnlySpan<VertexBufferLayout> vertBuffers = vert.Buffers.IsDefault ? ReadOnlySpan<VertexBufferLayout>.Empty : vert.Buffers.AsSpan();
+		int totalVertAttrCount = 0;
+		for (int i = 0; i < vertBuffers.Length; i++)
+			totalVertAttrCount += vertBuffers[i].Attributes.Length;
+
+		ReadOnlySpan<ColorTargetState> colorTargets = (haveFrag && !frag.Targets.IsDefault) ? frag.Targets.AsSpan() : ReadOnlySpan<ColorTargetState>.Empty;
+
+		WGPUVertexBufferLayout *wgpuVertBuffers = stackalloc WGPUVertexBufferLayout[vertBuffers.Length];
+		WGPUVertexAttribute *wgpuVertAttrs = stackalloc WGPUVertexAttribute[totalVertAttrCount];
+		WGPUColorTargetState *wgpuColorTargets = stackalloc WGPUColorTargetState[colorTargets.Length];
+		WGPUBlendState *wgpuBlendStates = stackalloc WGPUBlendState[colorTargets.Length];
+
+		int vsEntrySize = Encoding.UTF8.GetByteCount(vert.EntryPoint);
+		byte *vsEntry = stackalloc byte[vsEntrySize];
+		int vsEntryLen = Encoding.UTF8.GetBytes(vert.EntryPoint, new Span<byte>(vsEntry, vsEntrySize));
+
+		int fsEntrySize = haveFrag ? Encoding.UTF8.GetByteCount(frag.EntryPoint) : 0;
+		byte *fsEntry = stackalloc byte[fsEntrySize];
+		int fsEntryLen = haveFrag ? Encoding.UTF8.GetBytes(frag.EntryPoint, new Span<byte>(fsEntry, fsEntrySize)) : 0;
+
+		// -----------------------------------------------------------------
+		// vertex
+		int attrBase = 0;
+		for (int i = 0; i < vertBuffers.Length; i++) {
+			VertexBufferLayout vb = vertBuffers[i];
+			ReadOnlySpan<VertexAttribute> vbAttributes = vb.Attributes.IsDefault ? ReadOnlySpan<VertexAttribute>.Empty : vb.Attributes.AsSpan();
+			for (int j = 0; j < vbAttributes.Length; j++)
+				wgpuVertAttrs[attrBase + j] = vbAttributes[j].ToWebGPUType();
+			wgpuVertBuffers[i] = new WGPUVertexBufferLayout {
+				arrayStride = vb.ArrayStride,
+				stepMode = vb.StepMode.ToWebGPUType(),
+				attributeCount = (nuint)vbAttributes.Length,
+				attributes = vbAttributes.IsEmpty ? null : (wgpuVertAttrs + attrBase)
+			};
+			attrBase += vbAttributes.Length;
+		}
+
+		WGPUVertexState wgpuVert = new WGPUVertexState {
+			module = vert.ShaderModule.WGPUShaderModule,
+			entryPoint = new WGPUStringView(vsEntry, vsEntryLen),
+			constantCount = 0, // TODO
+			constants = null,  // TODO
+			bufferCount = (nuint)vertBuffers.Length,
+			buffers = vertBuffers.IsEmpty ? null : wgpuVertBuffers
 		};
 
-		byte *vsEntry = (byte *)SilkMarshal.StringToPtr(@params.VertShaderEntryPoint, NativeStringEncoding.UTF8);
-		byte *fsEntry = (byte *)SilkMarshal.StringToPtr(@params.FragShaderEntryPoint, NativeStringEncoding.UTF8);
-		try {
-			VertexState vert = new VertexState {
-				Module = @params.ShaderModule.ShaderModule,
-				EntryPoint = vsEntry,
-				BufferCount = 1,
-				Buffers = vbuffers
+		// -----------------------------------------------------------------
+		// fragment
+		WGPUFragmentState wgpuFrag = default;
+		WGPUFragmentState *pWgpuFrag = null;
+		if (haveFrag) {
+			for (int i = 0; i < colorTargets.Length; i++)
+				wgpuColorTargets[i] = colorTargets[i].ToWebGPUType(&wgpuBlendStates[i]);
+			wgpuFrag = new WGPUFragmentState {
+				module = frag.ShaderModule.WGPUShaderModule,
+				entryPoint = new WGPUStringView(fsEntry, fsEntryLen),
+				constantCount = 0, // TODO
+				constants = null,  // TODO
+				targetCount = (nuint)colorTargets.Length,
+				targets = colorTargets.IsEmpty ? null : wgpuColorTargets
 			};
-
-			BlendState blend = default;
-			BlendState *blendp = null;
-			if (@params.Blend is BlendState b) {
-				blend = b;
-				blendp = &blend;
-			}
-
-			ColorTargetState *targets = stackalloc ColorTargetState[1];
-			targets[0] = new ColorTargetState {
-				Format = @params.ColorTargetFormat,
-				WriteMask = @params.ColorWriteMask,
-				Blend = blendp
-			};
-
-			FragmentState frag = new FragmentState {
-				Module = @params.ShaderModule.ShaderModule,
-				EntryPoint = fsEntry,
-				TargetCount = 1,
-				Targets = targets
-			};
-
-			PrimitiveState primitive = new PrimitiveState {
-				Topology = @params.PrimitiveTopology,
-				FrontFace = @params.FrontFace,
-				CullMode = @params.CullMode
-			};
-
-			DepthStencilState depthStencil = default;
-			DepthStencilState *depthStencilP = null;
-			if (@params.DepthStencil is DepthStencilState d) {
-				depthStencil = d;
-				depthStencilP = &depthStencil;
-			}
-
-			MultisampleState multisample = new MultisampleState {
-				Count = 1,
-				Mask = uint.MaxValue
-			};
-
-			RenderPipelineDescriptor desc = new RenderPipelineDescriptor {
-				Layout = layout.PipelineLayout,
-				Vertex = vert,
-				Fragment = &frag,
-				Primitive = primitive,
-				DepthStencil = depthStencilP,
-				Multisample = multisample
-			};
-
-			RenderPipeline *pipeline = Check(API.DeviceCreateRenderPipeline(Device, &desc));
-			return new GPURenderPipeline(this, pipeline);
-		} finally {
-			SilkMarshal.Free((IntPtr)fsEntry);
-			SilkMarshal.Free((IntPtr)vsEntry);
+			pWgpuFrag = &wgpuFrag;
 		}
-	}
 
-	/// <summary>
-	/// Submits a finished command buffer to the queue.
-	/// </summary>
-	/// <remarks>
-	/// Renderer-internal submission interface used by <see cref="RenderFrame"/>.
-	/// Callers are expected to have finished all encoding / passes before this point.
-	/// </remarks>
-	internal void Submit(CommandBuffer *cmdbuf) {
-		ObjectDisposedException.ThrowIf(disposed, this);
-		API.QueueSubmit(Queue, 1, &cmdbuf);
+		// -----------------------------------------------------------------
+		// primitive, depth/stencil, multisample
+		WGPUPrimitiveState wgpuPrim = prim.ToWebGPUType();
+
+		WGPUDepthStencilState wgpuDepthStencil = default;
+		WGPUDepthStencilState *pWgpuDepthStencil = null;
+		if (@params.DepthStencil is DepthStencilState ds) {
+			wgpuDepthStencil = ds.ToWebGPUType();
+			pWgpuDepthStencil = &wgpuDepthStencil;
+		}
+
+		WGPUMultisampleState wgpuMs = ms.ToWebGPUType();
+
+		// -----------------------------------------------------------------
+		// full pipeline descriptor
+		WGPURenderPipelineDescriptor desc = new WGPURenderPipelineDescriptor {
+			layout = @params.Layout.WGPUPipelineLayout,
+			vertex = wgpuVert,
+			primitive = wgpuPrim,
+			depthStencil = pWgpuDepthStencil,
+			multisample = wgpuMs,
+			fragment = pWgpuFrag
+		};
+		return new GPURenderPipeline(Check(wgpuDeviceCreateRenderPipeline(Device, &desc)));
 	}
 
 	/// <summary>
 	/// Releases all owned GPU state and invalidates all objects created from this <see cref="WebGPUDevice"/>.
 	/// </summary>
 	public void Dispose() {
-		if (disposed)
+		if (Interlocked.Exchange(ref disposed, 1) != 0)
 			return;
-		disposed = true;
 
 		filteringDepthTex2DBindGroupLayout.Dispose();
 		comparisonDepthTex2DBindGroupLayout.Dispose();
 		colorTex2DBindGroupLayout.Dispose();
 		globalsUniformBindGroupLayout.Dispose();
-		API.QueueRelease(Queue);
-		API.DeviceRelease(Device);
-		API.AdapterRelease(Adapter);
-		API.InstanceRelease(Instance);
-		API.Dispose();
+		deviceLostCallbackStateHandle.Free();
+		wgpuQueueRelease(Queue);
+		wgpuDeviceRelease(Device);
+		wgpuAdapterRelease(Adapter);
+		wgpuInstanceRelease(Instance);
 	}
 
 	// ==========================================================================
@@ -1015,7 +1099,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// 2D, non-multisampled, color view.
 	/// </exception>
 	public GPUBindGroup CreateStdColorTexture2DBindGroup(GPUTextureViewHandle view, GPUSamplerHandle sampler) {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		ArgumentNullException.ThrowIfNull(view);
 		ArgumentNullException.ThrowIfNull(sampler);
 		if ((view.Usage & TextureUsage.TextureBinding) == 0)
@@ -1024,8 +1108,8 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			throw new ArgumentException("view must be 2D", nameof(view));
 		if (view.SampleCount != 1)
 			throw new ArgumentException("view must not be multisampled", nameof(view));
-		if (view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float
-			or TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32floatStencil8 or TextureFormat.Stencil8)
+		if (view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float
+			or TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32FloatStencil8 or TextureFormat.Stencil8)
 			throw new ArgumentException("view must be a color format", nameof(view));
 		return CreateBindGroup(StdColorTexture2DLayout, [
 			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
@@ -1048,7 +1132,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// </exception>
 	/// <inheritdoc cref="CreateStdColorTexture2DBindGroup(GPUTextureViewHandle, GPUSamplerHandle)"/>
 	public GPUBindGroup CreateStdColorTexture2DBindGroup(GPUTextureHandle texture, GPUSamplerHandle sampler) {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		ArgumentNullException.ThrowIfNull(texture);
 		return CreateStdColorTexture2DBindGroup(texture.DefaultView, sampler);
 	}
@@ -1078,7 +1162,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// 2D, non-multisampled, depth-only view.
 	/// </exception>
 	public GPUBindGroup CreateStdFilteringDepthTexture2DBindGroup(GPUTextureViewHandle view, GPUSamplerHandle sampler) {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		ArgumentNullException.ThrowIfNull(view);
 		ArgumentNullException.ThrowIfNull(sampler);
 		if ((view.Usage & TextureUsage.TextureBinding) == 0)
@@ -1087,7 +1171,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			throw new ArgumentException("view must be 2D", nameof(view));
 		if (view.SampleCount != 1)
 			throw new ArgumentException("view must not be multisampled", nameof(view));
-		if (!(view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float))
+		if (!(view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float))
 			throw new ArgumentException("view must be a depth-only format", nameof(view));
 		return CreateBindGroup(StdFilteringDepthTexture2DLayout, [
 			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
@@ -1120,7 +1204,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	/// 2D, non-multisampled, depth-only view.
 	/// </exception>
 	public GPUBindGroup CreateStdComparisonDepthTexture2DBindGroup(GPUTextureViewHandle view, GPUSamplerHandle sampler) {
-		ObjectDisposedException.ThrowIf(disposed, this);
+		chk();
 		ArgumentNullException.ThrowIfNull(view);
 		ArgumentNullException.ThrowIfNull(sampler);
 		if ((view.Usage & TextureUsage.TextureBinding) == 0)
@@ -1129,11 +1213,63 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			throw new ArgumentException("view must be 2D", nameof(view));
 		if (view.SampleCount != 1)
 			throw new ArgumentException("view must not be multisampled", nameof(view));
-		if (!(view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32float))
+		if (!(view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float))
 			throw new ArgumentException("view must be a depth-only format", nameof(view));
 		return CreateBindGroup(StdComparisonDepthTexture2DLayout, [
 			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
 			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler))
 		]);
+	}
+
+	// ==========================================================================
+	// internal api surface / hooks
+
+	/// <summary>
+	/// Submits a finished command buffer to the queue.
+	/// </summary>
+	/// <remarks>
+	/// Renderer-internal submission interface used by <see cref="RenderFrame"/>.
+	/// Callers are expected to have finished all encoding / passes before this point.
+	/// </remarks>
+	internal void Submit(WGPUCommandBuffer commands) {
+		if (Volatile.Read(ref disposed) != 0)
+			throw new InternalStateException("attempted to Submit() after dispose");
+		wgpuQueueSubmit(Queue, 1, &commands);
+	}
+
+	/// <summary>
+	/// Notifies this <see cref="WebGPUDevice"/> that its underlying <see cref="WGPUDevice"/>
+	/// has been lost.
+	/// </summary>
+	internal void NotifyLost(DeviceLostInfo info) {
+		if (Volatile.Read(ref disposed) != 0)
+			throw new InternalStateException("attempted to NotifyLost() after dispose");
+		lostInfo = info;
+		Volatile.Write(ref lost, 1); // memory fence for the above one
+	}
+
+	/// <summary>
+	/// Throws a <see cref="DeviceLostException"/> with the currently stored
+	/// device loss information. If the device has not been lost, throws
+	/// <see cref="InternalStateException"/>. Never returns.
+	/// </summary>
+	[DoesNotReturn]
+	internal void TripLostException() {
+		if (Volatile.Read(ref disposed) != 0)
+			throw new InternalStateException("TripLostException() called post-dispose");
+		if (Volatile.Read(ref lost) == 0)
+			throw new InternalStateException("TripLostException() called while the device isn't lost");
+		DeviceLostInfo info = Volatile.Read(ref lostInfo) ?? throw new InternalStateException("device lost but no DeviceLostInfo present");
+		throw new DeviceLostException(info);
+	}
+
+	// ==========================================================================
+	// lifetime/dispose
+	private void chk() {
+		ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
+		if (Volatile.Read(ref lost) != 0) {
+			DeviceLostInfo info = Volatile.Read(ref lostInfo) ?? throw new InternalStateException("device lost but no DeviceLostInfo present");
+			throw new DeviceLostException(info);
+		}
 	}
 }

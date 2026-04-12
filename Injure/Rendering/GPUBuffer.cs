@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using Silk.NET.WebGPU;
-
-using Buffer = Silk.NET.WebGPU.Buffer;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -11,14 +10,18 @@ namespace Injure.Rendering;
 /// Common base type for GPU buffer wrappers, allowing APIs to accept both
 /// owning and non-owning wrappers.
 /// </summary>
-public abstract unsafe class GPUBufferHandle {
-	internal abstract Buffer *Buffer { get; }
+public abstract class GPUBufferHandle {
+	internal abstract WGPUBuffer WGPUBuffer { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="Silk.NET.WebGPU.Buffer"/>, bypassing
+	/// Returns the underlying <see cref="WebGPU.WGPUBuffer"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public Buffer *DangerousGetPtr() => Buffer;
+	/// <remarks>
+	/// <b>The return type is not a stable API and may change without notice.</b>
+	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// </remarks>
+	public WGPUBuffer DangerousGetNative() => WGPUBuffer;
 
 	/// <summary>
 	/// Size of the buffer in bytes.
@@ -34,18 +37,16 @@ public abstract unsafe class GPUBufferHandle {
 /// <summary>
 /// Owning wrapper around a GPU buffer.
 /// </summary>
-public sealed unsafe class GPUBuffer : GPUBufferHandle, IDisposable {
-	private readonly WebGPUDevice device;
-	private Buffer *buffer;
+public sealed class GPUBuffer : GPUBufferHandle, IDisposable {
+	private WGPUBuffer buffer;
 
-	internal GPUBuffer(WebGPUDevice device, Buffer *buffer, ulong size, BufferUsage usage) {
-		this.device = device;
+	internal GPUBuffer(WGPUBuffer buffer, ulong size, BufferUsage usage) {
 		this.buffer = buffer;
 		Size = size;
 		Usage = usage;
 	}
 
-	internal override Buffer *Buffer => buffer;
+	internal override WGPUBuffer WGPUBuffer => buffer;
 	public override ulong Size { get; }
 	public override BufferUsage Usage { get; }
 
@@ -58,22 +59,22 @@ public sealed unsafe class GPUBuffer : GPUBufferHandle, IDisposable {
 	/// Releases the underlying WebGPU buffer.
 	/// </summary>
 	public void Dispose() {
-		if (buffer is not null)
-			device.API.BufferRelease(buffer);
-		buffer = null;
+		if (buffer.IsNotNull)
+			wgpuBufferRelease(buffer);
+		buffer = default;
 	}
 }
 
 /// <summary>
 /// Non-owning wrapper around a GPU buffer.
 /// </summary>
-public sealed unsafe class GPUBufferRef : GPUBufferHandle {
+public sealed class GPUBufferRef : GPUBufferHandle {
 	private readonly GPUBuffer source;
 	internal GPUBufferRef(GPUBuffer source) {
 		this.source = source;
 	}
 
-	internal override Buffer *Buffer => source.Buffer;
+	internal override WGPUBuffer WGPUBuffer => source.WGPUBuffer;
 	public override ulong Size => source.Size;
 	public override BufferUsage Usage => source.Usage;
 }

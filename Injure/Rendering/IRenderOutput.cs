@@ -2,7 +2,6 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
-using Silk.NET.WebGPU;
 
 namespace Injure.Rendering;
 

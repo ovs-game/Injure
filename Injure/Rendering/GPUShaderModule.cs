@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using Silk.NET.WebGPU;
+using WebGPU;
+using static WebGPU.WebGPU;
 
 namespace Injure.Rendering;
 
@@ -9,29 +10,31 @@ namespace Injure.Rendering;
 /// Common base type for shader module wrappers, allowing APIs to accept both
 /// owning and non-owning wrappers.
 /// </summary>
-public abstract unsafe class GPUShaderModuleHandle {
-	internal abstract ShaderModule *ShaderModule { get; }
+public abstract class GPUShaderModuleHandle {
+	internal abstract WGPUShaderModule WGPUShaderModule { get; }
 
 	/// <summary>
-	/// Returns the underlying <see cref="Silk.NET.WebGPU.ShaderModule"/>, bypassing
+	/// Returns the underlying <see cref="WebGPU.WGPUShaderModule"/>, bypassing
 	/// ownership/lifetime/revocation contracts.
 	/// </summary>
-	public ShaderModule *DangerousGetPtr() => ShaderModule;
+	/// <remarks>
+	/// <b>The return type is not a stable API and may change without notice.</b>
+	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// </remarks>
+	public WGPUShaderModule DangerousGetNative() => WGPUShaderModule;
 }
 
 /// <summary>
 /// Owning wrapper around a shader module.
 /// </summary>
-public sealed unsafe class GPUShaderModule : GPUShaderModuleHandle, IDisposable {
-	private readonly WebGPUDevice device;
-	private ShaderModule *shaderModule;
+public sealed class GPUShaderModule : GPUShaderModuleHandle, IDisposable {
+	private WGPUShaderModule shaderModule;
 
-	internal GPUShaderModule(WebGPUDevice device, ShaderModule *shaderModule) {
-		this.device = device;
+	internal GPUShaderModule(WGPUShaderModule shaderModule) {
 		this.shaderModule = shaderModule;
 	}
 
-	internal override ShaderModule *ShaderModule => shaderModule;
+	internal override WGPUShaderModule WGPUShaderModule => shaderModule;
 
 	/// <summary>
 	/// Creates a non-owning view of this shader module.
@@ -42,20 +45,20 @@ public sealed unsafe class GPUShaderModule : GPUShaderModuleHandle, IDisposable 
 	/// Releases the underlying WebGPU shader module.
 	/// </summary>
 	public void Dispose() {
-		if (shaderModule is not null)
-			device.API.ShaderModuleRelease(shaderModule);
-		shaderModule = null;
+		if (shaderModule.IsNotNull)
+			wgpuShaderModuleRelease(shaderModule);
+		shaderModule = default;
 	}
 }
 
 /// <summary>
 /// Non-owning wrapper around a shader module.
 /// </summary>
-public sealed unsafe class GPUShaderModuleRef : GPUShaderModuleHandle {
+public sealed class GPUShaderModuleRef : GPUShaderModuleHandle {
 	private readonly GPUShaderModule source;
 	internal GPUShaderModuleRef(GPUShaderModule source) {
 		this.source = source;
 	}
 
-	internal override ShaderModule *ShaderModule => source.ShaderModule;
+	internal override WGPUShaderModule WGPUShaderModule => source.WGPUShaderModule;
 }

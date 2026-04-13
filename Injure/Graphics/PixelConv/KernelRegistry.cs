@@ -16,19 +16,29 @@ internal readonly unsafe struct KernelFallbackChain(Kernel avx2, Kernel ssse3, K
 	public readonly Kernel Scalar = scalar;
 	public readonly bool Sentinel = sentinel;
 
-	public Kernel Pick() {
+	public Kernel Pick(out PlanBackend chosen) {
 		if (Sentinel)
 			throw new InternalStateException("this KernelFallbackChain is a sentinel value");
-		if (Avx2.IsSupported && AVX2 is not null)
+		if (Avx2.IsSupported && AVX2 is not null) {
+			chosen = PlanBackend.AVX2;
 			return AVX2;
-		if (Ssse3.IsSupported && SSSE3 is not null)
+		}
+		if (Ssse3.IsSupported && SSSE3 is not null) {
+			chosen = PlanBackend.SSSE3;
 			return SSSE3;
-		if (Sse2.IsSupported && SSE2 is not null)
+		}
+		if (Sse2.IsSupported && SSE2 is not null) {
+			chosen = PlanBackend.SSE2;
 			return SSE2;
-		if (AdvSimd.IsSupported && AdvSIMD is not null)
+		}
+		if (AdvSimd.Arm64.IsSupported && AdvSIMD is not null) {
+			chosen = PlanBackend.AdvSIMD;
 			return AdvSIMD;
-		if (Scalar is not null)
+		}
+		if (Scalar is not null) {
+			chosen = PlanBackend.Scalar;
 			return Scalar;
+		}
 		throw new InternalStateException("this KernelFallbackChain is empty");
 	}
 }
@@ -39,7 +49,7 @@ internal static unsafe class KernelRegistry {
 		new KernelFallbackChain(null, null, &SSE2Kernels.Copy32SetAlpha, null, &ScalarKernels.Copy32SetAlpha),
 		new KernelFallbackChain(null, null, null, null, &ScalarKernels.Copy64SetAlpha),
 
-		new KernelFallbackChain(null, &SSSE3Kernels.Shuffle32, null, null, &ScalarKernels.Shuffle32),
+		new KernelFallbackChain(&AVX2Kernels.Shuffle32, &SSSE3Kernels.Shuffle32, null, &AdvSIMDKernels.Shuffle32, &ScalarKernels.Shuffle32),
 		new KernelFallbackChain(null, null, null, null, &ScalarKernels.Expand24To32),
 		new KernelFallbackChain(null, null, null, null, &ScalarKernels.Contract32To24),
 

@@ -40,16 +40,18 @@ public readonly unsafe struct PixelConversionPlan {
 	public PixelFormat DestinationFormat { get; }
 	public PixelConvertOptions Options { get; }
 
+	public PlanInfo Info { get; }
 	public int SourceBytesPerPixel => SrcDesc.BytesPerPixel;
 	public int DestinationBytesPerPixel => DstDesc.BytesPerPixel;
 
 	internal PixelConversionPlan(PixelFormat srcFmt, PixelFormat dstFmt, PixelConvertOptions opts, PlanKind kind,
-		Kernel kernel, PixelFormatDesc srcDesc, PixelFormatDesc dstDesc, PayloadUnion payload) {
+		PlanInfo info, Kernel kernel, PixelFormatDesc srcDesc, PixelFormatDesc dstDesc, PayloadUnion payload) {
 		SourceFormat = srcFmt;
 		DestinationFormat = dstFmt;
 		Options = opts;
 
 		Kind = kind;
+		Info = info;
 		Kernel = kernel;
 
 		SrcDesc = srcDesc;

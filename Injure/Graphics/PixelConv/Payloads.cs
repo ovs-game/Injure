@@ -27,12 +27,12 @@ internal readonly struct Copy64SetAlphaPayload(byte byteOffsetInPixel, byte byte
 	public readonly Vector256<byte> FillMask256 = Vector256.Create(fill128, fill128);
 }
 
-internal readonly struct Shuffle32Payload(Vector128<byte> shuf128, Vector128<byte> fill128, bool hasOr) {
+internal readonly struct Shuffle32Payload(Vector128<byte> shuf128, Vector128<byte> fill128, bool hasFill) {
 	public readonly Vector128<byte> ShufMask128 = shuf128;
 	public readonly Vector128<byte> FillMask128 = fill128;
 	public readonly Vector256<byte> ShufMask256 = Vector256.Create(shuf128, shuf128);
 	public readonly Vector256<byte> FillMask256 = Vector256.Create(fill128, fill128);
-	public readonly bool HasOr = hasOr;
+	public readonly bool HasFill = hasFill;
 }
 
 [StructLayout(LayoutKind.Explicit)]

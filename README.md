@@ -12,15 +12,23 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 ----------
 TODO:
 
-- [active] add an uncaptured error callback and an error scope api into `Rendering`, right now something like a validation error triggers a panic in `wgpu-native` and then it can't unwind across an ffi boundary so it just aborts the entire process
-- [this one is next-up] public optimized swizzle/convert api
-- [this one is next-up] high-level texture creation / upload api
-- [next-up afterwards] game-facing renderer config api and some way to adjust the adjustable config settings on the fly
-- [next-up afterwards #2] ~~FIX~~ WRITE THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
-- [next-up afterwards #3] layers system
-- [next-up afterwards #4] clocks, clock filtering, etc.
-- [really priority] dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
-- [Idk when but this should be done] stop having the todo here and use github issues
+- [active] public optimized swizzle/convert api
+  - convenience api that allocates an output buffer of the correct size for you
+  - optimize matching stride+width conversions by doing one big pass instead of going per row
+  - AVX2/AdvSIMD implementations for the basic stuff like shuffle32
+  - more SIMD kernels, there's barely any right now
+  - benchmarks, as well as looking at the codegen to make sure nothing stupid is going on
+  - maybe a few more packed formats, also maybe arbitrary RGBA8x4 / mayybe RGB8x3 permutations
+  - more tests, the ones right now are like bare minimum
+- high-level texture creation / upload api
+- game-facing renderer config api and some way to adjust the adjustable config settings on the fly
+- add a test game into the source tree so testing is less of a pain in the ass
+- ~~FIX~~ WRITE THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
+- add an uncaptured error callback and an error scope api into `Rendering`, right now something like a validation error triggers a panic in `wgpu-native` and then it can't unwind across an ffi boundary so it just aborts the entire process
+- layers system
+- clocks, clock filtering, etc.
+- dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
+- stop having the todo here and use github issues
 - the text renderer
   - [priority] write tests for like everything that can be automatically tested, this is also going to involve somehow being able to do things that need `WebGPURenderer` without actually pulling a renderer
   - way to scale/etc text post-make
@@ -60,4 +68,3 @@ TODO:
 - a good asset replace/hotpatch/hook system, you can do it right now but it's a bit clunky
 - mipmap-like system for textures with a "known viewport resolutions" registry
 - conveniences for mask drawing and animations, probably IAnimatedTexture with texture list / animated webp implementations
-- think about whether Injure.Native and/or Injure should become local nuget packages, probably not since a local nuget feed is probably more churn than necessary and the only benefit is not having to do `-r <RID> -p:InjureNativeRID=<RID>`

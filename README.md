@@ -13,13 +13,10 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 TODO:
 
 - [active] public optimized swizzle/convert api
-  - convenience api that allocates an output buffer of the correct size for you
-  - optimize matching stride+width conversions by doing one big pass instead of going per row
-  - AVX2/AdvSIMD implementations for the basic stuff like shuffle32
+  - [priority] fix the FUCking tests
   - more SIMD kernels, there's barely any right now
   - benchmarks, as well as looking at the codegen to make sure nothing stupid is going on
   - maybe a few more packed formats, also maybe arbitrary RGBA8x4 / mayybe RGB8x3 permutations
-  - more tests, the ones right now are like bare minimum
 - high-level texture creation / upload api
 - game-facing renderer config api and some way to adjust the adjustable config settings on the fly
 - add a test game into the source tree so testing is less of a pain in the ass

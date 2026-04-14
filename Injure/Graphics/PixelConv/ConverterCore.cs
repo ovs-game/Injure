@@ -169,7 +169,7 @@ internal static unsafe class ConverterCore {
 	public static PlanKind Classify(PixelFormat srcFmt, PixelFormat dstFmt, in PixelFormatDesc srcDesc, in PixelFormatDesc dstDesc, in PixelConvertOptions opts) {
 		if (srcFmt == dstFmt) {
 			if (!dstDesc.HasA || !opts.OverrideAlpha)
-				return PlanKind.ByteCopy;
+				return PlanKind.Memcpy;
 			if (dstDesc.Family == PixelFormatFamily.ByteAligned4x8)
 				return PlanKind.Copy32SetAlpha;
 			if (dstDesc.Family == PixelFormatFamily.ByteAligned4x16)
@@ -219,11 +219,20 @@ internal static unsafe class ConverterCore {
 		case PlanKind.Shuffle32:
 			payload.Shuffle32 = MakeShuffle32Payload(in src, in dst, in opts);
 			break;
+		case PlanKind.Expand24To32:
+			payload.Expand24To32 = MakeExpand24To32Payload(in src, in dst, in opts);
+			break;
+		case PlanKind.Contract32To24:
+			payload.Contract32To24 = MakeContract32To24Payload(in src, in dst);
+			break;
 		}
 		return payload;
 	}
 
 	public static Copy32SetAlphaPayload MakeCopy32SetAlphaPayload(in PixelFormatDesc dst, in PixelConvertOptions opts) {
+		Debug.Assert(dst.Family == PixelFormatFamily.ByteAligned4x8);
+		Debug.Assert(dst.HasA);
+
 		byte byteIndex = checked((byte)dst.AIndex);
 		byte a8 = Narrow16To8(opts.Alpha16UNorm);
 		byte *keep = stackalloc byte[16];
@@ -239,6 +248,9 @@ internal static unsafe class ConverterCore {
 	}
 
 	public static Copy64SetAlphaPayload MakeCopy64SetAlphaPayload(in PixelFormatDesc dst, in PixelConvertOptions opts) {
+		Debug.Assert(dst.Family == PixelFormatFamily.ByteAligned4x16);
+		Debug.Assert(dst.HasA);
+
 		byte byteOffsetInPixel = checked((byte)(dst.AIndex * 2));
 		ushort a16 = opts.Alpha16UNorm;
 		byte byte0;
@@ -270,6 +282,11 @@ internal static unsafe class ConverterCore {
 	}
 
 	public static Shuffle32Payload MakeShuffle32Payload(in PixelFormatDesc src, in PixelFormatDesc dst, in PixelConvertOptions opts) {
+		Debug.Assert(src.Family == PixelFormatFamily.ByteAligned4x8);
+		Debug.Assert(dst.Family == PixelFormatFamily.ByteAligned4x8);
+		Debug.Assert(src.HasR && src.HasG && src.HasB && src.HasA);
+		Debug.Assert(dst.HasR && dst.HasG && dst.HasB && dst.HasA);
+
 		bool hasFill = false;
 		byte a8 = Narrow16To8(opts.Alpha16UNorm);
 		byte *shuf = stackalloc byte[16];
@@ -279,7 +296,7 @@ internal static unsafe class ConverterCore {
 			shuf[i + dst.GIndex] = (byte)(i + src.GIndex);
 			shuf[i + dst.BIndex] = (byte)(i + src.BIndex);
 			if (opts.OverrideAlpha) {
-				shuf[i + dst.AIndex] = 1 << 7;
+				shuf[i + dst.AIndex] = 0x80;
 				fill[i + dst.AIndex] = a8;
 				hasFill = true;
 			} else {
@@ -289,6 +306,52 @@ internal static unsafe class ConverterCore {
 		Vector128<byte> shuf128 = Unsafe.ReadUnaligned<Vector128<byte>>(shuf);
 		Vector128<byte> fill128 = Unsafe.ReadUnaligned<Vector128<byte>>(fill);
 		return new Shuffle32Payload(shuf128, fill128, hasFill);
+	}
+
+	public static Expand24To32Payload MakeExpand24To32Payload(in PixelFormatDesc src, in PixelFormatDesc dst, in PixelConvertOptions opts) {
+		Debug.Assert(src.Family == PixelFormatFamily.ByteAligned3x8);
+		Debug.Assert(dst.Family == PixelFormatFamily.ByteAligned4x8);
+		Debug.Assert(src.HasR && src.HasG && src.HasB && !src.HasA);
+		Debug.Assert(dst.HasR && dst.HasG && dst.HasB && dst.HasA);
+
+		byte a8 = Narrow16To8(opts.Alpha16UNorm);
+		byte *shuf = stackalloc byte[16];
+		byte *fill = stackalloc byte[16];
+		Unsafe.InitBlockUnaligned(shuf, 0x80, 16);
+		Unsafe.InitBlockUnaligned(fill, 0x00, 16);
+		for (int pixel = 0; pixel < 4; pixel++) {
+			int s = pixel * 3;
+			int d = pixel * 4;
+			shuf[d + dst.RIndex] = (byte)(s + src.RIndex);
+			shuf[d + dst.GIndex] = (byte)(s + src.GIndex);
+			shuf[d + dst.BIndex] = (byte)(s + src.BIndex);
+
+			// synthesize alpha
+			shuf[d + dst.AIndex] = 0x80;
+			fill[d + dst.AIndex] = a8;
+		}
+		Vector128<byte> shuf128 = Unsafe.ReadUnaligned<Vector128<byte>>(shuf);
+		Vector128<byte> fill128 = Unsafe.ReadUnaligned<Vector128<byte>>(fill);
+		return new Expand24To32Payload(a8, shuf128, fill128);
+	}
+
+	public static Contract32To24Payload MakeContract32To24Payload(in PixelFormatDesc src, in PixelFormatDesc dst) {
+		Debug.Assert(src.Family == PixelFormatFamily.ByteAligned4x8);
+		Debug.Assert(dst.Family == PixelFormatFamily.ByteAligned3x8);
+		Debug.Assert(src.HasR && src.HasG && src.HasB && src.HasA);
+		Debug.Assert(dst.HasR && dst.HasG && dst.HasB && !dst.HasA);
+
+		byte *shuf = stackalloc byte[16];
+		Unsafe.InitBlockUnaligned(shuf, 0x80, 16);
+		for (int pixel = 0; pixel < 4; pixel++) {
+			int s = pixel * 4;
+			int d = pixel * 3;
+			shuf[d + dst.RIndex] = (byte)(s + src.RIndex);
+			shuf[d + dst.GIndex] = (byte)(s + src.GIndex);
+			shuf[d + dst.BIndex] = (byte)(s + src.BIndex);
+		}
+		Vector128<byte> shuf128 = Unsafe.ReadUnaligned<Vector128<byte>>(shuf);
+		return new Contract32To24Payload(shuf128);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -7,7 +7,7 @@ using static Injure.Tests.Graphics.PixelConv.Util;
 
 namespace Injure.Tests.Graphics.PixelConv;
 
-public sealed class ConversionTests {
+public sealed class BasicConversionTests {
 	[Fact]
 	public void BasicShufflingWorks() {
 		PixelConversionPlan plan = PixelConverter.CreatePlan(PixelFormat.RGBA32_UNorm, PixelFormat.BGRA32_UNorm);

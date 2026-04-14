@@ -35,9 +35,24 @@ internal readonly struct Shuffle32Payload(Vector128<byte> shuf128, Vector128<byt
 	public readonly bool HasFill = hasFill;
 }
 
+internal readonly struct Expand24To32Payload(byte a8unorm, Vector128<byte> shuf128, Vector128<byte> fill128) {
+	public readonly byte Alpha8UNorm = a8unorm;
+	public readonly Vector128<byte> ShufMask128 = shuf128;
+	public readonly Vector128<byte> FillMask128 = fill128;
+	public readonly Vector256<byte> ShufMask256 = Vector256.Create(shuf128, shuf128);
+	public readonly Vector256<byte> FillMask256 = Vector256.Create(fill128, fill128);
+}
+
+internal readonly struct Contract32To24Payload(Vector128<byte> shuf128) {
+	public readonly Vector128<byte> ShufMask128 = shuf128;
+	public readonly Vector256<byte> ShufMask256 = Vector256.Create(shuf128, shuf128);
+}
+
 [StructLayout(LayoutKind.Explicit)]
 internal struct PayloadUnion {
 	[FieldOffset(0)] public Copy32SetAlphaPayload Copy32SetAlpha;
 	[FieldOffset(0)] public Copy64SetAlphaPayload Copy64SetAlpha;
 	[FieldOffset(0)] public Shuffle32Payload Shuffle32;
+	[FieldOffset(0)] public Expand24To32Payload Expand24To32;
+	[FieldOffset(0)] public Contract32To24Payload Contract32To24;
 }

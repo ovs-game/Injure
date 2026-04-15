@@ -86,12 +86,6 @@ internal readonly ref struct ResolvedTextureSource {
 		ResolvedTextureSourceKind.LeasedTexture2D => lease.Value.Height,
 		_ => throw new UnreachableException()
 	};
-	public TextureFormat Format => Kind switch {
-		ResolvedTextureSourceKind.Texture2D => texture!.Format,
-		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!.ColorFormat,
-		ResolvedTextureSourceKind.LeasedTexture2D => lease.Value.Format,
-		_ => throw new UnreachableException()
-	};
 	public GPUBindGroupRef BindGroup => Kind switch {
 		ResolvedTextureSourceKind.Texture2D => texture!.BindGroup,
 		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!.ColorBindGroup,

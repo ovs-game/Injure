@@ -268,8 +268,8 @@ public readonly record struct GPUTextureRegion(
 	uint Z,
 	uint Width,
 	uint Height,
-	uint DepthOrArrayLayers = 1,
-	uint MipLevel = 0,
+	uint DepthOrArrayLayers,
+	uint MipLevel,
 	TextureAspect Aspect = TextureAspect.All
 );
 

@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using StbImageSharp;
 
 using Injure.Graphics;
+using Injure.Graphics.PixelConv;
 using Injure.Rendering;
 
 namespace Injure.Assets.Builtin;
@@ -138,7 +139,7 @@ public sealed class Texture2DAssetCreator(WebGPUDevice gpuDevice) : IAssetCreato
 		if (info.Prepared is not Texture2DAssetPreparedData p)
 			return AssetCreateResult<Texture2D>.NotHandled();
 		try {
-			TextureFormat fmt = p.Metadata.SRGB ? TextureFormat.RGBA8UnormSrgb : TextureFormat.RGBA8Unorm;
+			Texture2DFormat fmt = p.Metadata.SRGB ? Texture2DFormat.RGBA32_UNorm_Srgb : Texture2DFormat.RGBA32_UNorm;
 			GPUSamplerCreateParams smpParams = p.Metadata.SamplerMode switch {
 				Texture2DSamplerMode.NearestClamp => SamplerStates.NearestClamp,
 				Texture2DSamplerMode.LinearClamp => SamplerStates.LinearClamp,
@@ -146,45 +147,29 @@ public sealed class Texture2DAssetCreator(WebGPUDevice gpuDevice) : IAssetCreato
 				Texture2DSamplerMode.LinearRepeat => SamplerStates.LinearRepeat,
 				_ => throw new UnreachableException()
 			};
-			GPUTextureRegion texRegion;
-			GPUTextureLayout texLayout;
+			ReadOnlySpan<byte> src;
+			uint srcStride, w, h;
 			if (p.Metadata.SourceRect is RectI r) {
 				if (r.Width <= 0 || r.Height <= 0) throw new ArgumentException("texture source rect cannot have negative/zero dimensions");
 				if (r.X < 0) throw new ArgumentException("texture source rect goes out of bounds (negative X)");
 				if (r.Y < 0) throw new ArgumentException("texture source rect goes out of bounds (negative Y)");
 				if (r.X + r.Width > p.Width) throw new ArgumentException("texture source rect goes out of bounds (X + width > texture width)");
 				if (r.Y + r.Height > p.Height) throw new ArgumentException("texture source rect goes out of bounds (Y + height > texture height)");
-				texRegion = new GPUTextureRegion(X: 0, Y: 0, Z: 0, Width: (uint)r.Width, Height: (uint)r.Height);
-				texLayout = new GPUTextureLayout(Offset: (ulong)(r.Y * (p.Width * 4) + r.X * 4), BytesPerRow: p.Width * 4, RowsPerImage: p.Height);
+
+				w = (uint)r.Width;
+				h = (uint)r.Height;
+				srcStride = p.Width * 4;
+				src = p.RGBA.AsSpan(checked((int)(r.Y * (p.Width * 4) + r.X * 4)));
 			} else {
-				texRegion = new GPUTextureRegion(X: 0, Y: 0, Z: 0, Width: p.Width, Height: p.Height);
-				texLayout = new GPUTextureLayout(Offset: 0, BytesPerRow: p.Width * 4, RowsPerImage: p.Height);
+				w = p.Width;
+				h = p.Height;
+				srcStride = p.Width * 4;
+				src = p.RGBA;
 			}
 
-			GPUTexture tex = gpuDevice.CreateTexture(new GPUTextureCreateParams(
-				Width: p.Width,
-				Height: p.Height,
-				DepthOrArrayLayers: 1,
-				MipLevelCount: 1,
-				SampleCount: 1,
-				Dimension: TextureDimension.Dimension2D,
-				Format: fmt,
-				Usage: TextureUsage.TextureBinding | TextureUsage.CopyDst
-			));
-			// TODO: don't do This thing with the try { try {} catch { throw; } } catch { throw; } it's ugly
-			try {
-				GPUSampler sampler = gpuDevice.CreateSampler(in smpParams);
-				try {
-					gpuDevice.WriteToTexture(tex, in texRegion, p.RGBA, in texLayout);
-					return AssetCreateResult<Texture2D>.Success(new Texture2D(gpuDevice, tex, sampler));
-				} catch {
-					sampler.Dispose();
-					throw;
-				}
-			} catch {
-				tex.Dispose();
-				throw;
-			}
+			Texture2D tex = new Texture2D(gpuDevice, w, h, fmt);
+			tex.Upload(src, checked((int)srcStride), PixelFormat.RGBA32_UNorm);
+			return AssetCreateResult<Texture2D>.Success(tex);
 		} catch (Exception ex) {
 			return AssetCreateResult<Texture2D>.Error(
 				new AssetLoadException(info.AssetID, typeof(Texture2D), "failed to finalize texture", ex));

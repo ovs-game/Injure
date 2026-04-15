@@ -16,7 +16,6 @@ TODO:
   - more SIMD kernels, there's barely any right now
   - benchmarks, as well as looking at the codegen to make sure nothing stupid is going on
   - maybe a few more packed formats, also maybe arbitrary RGBA8x4 / mayybe RGB8x3 permutations
-- high-level texture creation / upload api
 - game-facing renderer config api and some way to adjust the adjustable config settings on the fly
 - add a test game into the source tree so testing is less of a pain in the ass
 - ~~FIX~~ WRITE THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this

@@ -43,8 +43,12 @@ public static unsafe class PixelConverter {
 
 	public static byte[] Convert(
 		ReadOnlySpan<byte> src, int srcStride, PixelFormat srcFmt,
-		PixelFormat dstFmt, int width, int height, PixelConvertOptions opts = default
-	) => CreatePlan(srcFmt, dstFmt, opts).Convert(src, srcStride, width, height);
+		PixelFormat dstFmt, out int dstStride, int width, int height, PixelConvertOptions opts = default
+	) {
+		PixelConversionPlan plan = CreatePlan(srcFmt, dstFmt, opts);
+		dstStride = width * plan.DestinationBytesPerPixel;
+		return plan.Convert(src, srcStride, width, height);
+	}
 
 	// internal helper for tests
 	internal static bool TryCreatePlanWithBackend(PixelFormat srcFmt, PixelFormat dstFmt, PlanBackend selected, out PixelConversionPlan plan, PixelConvertOptions opts = default) {

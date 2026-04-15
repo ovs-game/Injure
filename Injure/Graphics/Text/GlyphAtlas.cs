@@ -116,13 +116,7 @@ internal sealed unsafe class GlyphAtlas(WebGPUDevice gpuDevice, TextSystem text,
 
 		byte[] pixels = readbitmap(slot->bitmap);
 		GlyphAtlasPage page = alloc(w, h, out int x, out int y);
-		gpuDevice.WriteToTexture(
-			page.Texture.Texture,
-			new GPUTextureRegion(X: (uint)x, Y: (uint)y, Z: 0, Width: slot->bitmap.width, Height: slot->bitmap.rows),
-			pixels,
-			new GPUTextureLayout(Offset: 0, BytesPerRow: slot->bitmap.width, RowsPerImage: slot->bitmap.rows)
-		);
-
+		page.Texture.Upload(x, y, pixels, srcStride: w, PixelConv.PixelFormat.R8_UNorm, w, h);
 		entry = new GlyphAtlasEntry(
 			Page: page,
 			SrcPixels: new RectI(x, y, w, h),
@@ -180,19 +174,13 @@ internal sealed unsafe class GlyphAtlas(WebGPUDevice gpuDevice, TextSystem text,
 	}
 
 	private GlyphAtlasPage newpage() {
-		GPUTexture tex = gpuDevice.CreateTexture(new GPUTextureCreateParams(
-			Width: (uint)pageWidth,
-			Height: (uint)pageHeight,
-			DepthOrArrayLayers: 1,
-			MipLevelCount: 1,
-			SampleCount: 1,
-			Dimension: TextureDimension.Dimension2D,
-			Format: TextureFormat.R8Unorm,
-			Usage: TextureUsage.TextureBinding | TextureUsage.CopyDst
-		));
-		GPUSampler sampler = gpuDevice.CreateSampler(SamplerStates.LinearClamp);
 		GlyphAtlasPage page = new GlyphAtlasPage {
-			Texture = new Texture2D(gpuDevice, tex, sampler),
+			Texture = new Texture2D(gpuDevice, new Texture2DCreateParams(
+				Width: (uint)pageWidth,
+				Height: (uint)pageHeight,
+				Format: Texture2DFormat.R8_UNorm,
+				SamplerParams: SamplerStates.LinearClamp
+			)),
 			Width = pageWidth,
 			Height = pageHeight,
 			WriteX = 0,

@@ -13,7 +13,6 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 TODO:
 
 - [active] public optimized swizzle/convert api
-  - [priority] fix the FUCking tests
   - more SIMD kernels, there's barely any right now
   - benchmarks, as well as looking at the codegen to make sure nothing stupid is going on
   - maybe a few more packed formats, also maybe arbitrary RGBA8x4 / mayybe RGB8x3 permutations

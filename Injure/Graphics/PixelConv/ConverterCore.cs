@@ -237,7 +237,8 @@ internal static unsafe class ConverterCore {
 		byte a8 = Narrow16To8(opts.Alpha16UNorm);
 		byte *keep = stackalloc byte[16];
 		byte *fill = stackalloc byte[16];
-		Unsafe.InitBlockUnaligned(fill, 0xff, 16);
+		Unsafe.InitBlockUnaligned(keep, 0xff, 16);
+		Unsafe.InitBlockUnaligned(fill, 0x00, 16);
 		for (int i = 0; i < 16; i += 4) {
 			keep[i + byteIndex] = 0x00;
 			fill[i + byteIndex] = a8;
@@ -269,7 +270,8 @@ internal static unsafe class ConverterCore {
 		}
 		byte *keep = stackalloc byte[16];
 		byte *fill = stackalloc byte[16];
-		Unsafe.InitBlockUnaligned(fill, 0xff, 16);
+		Unsafe.InitBlockUnaligned(keep, 0xff, 16);
+		Unsafe.InitBlockUnaligned(fill, 0x00, 16);
 		for (int i = 0; i < 16; i += 8) {
 			keep[i + byteOffsetInPixel] = 0x00;
 			keep[i + byteOffsetInPixel + 1] = 0x00;

@@ -20,8 +20,6 @@ TODO:
 - add a test game into the source tree so testing is less of a pain in the ass
 - ~~FIX~~ WRITE THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
 - add an uncaptured error callback and an error scope api into `Rendering`, right now something like a validation error triggers a panic in `wgpu-native` and then it can't unwind across an ffi boundary so it just aborts the entire process
-- layers system
-- clocks, clock filtering, etc.
 - dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
 - stop having the todo here and use github issues
 - the text renderer

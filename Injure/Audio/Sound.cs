@@ -17,13 +17,10 @@ public enum SoundPanMode {
 	Pan = ma_pan_mode_pan
 }
 
-public sealed unsafe class Sound : IDisposable {
+public sealed unsafe class Sound : ICurrentSampleable<AudioFrame>, IDisposable {
 	internal ma_sound *ma_sound { get; private set; }
 
 	private readonly AudioEngine engine;
-
-	private PerfTick refpointPerfTick;
-	private AudioFrame refpointFrame;
 
 	public bool Looping {
 		get {
@@ -87,6 +84,7 @@ public sealed unsafe class Sound : IDisposable {
 			return (AudioFrame)(long)ma.sound_get_time_in_pcm_frames(ma_sound);
 		}
 	}
+	public AudioFrame SampleCurrent() => CurrentFrame;
 
 	private bool disposed = false;
 
@@ -147,16 +145,6 @@ public sealed unsafe class Sound : IDisposable {
 	public void SeekToSecond(float seconds) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		Check(ma.sound_seek_to_second(ma_sound, seconds));
-	}
-
-	public void UpdateConversionRefpoint() {
-		refpointPerfTick = PerfTick.GetCurrent();
-		refpointFrame = CurrentFrame;
-	}
-
-	public AudioFrame PerfToAudioFrame(PerfTick perfTick) {
-		double deltaSeconds = (double)((long)perfTick.Value - (long)refpointPerfTick.Value) / (double)PerfTick.Frequency;
-		return refpointFrame + (AudioFrame)(long)Math.Round(deltaSeconds * engine.Spec.SampleRate);
 	}
 
 	public void Dispose() {

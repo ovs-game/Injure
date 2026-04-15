@@ -24,7 +24,11 @@ public abstract class Layer {
 	internal LayerStack? Owner { get; set; }
 	internal LayerRuntime? Runtime { get; private set; }
 
-	protected CoroutineScheduler Coroutines => Runtime?.Coroutines ?? throw new InternalStateException("expected layer runtime instance to be nonnull by this point");
+	private const string eMsg = "activation-bound layer services (time domain, coroutines, tracking) are not available yet (most likely, you have to move this code from the constructor to OnEnter)";
+	protected LayerTimeDomain Time => Runtime?.Time ?? throw new InvalidOperationException(eMsg);
+	protected CoroutineScheduler Coroutines => Runtime?.Coroutines ?? throw new InvalidOperationException(eMsg);
+	protected CoroutineScope CoroutineScope => Runtime?.CoroutineScope ?? throw new InvalidOperationException(eMsg);
+	protected ILayerPerfTracker PerfTracker => Runtime ?? throw new InvalidOperationException(eMsg);
 
 	[MemberNotNull(nameof(Runtime))]
 	internal void OnEnterCore() {
@@ -34,6 +38,7 @@ public abstract class Layer {
 	internal void UpdateCore(in LayerTickContext ctx) {
 		if (Runtime is null)
 			throw new InternalStateException("expected layer runtime instance to be nonnull by this point");
+		Runtime.BeforeUpdate(in ctx);
 		Update(in ctx);
 		Runtime.AfterUpdate(in ctx);
 	}

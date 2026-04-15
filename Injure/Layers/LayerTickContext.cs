@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 
 using Injure.Input;
+using Injure.Timing;
 
 namespace Injure.Layers;
 
-public readonly ref struct LayerTickContext(double dt, double rawDt, double time, double rawTime, ulong tickNum, InputView input) {
+public readonly ref struct LayerTickContext(PerfTick perfTick, double dt, double rawDt, double time, double rawTime, ulong tickNum, InputView input) {
+	public PerfTick PerfTick { get; } = perfTick;
 	public double DeltaTime { get; } = dt;
 	public double RawDeltaTime { get; } = rawDt;
 	public double Time { get; } = time;

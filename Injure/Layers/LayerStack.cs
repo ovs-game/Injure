@@ -216,7 +216,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 
 				double dt = tm.Transform(rawDt);
 				tm.Advance(dt, rawDt);
-				LayerTickContext ctx = new LayerTickContext(dt, rawDt, tm.Time, tm.RawTime, tm.TickNum, input);
+				LayerTickContext ctx = new LayerTickContext(info.ActualAt, dt, rawDt, tm.Time, tm.RawTime, tm.TickNum, input);
 				ent.Layer.UpdateCore(in ctx);
 				if (consumeInput)
 					ent.NextInputSeq = InputCollector.NextSeq;

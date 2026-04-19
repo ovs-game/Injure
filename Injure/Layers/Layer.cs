@@ -28,7 +28,7 @@ public abstract class Layer {
 	protected LayerTimeDomain Time => Runtime?.Time ?? throw new InvalidOperationException(eMsg);
 	protected CoroutineScheduler Coroutines => Runtime?.Coroutines ?? throw new InvalidOperationException(eMsg);
 	protected CoroutineScope CoroutineScope => Runtime?.CoroutineScope ?? throw new InvalidOperationException(eMsg);
-	protected ILayerPerfTracker PerfTracker => Runtime ?? throw new InvalidOperationException(eMsg);
+	protected ILayerTickTracker TickTracker => Runtime ?? throw new InvalidOperationException(eMsg);
 
 	[MemberNotNull(nameof(Runtime))]
 	internal void OnEnterCore() {

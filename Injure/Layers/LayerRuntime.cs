@@ -8,28 +8,28 @@ using Injure.Timing;
 
 namespace Injure.Layers;
 
-internal sealed class LayerRuntime : ILayerPerfTracker, IDisposable {
+internal sealed class LayerRuntime : ILayerTickTracker, IDisposable {
 	public LayerTimeDomain Time { get; }
 	public CoroutineScheduler Coroutines { get; }
 	public CoroutineScope CoroutineScope { get; }
 
-	private readonly List<IPerfUpdateReceiver> toUpdate;
+	private readonly List<ITickTimestampReceiver> toUpdate;
 
 	public LayerRuntime() {
 		Time = new LayerTimeDomain();
 		Coroutines = new CoroutineScheduler();
 		CoroutineScope = CoroutineScope.CreateRoot(Coroutines, "Layer");
-		toUpdate = new List<IPerfUpdateReceiver>();
+		toUpdate = new List<ITickTimestampReceiver>();
 	}
 
-	public T Track<T>(T obj) where T : class, IPerfUpdateReceiver {
+	public T Track<T>(T obj) where T : class, ITickTimestampReceiver {
 		toUpdate.Add(obj);
 		return obj;
 	}
 
 	public void BeforeUpdate(in LayerTickContext ctx) {
-		foreach (IPerfUpdateReceiver r in toUpdate)
-			r.Update(ctx.PerfTick);
+		foreach (ITickTimestampReceiver r in toUpdate)
+			r.Update(ctx.Tick);
 	}
 
 	public void AfterUpdate(in LayerTickContext ctx) {

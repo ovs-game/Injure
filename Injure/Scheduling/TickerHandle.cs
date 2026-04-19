@@ -2,7 +2,7 @@
 
 using System;
 
-namespace Injure.Core;
+namespace Injure.Scheduling;
 
 public readonly struct TickerHandle(int slot, int generation) : IEquatable<TickerHandle> {
 	public static readonly TickerHandle Invalid = default;

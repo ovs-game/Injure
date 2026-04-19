@@ -474,12 +474,12 @@ public sealed class Canvas : IDisposable {
 	/// <summary>
 	/// Gets the drawable width in pixels of the active target.
 	/// </summary>
-	public uint CurrentWidth => CurrentParams.Target.IsPrimary ? frame.PrimaryView.Width : CurrentParams.Target.RenderTarget.Width;
+	public uint CurrentDrawableWidth => CurrentParams.Target.IsPrimary ? frame.PrimaryView.Width : CurrentParams.Target.RenderTarget.Width;
 
 	/// <summary>
 	/// Gets the drawable height in pixels of the active target.
 	/// </summary>
-	public uint CurrentHeight => CurrentParams.Target.IsPrimary ? frame.PrimaryView.Height : CurrentParams.Target.RenderTarget.Height;
+	public uint CurrentDrawableHeight => CurrentParams.Target.IsPrimary ? frame.PrimaryView.Height : CurrentParams.Target.RenderTarget.Height;
 
 	/// <summary>
 	/// Creates a canvas bound to the given frame and base parameters.

@@ -3,9 +3,7 @@
 using System;
 using System.Buffers.Binary;
 using System.IO;
-using Hexa.NET.SDL2;
-
-using Injure.SDLUtil;
+using Hexa.NET.SDL3;
 
 namespace Injure.Core;
 
@@ -186,27 +184,27 @@ public sealed unsafe class BootDraw {
 		}
 	}
 
+	// TODO: something that doesn't involve making an entire new surface every time
 	private static void sdlpresent(Color32[] buffer, int width, int height) {
 		SDLSurface *dst = SDL.GetWindowSurface(SDLOwner.Window);
 		if (dst is null)
 			throw new InvalidOperationException($"SDL_GetWindowSurface: {SDL.GetErrorS()}");
 		fixed (Color32 *p = buffer) {
-			SDLSurface *src = SDL.CreateRGBSurfaceWithFormatFrom(p, width, height, 32, width * sizeof(Color32), (uint)SDLPixelFormatEnum.Rgba32);
-			if (src is null)
-				throw new InvalidOperationException($"SDL_CreateRGBSurfaceWithFormatFrom: {SDL.GetErrorS()}");
-			uint black = SDL.MapRGBA(dst->Format, 0, 0, 0, 255);
-			if (SDL.FillRect(dst, null, black) < 0) {
-				SDL.FreeSurface(src);
-				throw new InvalidOperationException($"SDL_FillRect: {SDL.GetErrorS()}");
+			SDLSurface *src = SDL.CreateSurfaceFrom(width, height, SDLPixelFormat.Rgba32, p, width * sizeof(Color32));
+			try {
+				if (src is null)
+					throw new InvalidOperationException($"SDL_CreateSurfaceFrom: {SDL.GetErrorS()}");
+				uint black = SDL.MapSurfaceRGBA(dst, 0, 0, 0, 255);
+				if (!SDL.FillSurfaceRect(dst, null, black))
+					throw new InvalidOperationException($"SDL_FillRect: {SDL.GetErrorS()}");
+				SDLRect dstRect = fit(width, height, dst->W, dst->H);
+				if (!SDL.BlitSurfaceScaled(src, null, dst, &dstRect, SDLScaleMode.Nearest))
+					throw new InvalidOperationException($"SDL_UpperBlitScaled: {SDL.GetErrorS()}");
+			} finally {
+				SDL.DestroySurface(src);
 			}
-			SDLRect dstRect = fit(width, height, dst->W, dst->H);
-			if (SDL.UpperBlitScaled(src, null, dst, &dstRect) < 0) {
-				SDL.FreeSurface(src);
-				throw new InvalidOperationException($"SDL_UpperBlitScaled: {SDL.GetErrorS()}");
-			}
-			SDL.FreeSurface(src);
 		}
-		if (SDL.UpdateWindowSurface(SDLOwner.Window) < 0)
+		if (!SDL.UpdateWindowSurface(SDLOwner.Window))
 			throw new InvalidOperationException($"SDL_UpdateWindowSurface: {SDL.GetErrorS()}");
 	}
 

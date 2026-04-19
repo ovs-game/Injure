@@ -2,10 +2,12 @@
 
 using System;
 using System.Runtime.CompilerServices;
+
 using Injure.Assets;
 using Injure.Audio;
 using Injure.Graphics.Text;
 using Injure.Rendering;
+using Injure.Scheduling;
 
 namespace Injure.Core;
 

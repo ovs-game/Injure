@@ -24,9 +24,9 @@
 	<ItemGroup>
 		<!-- general deps -->
 		<PackageReference Include="System.IO.Hashing" Version="10.0.5" />
+		<PackageReference Include="Hexa.NET.SDL3" Version="1.2.17" />
 
 		<!-- rendering -->
-		<PackageReference Include="Hexa.NET.SDL2" Version="1.2.17" />
 		<PackageReference Include="Alimer.Bindings.WebGPU" Version="1.6.0" />
 		<PackageReference Include="Alimer.WebGPU.Native" Version="1.0.4" />
 

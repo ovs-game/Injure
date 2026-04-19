@@ -51,7 +51,7 @@ public readonly struct AssetID : IEquatable<AssetID>, ISpanParsable<AssetID> {
 	/// and has a valid namespace and path, and as such the parse succeeded,
 	/// otherwise <see langword="false"/>.
 	/// </returns>
-	public static bool TryParse(string? s, out AssetID val) {
+	public static bool TryParse([NotNullWhen(true)] string? s, out AssetID val) {
 		val = default;
 		if (s is null)
 			return false;
@@ -67,7 +67,7 @@ public readonly struct AssetID : IEquatable<AssetID>, ISpanParsable<AssetID> {
 	/// <remarks>
 	/// <paramref name="provider"/> is ignored and is for compatibility with <see cref="IParsable{TSelf}"/>.
 	/// </remarks>
-	public static bool TryParse(string? s, IFormatProvider? provider, out AssetID val) => TryParse(s, out val);
+	public static bool TryParse([NotNullWhen(true)] string? s, IFormatProvider? provider, out AssetID val) => TryParse(s, out val);
 
 	/// <summary>
 	/// Parses an <see cref="AssetID"/> from the canonical <c>namespace::path</c>
@@ -81,7 +81,7 @@ public readonly struct AssetID : IEquatable<AssetID>, ISpanParsable<AssetID> {
 	/// Thrown if the string is not in the format <c>namespace::path</c> or has
 	/// an invalid namespace or path.
 	/// </exception>
-	public static AssetID Parse(string? s) {
+	public static AssetID Parse([NotNull] string? s) {
 		ArgumentNullException.ThrowIfNull(s);
 		int i = s.IndexOf("::", StringComparison.Ordinal);
 		if (i < 0 || s.IndexOf("::", i + 2, StringComparison.Ordinal) >= 0)
@@ -94,7 +94,7 @@ public readonly struct AssetID : IEquatable<AssetID>, ISpanParsable<AssetID> {
 	/// <remarks>
 	/// <paramref name="provider"/> is ignored and is for compatibility with <see cref="IParsable{TSelf}"/>.
 	/// </remarks>
-	public static AssetID Parse(string? s, IFormatProvider? provider) => Parse(s);
+	public static AssetID Parse([NotNull] string? s, IFormatProvider? provider) => Parse(s);
 
 	/// <summary>
 	/// Parses an <see cref="AssetID"/> from the canonical <c>namespace::path</c>
@@ -160,14 +160,9 @@ public readonly struct AssetID : IEquatable<AssetID>, ISpanParsable<AssetID> {
 			err = "asset namespace must start with an ASCII letter or ASCII digit";
 			return false;
 		}
-		for (int i = 0; i < s.Length; i++) {
-			char c = s[i];
-			if (char.IsControl(c)) {
-				err = "asset namespace must not contain control characters";
-				return false;
-			}
+		foreach (char c in s) {
 			if (!(char.IsAsciiLetterOrDigit(c) || c == '_' || c == '-' || c == '.')) {
-				err = $"asset namespace contains invalid character '{c}' (valid: ASCII letters, ASCII digits, '_', '-', '.')";
+				err = $"asset namespace contains invalid UTF-16 code unit U+{(ushort)c:X4} '{c}' (valid: ASCII letters, ASCII digits, '_', '-', '.')";
 				return false;
 			}
 		}

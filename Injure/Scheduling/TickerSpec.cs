@@ -2,9 +2,9 @@
 
 using Injure.Timing;
 
-namespace Injure.Core;
+namespace Injure.Scheduling;
 
-public readonly record struct TickerTiming(PerfTick Period, PerfTick InitialOffset = default);
+public readonly record struct TickerTiming(MonoTick Period, MonoTick InitialOffset = default);
 
 public enum TickerOverrunMode {
 	CatchUp,
@@ -26,7 +26,7 @@ public readonly record struct TickerOptions(
 	int MaxBurst,
 	TickerOverrunMode OverrunMode,
 	TickerStartMode StartMode,
-	PerfTick StartAt
+	MonoTick StartAt
 ) {
 	public static readonly TickerOptions Default = new TickerOptions(
 		Priority: 0,

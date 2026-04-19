@@ -6,7 +6,7 @@ using Injure.Audio;
 
 namespace Injure.Timing;
 
-public sealed class SmoothedAudioFrameProjector : IPerfProjector<AudioFrame>, IPerfUpdateReceiver {
+public sealed class SmoothedAudioFrameProjector : IMonoProjector<AudioFrame>, ITickTimestampReceiver {
 	// basic alpha-beta filter over "latest audio frame" observations, hopefully close enough to a fixed timestep for rendering
 	//
 	// x = estimated audio playhead pos in pcm frames
@@ -38,7 +38,7 @@ public sealed class SmoothedAudioFrameProjector : IPerfProjector<AudioFrame>, IP
 	private readonly ICurrentSampleable<AudioFrame> source;
 	private readonly int sampleRate;
 	private bool inited = false;
-	private PerfTick last;
+	private MonoTick last;
 
 	// tune these default values until you figure out something decent
 	public SmoothedAudioFrameProjector(ICurrentSampleable<AudioFrame> source, int sampleRate, double alpha = 0.08, double beta = 0.002, double resetThresholdMs = 50.0, double maxVErrorPercent = 0.02) {
@@ -54,7 +54,7 @@ public sealed class SmoothedAudioFrameProjector : IPerfProjector<AudioFrame>, IP
 		vMax = sampleRate + r;
 	}
 
-	public void Update(PerfTick now) {
+	public void Update(MonoTick now) {
 		AudioFrame f = source.SampleCurrent();
 		if (!inited) {
 			inited = true;
@@ -79,10 +79,10 @@ public sealed class SmoothedAudioFrameProjector : IPerfProjector<AudioFrame>, IP
 			v = Math.Clamp(v + (beta / dt) * err, vMin, vMax);
 	}
 
-	private double advanceTo(PerfTick now) {
+	private double advanceTo(MonoTick now) {
 		if (!inited)
 			return 0.0;
-		double dt = (double)(now - last) / (double)PerfTick.Frequency;
+		double dt = (double)(now - last) / (double)MonoTick.Frequency;
 		if (dt > 0.0) {
 			last = now;
 			x += v * dt;
@@ -90,12 +90,12 @@ public sealed class SmoothedAudioFrameProjector : IPerfProjector<AudioFrame>, IP
 		return x;
 	}
 
-	public AudioFrame GetAt(PerfTick now) {
+	public AudioFrame GetAt(MonoTick now) {
 		advanceTo(now);
 		return (AudioFrame)(long)Math.Floor(x);
 	}
 
-	public double GetSecondsAt(PerfTick now) {
+	public double GetSecondsAt(MonoTick now) {
 		advanceTo(now);
 		return x / sampleRate;
 	}

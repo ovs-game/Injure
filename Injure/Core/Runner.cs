@@ -6,7 +6,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Threading.Tasks;
-using Hexa.NET.SDL2;
+using Hexa.NET.SDL3;
 
 using Injure.Assets;
 using Injure.Assets.Builtin;
@@ -15,7 +15,7 @@ using Injure.Graphics;
 using Injure.Graphics.Text;
 using Injure.Input;
 using Injure.Rendering;
-using Injure.SDLUtil;
+using Injure.Scheduling;
 using Injure.Timing;
 
 using Thread = System.Threading.Thread;
@@ -23,6 +23,11 @@ using Thread = System.Threading.Thread;
 namespace Injure.Core;
 
 public static unsafe class Runner {
+	private struct HostState {
+		public WindowState State;
+		public bool QuitRequested;
+	}
+
 	public static readonly CanvasParams BaseCanvasParams = new CanvasParams(
 		Target: CanvasTarget.Primary,
 		ColorAttachmentOps: ColorAttachmentOps.Clear(Color32.Black),
@@ -38,15 +43,17 @@ public static unsafe class Runner {
 
 	[AllowNull] private static GameServices services;
 	[AllowNull] private static CanvasSharedResources canvasResources;
-	[AllowNull] private static Queue<RawInputEvent> inputQueue;
+	//[AllowNull] private static Queue<RawInputEvent> inputQueue;
 	private static bool running = false;
 
-	private static void handleEvent(SDLEvent *ev, IGame game, ref bool cont) {
+	private static void handleEvent(SDLEvent *ev, ref HostState st, IGame game) {
 		switch ((SDLEventType)ev->Type) {
 		case SDLEventType.Quit:
-			cont = false;
+			st.QuitRequested = true;
 			break;
-		case SDLEventType.Windowevent:
+		/*
+		TODO
+		case SDLEventType.WindowPixelSizeChanged:
 			switch ((SDLWindowEventID)ev->Window.Event) {
 			case SDLWindowEventID.SizeChanged:
 				// hand over logical window size, not px-drawable size to the game
@@ -73,14 +80,17 @@ public static unsafe class Runner {
 				break;
 			}
 			break;
+		*/
+		/*
 		case SDLEventType.Keydown:
 		case SDLEventType.Keyup:
 			if (ev->Key.Repeat == 1)
 				break;
-			PerfTick timestamp = PerfTick.GetCurrent();
+			MonoTick timestamp = MonoTick.GetCurrent();
 			RawInputID id = new RawInputID(InputDeviceType.Keyboard, -1, (int)ev->Key.Keysym.Scancode);
 			inputQueue.Enqueue(new RawInputEvent(id, (SDLEventType)ev->Type == SDLEventType.Keydown ? EdgeType.Press : EdgeType.Release, timestamp));
 			break;
+		*/
 		}
 	}
 
@@ -94,41 +104,45 @@ public static unsafe class Runner {
 		}
 	}
 
-	private static void initSDLFrom(in GameWindowConfig conf) {
-		SDLWindowFlags flags = 0;
-		if (!conf.StartVisible) flags |= SDLWindowFlags.Hidden;
-		if (conf.Resizable) flags |= SDLWindowFlags.Resizable;
-		if (conf.Borderless) flags |= SDLWindowFlags.Borderless;
-		if (conf.AllowHighDPI) flags |= SDLWindowFlags.AllowHighdpi;
-		switch (conf.Mode) {
-		case WindowMode.BorderlessFullscreen: flags |= SDLWindowFlags.Borderless | SDLWindowFlags.FullscreenDesktop; break;
-		case WindowMode.ExclusiveFullscreen: flags |= SDLWindowFlags.Fullscreen; break;
-		}
-		switch (conf.StartState) {
-		case WindowState.Minimized: flags |= SDLWindowFlags.Minimized; break;
-		case WindowState.Maximized: flags |= SDLWindowFlags.Maximized; break;
+	private static void initSDLFrom(in WindowConfig conf) {
+		uint props = SDL.CreateProperties();
+		WindowSettings s = conf.Settings;
+		SDL.SetStringProperty(props, SDL.SDL_PROP_WINDOW_CREATE_TITLE_STRING, s.Title);
+		SDL.SetNumberProperty(props, SDL.SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, s.Width);
+		SDL.SetNumberProperty(props, SDL.SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, s.Height);
+		if (!s.Visible) SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, true);
+		if (s.Resizable) SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+		if (s.Borderless) SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_BORDERLESS_BOOLEAN, true);
+		if (s.Fullscreen) SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, true);
+		if (conf.AllowHighDPI) SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
+		switch (s.Mode) {
+		case WindowMode.Minimized: SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_MINIMIZED_BOOLEAN, true); break;
+		case WindowMode.Maximized: SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, true); break;
 		}
 		int x, y;
-		switch (conf.StartPositioning) {
+		switch (s.Positioning) {
 		case WindowPositioning.Undefined: x = y = unchecked((int)SDL.SDL_WINDOWPOS_UNDEFINED_MASK); break;
 		case WindowPositioning.Centered: x = y = unchecked((int)SDL.SDL_WINDOWPOS_CENTERED_MASK); break;
-		case WindowPositioning.Explicit: x = conf.StartX; y = conf.StartY; break;
+		case WindowPositioning.Explicit: x = s.X; y = s.Y; break;
 		default: throw new UnreachableException(); // silence "use of unassigned local"
 		}
-		SDLOwner.InitSDL(conf.Title, x, y, conf.Width, conf.Height, flags);
+		SDL.SetNumberProperty(props, SDL.SDL_PROP_WINDOW_CREATE_X_NUMBER, x);
+		SDL.SetNumberProperty(props, SDL.SDL_PROP_WINDOW_CREATE_Y_NUMBER, y);
+		SDLOwner.InitSDL(props);
 	}
 
 	public static void Run(IGame game, in GameConfig conf) {
-		GameServicesConfig svconf = conf.Services;
-		GameWindowConfig winconf = conf.Window;
-		GameRenderConfig rconf = conf.Render;
-		GameTimingConfig tmconf = conf.Timing;
+		ServiceConfig svconf = conf.Service;
+		WindowConfig winconf = conf.Window;
+		RenderConfig rconf = conf.Render;
+		TimingConfig tmconf = conf.Timing;
+		TimingSettings tmst = tmconf.Settings;
 
 		// validation and basic init
-		if (tmconf.RenderMode == RenderTimingMode.Capped) ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tmconf.TargetFPS);
-		if (tmconf.LoopMode == LoopTimingMode.Wait) {
-			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tmconf.TargetLoopHz);
-			if (tmconf.TargetFPS > tmconf.TargetLoopHz)
+		if (tmst.RenderMode == RenderTimingMode.Capped) ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tmst.TargetFPS);
+		if (tmst.LoopMode == LoopTimingMode.Wait) {
+			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tmst.TargetLoopHz);
+			if (tmst.TargetFPS > tmst.TargetLoopHz)
 				throw new ArgumentException("TargetFPS cannot be higher than TargetLoopHz; if you want to go higher, increase TargetLoopHz");
 		}
 
@@ -136,19 +150,19 @@ public static unsafe class Runner {
 			throw new InvalidOperationException("an IGame instance is already running");
 		running = true;
 
-		double renderStep = tmconf.TargetFPS > 0.0 ? 1.0 / tmconf.TargetFPS : 0.0;
-		double loopStep = tmconf.TargetLoopHz > 0.0 ? 1.0 / tmconf.TargetLoopHz : 0.0;
-		PerfTick loopStepTicks = (PerfTick)(ulong)Math.Round(loopStep * (double)PerfTick.Frequency);
+		double renderStep = tmst.TargetFPS > 0.0 ? 1.0 / tmst.TargetFPS : 0.0;
+		double loopStep = tmst.TargetLoopHz > 0.0 ? 1.0 / tmst.TargetLoopHz : 0.0;
+		MonoTick loopStepTicks = (MonoTick)(ulong)Math.Round(loopStep * (double)MonoTick.Frequency);
 
-		PerfTick t1_5ms = (PerfTick)(ulong)((UInt128)PerfTick.Frequency.Value * 15 / 10000);
-		PerfTick t0_5ms = (PerfTick)(ulong)((UInt128)PerfTick.Frequency.Value * 5 / 10000);
-		PerfTick t0_1ms = (PerfTick)(ulong)((UInt128)PerfTick.Frequency.Value * 1 / 10000);
+		MonoTick t1_5ms = (MonoTick)(ulong)((UInt128)MonoTick.Frequency.Value * 15 / 10000);
+		MonoTick t0_5ms = (MonoTick)(ulong)((UInt128)MonoTick.Frequency.Value * 5 / 10000);
+		MonoTick t0_1ms = (MonoTick)(ulong)((UInt128)MonoTick.Frequency.Value * 1 / 10000);
 
 		// sdl/precisewait init
 		initSDLFrom(in winconf);
 		PreciseWait.Init();
 		game.Loading(new LoadingContext(LoadingPhase.Start, redrawRequested: true));
-		PerfTick loadingStartTick = PerfTick.GetCurrent();
+		MonoTick loadingStartTick = MonoTick.GetCurrent();
 
 		// webgpu bootstrap
 		Task<WebGPUDevice> bootstrap = Task.Run(() => new WebGPUDevice());
@@ -159,19 +173,22 @@ public static unsafe class Runner {
 		bool cancelled = false;
 		while (!bootstrap.IsCompleted) {
 			if (!cancelled) {
-				while (SDL.PollEvent(&ev) == 1) {
+				while (SDL.PollEvent(&ev)) {
 					switch ((SDLEventType)ev.Type) {
 					case SDLEventType.Quit:
 						SDL.HideWindow(SDLOwner.Window);
 						cancelled = true;
 						goto bootstrapCancelled;
+					/*
+					TODO
 					case SDLEventType.Windowevent:
-						elapsed = (double)(PerfTick.GetCurrent() - loadingStartTick) / (double)PerfTick.Frequency;
+						elapsed = (double)(MonoTick.GetCurrent() - loadingStartTick) / (double)MonoTick.Frequency;
 						game.Loading(new LoadingContext(LoadingPhase.Tick, elapsed, redrawRequested: true));
 						break;
+					*/
 					}
 				}
-				elapsed = (double)(PerfTick.GetCurrent() - loadingStartTick) / (double)PerfTick.Frequency;
+				elapsed = (double)(MonoTick.GetCurrent() - loadingStartTick) / (double)MonoTick.Frequency;
 				game.Loading(new LoadingContext(LoadingPhase.Tick, elapsed));
 			}
 bootstrapCancelled:
@@ -179,12 +196,12 @@ bootstrapCancelled:
 		}
 		if (!bootstrap.IsCompletedSuccessfully)
 			goto earlyquit;
-		elapsed = (double)(PerfTick.GetCurrent() - loadingStartTick) / (double)PerfTick.Frequency;
+		elapsed = (double)(MonoTick.GetCurrent() - loadingStartTick) / (double)MonoTick.Frequency;
 		game.Loading(new LoadingContext(LoadingPhase.Finish, elapsed));
 
 		// webgpu setup
 		gpuDevice = bootstrap.Result;
-		sfOutput = new SurfaceRenderOutput(gpuDevice, SDLOwner.SurfaceHost!, rconf.PresentMode switch {
+		sfOutput = new SurfaceRenderOutput(gpuDevice, SDLOwner.SurfaceHost!, rconf.Settings.PresentMode switch {
 			PresentMode.TearFree => SurfacePresentModePolicy.AutoMailbox,
 			PresentMode.Adaptive => SurfacePresentModePolicy.AutoFifoRelaxed,
 			PresentMode.LowLatency => SurfacePresentModePolicy.AutoImmediate,
@@ -194,7 +211,7 @@ bootstrapCancelled:
 
 		// service init
 		// TODO: the builtin source/resolver/creator registry should be moved out somewhere
-		PerfTick budget = (PerfTick)Math.Min((ulong)loopStepTicks, (ulong)PerfTick.PeriodFromHz(1000.0));
+		MonoTick budget = (MonoTick)Math.Min((ulong)loopStepTicks, (ulong)MonoTick.PeriodFromHz(tmst.TargetLoopHz));
 		TickerScheduler sched = new TickerScheduler(new TickerSchedulerOptions(MaxBatchDuration: budget));
 		EngineResourceStore eresources = new EngineResourceStore();
 		eresources.RegisterSource(new EmbeddedEngineResourceSource(
@@ -226,38 +243,38 @@ bootstrapCancelled:
 
 		// game init
 		canvasResources = new CanvasSharedResources(gpuDevice, eresources);
-		inputQueue = new Queue<RawInputEvent>(64);
+		//inputQueue = new Queue<RawInputEvent>(64);TODO
 		game.Init(services);
 
 		// actual main loop
 		double renderAccum = 0.0;
-		PerfTick nextLoopDeadline = PerfTick.GetCurrent() + loopStepTicks;
+		MonoTick nextLoopDeadline = MonoTick.GetCurrent() + loopStepTicks;
 
-		PerfTick last = PerfTick.GetCurrent();
+		MonoTick last = MonoTick.GetCurrent();
 
-		bool cont = true;
-		while (cont) {
-			while (SDL.PollEvent(&ev) == 1)
-				handleEvent(&ev, game, ref cont);
-			if (!cont)
+		HostState st = default;
+		while (!st.QuitRequested) {
+			while (SDL.PollEvent(&ev))
+				handleEvent(&ev, ref st, game);
+			if (st.QuitRequested)
 				break;
 
-			PerfTick t = PerfTick.GetCurrent();
+			MonoTick t = MonoTick.GetCurrent();
 			double dt = (double)(t - last).ToSeconds();
 			last = t;
 
 			services.AtSafeBoundary();
-			InputCollector.Feed(inputQueue);
+			//InputCollector.Feed(inputQueue);TODO
 
 			sched.ApplyPending();
 			sched.RunDueTickers();
 
-			while (SDL.PollEvent(&ev) == 1)
-				handleEvent(&ev, game, ref cont);
-			if (!cont)
+			while (SDL.PollEvent(&ev))
+				handleEvent(&ev, ref st, game);
+			if (st.QuitRequested)
 				break;
 
-			switch (tmconf.RenderMode) {
+			switch (tmst.RenderMode) {
 			case RenderTimingMode.Capped:
 				renderAccum += dt;
 				if (renderAccum >= renderStep) {
@@ -278,44 +295,44 @@ bootstrapCancelled:
 			// my best attempt to make a reasonably millisecond precise wait
 			// SDL_Delay is unreliable for delays around <15ms due to OS scheduling,
 			// so after a lot of experimentation and trial and error i came up with this
-			if (tmconf.LoopMode == LoopTimingMode.Wait) {
-				PerfTick deadline = nextLoopDeadline;
-				if (sched.TryGetEarliestNextAt(out PerfTick nextTickDeadline) && nextTickDeadline < deadline)
+			if (tmst.LoopMode == LoopTimingMode.Wait) {
+				MonoTick deadline = nextLoopDeadline;
+				if (sched.TryGetEarliestNextAt(out MonoTick nextTickDeadline) && nextTickDeadline < deadline)
 					deadline = nextTickDeadline;
 
 				bool restartLoop = false;
 				for (;;) {
-					PerfTick now = PerfTick.GetCurrent();
+					MonoTick now = MonoTick.GetCurrent();
 					if (now >= deadline)
 						break;
-					PerfTick remaining = deadline - now;
+					MonoTick remaining = deadline - now;
 					if (remaining > t1_5ms) { // n > 1.5ms
-						PerfTick n = remaining - t0_5ms; // 0.5ms of safety
-						int ms = (int)((UInt128)n.Value * 1000 / (UInt128)PerfTick.Frequency.Value);
-						if (ms > 0 && SDL.WaitEventTimeout(&ev, ms) == 1) {
-							handleEvent(&ev, game, ref cont);
-							while (SDL.PollEvent(&ev) == 1)
-								handleEvent(&ev, game, ref cont);
-							if (!cont)
+						MonoTick n = remaining - t0_5ms; // 0.5ms of safety
+						int ms = (int)((UInt128)n.Value * 1000 / (UInt128)MonoTick.Frequency.Value);
+						if (ms > 0 && SDL.WaitEventTimeout(&ev, ms)) {
+							handleEvent(&ev, ref st, game);
+							while (SDL.PollEvent(&ev))
+								handleEvent(&ev, ref st, game);
+							if (st.QuitRequested)
 								break;
 							restartLoop = true; // OnHostEvent may have queued ticker changes
 							break;
 						}
 					} else if (remaining > t0_1ms) { // 1.5ms >= n > 0.1ms
-						PerfTick n = remaining - t0_1ms; // 0.1ms of safety
-						PreciseWait.Wait((long)((UInt128)n.Value * 1000000000 / (UInt128)PerfTick.Frequency.Value));
+						MonoTick n = remaining - t0_1ms; // 0.1ms of safety
+						PreciseWait.Wait((long)((UInt128)n.Value * 1000000000 / (UInt128)MonoTick.Frequency.Value));
 					} else { // 0.1ms >= n > 0ms
 						Thread.SpinWait(128);
 					}
 				}
 
-				if (!cont)
+				if (st.QuitRequested)
 					break;
 				if (restartLoop)
 					continue;
 				nextLoopDeadline += loopStepTicks;
-				PerfTick now2 = PerfTick.GetCurrent();
-				if ((long)(now2.Value - nextLoopDeadline.Value) > (long)(loopStepTicks.Value * (ulong)tmconf.MaxLoopDeadlineMissByFrames))
+				MonoTick now2 = MonoTick.GetCurrent();
+				if ((long)(now2.Value - nextLoopDeadline.Value) > (long)(loopStepTicks.Value * (ulong)tmst.MaxLoopDeadlineMissByLoopDurations))
 					nextLoopDeadline = now2 + loopStepTicks;
 			}
 		}

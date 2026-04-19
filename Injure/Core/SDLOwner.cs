@@ -2,11 +2,11 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
-using Hexa.NET.SDL2;
+using Hexa.NET.SDL3;
 
 using Injure.Timing;
 
-namespace Injure.SDLUtil;
+namespace Injure.Core;
 
 public static unsafe class SDLOwner {
 	public static SDLWindow *Window { get; private set; }
@@ -15,21 +15,20 @@ public static unsafe class SDLOwner {
 
 	public static SDLSurfaceHost? SurfaceHost { get; private set; }
 
-	internal static PerfTick PerfTickFrequency { get; private set; }
 	private static bool inited = false;
 
 	[MemberNotNull(nameof(Window), nameof(SurfaceHost))]
-	public static void InitSDL(string title, int x, int y, int w, int h, SDLWindowFlags flags) {
+	public static void InitSDL(uint props) {
 		if (OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") is not null)
-			SDL.SetHint(SDL.SDL_HINT_VIDEODRIVER, "wayland");
+			SDL.SetHint(SDL.SDL_HINT_VIDEO_DRIVER, "wayland");
 
-		if (SDL.Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS) < 0)
+		if (!SDL.Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS))
 			throw new InvalidOperationException($"SDL_Init: {SDL.GetErrorS()}");
 
 		if (OperatingSystem.IsMacOS())
-			flags |= SDLWindowFlags.Metal;
+			SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_METAL_BOOLEAN, true);
 
-		Window = SDL.CreateWindow(title, x, y, w, h, (uint)flags);
+		Window = SDL.CreateWindowWithProperties(props);
 		if (Window is null) {
 			SDL.Quit();
 			throw new InvalidOperationException($"SDL_CreateWindow: {SDL.GetErrorS()}");
@@ -53,8 +52,6 @@ public static unsafe class SDLOwner {
 		}
 
 		SurfaceHost = new SDLSurfaceHost(Window, AppleMetalLayer);
-
-		PerfTickFrequency = (PerfTick)SDL.GetPerformanceFrequency();
 		inited = true;
 	}
 	
@@ -72,9 +69,9 @@ public static unsafe class SDLOwner {
 		}
 	}
 
-	internal static PerfTick PerfTickGetCurrent() {
+	internal static MonoTick MonoTickGetCurrent() {
 		if (!inited)
 			throw new InvalidOperationException("SDLOwner.InitSDL() not called yet");
-		return (PerfTick)SDL.GetPerformanceCounter();
+		return (MonoTick)SDL.GetTicksNS();
 	}
 }

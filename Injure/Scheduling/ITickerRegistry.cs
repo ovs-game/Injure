@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-namespace Injure.Core;
+namespace Injure.Scheduling;
 
 public delegate void TickerCallback(in TickCallbackInfo info);
 

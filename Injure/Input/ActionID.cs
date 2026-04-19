@@ -5,12 +5,13 @@ using System;
 namespace Injure.Input;
 
 public readonly struct ActionID : IEquatable<ActionID> {
-	internal readonly int Val;
-	internal ActionID(int val) => Val = val;
+	public bool IsValid => Value != 0;
+	internal readonly uint Value;
+	internal ActionID(uint value) => Value = value;
 
-	public bool Equals(ActionID other) => Val == other.Val;
+	public bool Equals(ActionID other) => Value == other.Value;
 	public override bool Equals(object? obj) => obj is ActionID other && Equals(other);
-	public override int GetHashCode() => Val;
-	public static bool operator ==(ActionID left, ActionID right) => left.Val == right.Val;
-	public static bool operator !=(ActionID left, ActionID right) => left.Val != right.Val;
+	public override int GetHashCode() => unchecked((int)Value);
+	public static bool operator ==(ActionID left, ActionID right) => left.Value == right.Value;
+	public static bool operator !=(ActionID left, ActionID right) => left.Value != right.Value;
 }

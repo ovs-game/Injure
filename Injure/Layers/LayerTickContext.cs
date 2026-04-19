@@ -5,8 +5,8 @@ using Injure.Timing;
 
 namespace Injure.Layers;
 
-public readonly ref struct LayerTickContext(PerfTick perfTick, double dt, double rawDt, double time, double rawTime, ulong tickNum, InputView input) {
-	public PerfTick PerfTick { get; } = perfTick;
+public readonly ref struct LayerTickContext(MonoTick monoTick, double dt, double rawDt, double time, double rawTime, ulong tickNum, InputView input) {
+	public MonoTick MonoTick { get; } = monoTick;
 	public double DeltaTime { get; } = dt;
 	public double RawDeltaTime { get; } = rawDt;
 	public double Time { get; } = time;

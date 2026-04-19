@@ -3,9 +3,9 @@
 using System;
 using System.Collections.Generic;
 
-using Injure.Core;
 using Injure.Graphics;
 using Injure.Input;
+using Injure.Scheduling;
 
 namespace Injure.Layers;
 
@@ -15,8 +15,8 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	private sealed class LayerEntry {
 		public required Layer Layer { get; init; }
 		public required TickerHandle Ticker { get; set; }
-		public InputViewScratch Scratch { get; } = new InputViewScratch();
-		public InputEventSeq NextInputSeq { get; set; }
+		//public InputViewScratch Scratch { get; } = new InputViewScratch();
+		//public InputEventSeq NextInputSeq { get; set; }
 		public LayerTagSet Tags;
 	}
 
@@ -190,6 +190,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 			Span<ResolvedPassState> states = entries.Count <= 64 ? stackalloc ResolvedPassState[entries.Count] : new ResolvedPassState[entries.Count];
 			resolvePassStates(states);
 
+			/*
 			InputEventSeq nowSeq = InputCollector.NextSeq;
 			for (int i = 0; i < entries.Count; i++) {
 				LayerEntry ent = entries[i];
@@ -198,6 +199,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 				if (!states[i].Has(LayerPassMask.Input))
 					ent.NextInputSeq = nowSeq;
 			}
+			*/
 
 			double rawDt = info.Elapsed.ToSeconds();
 			for (int i = entries.Count - 1; i >= 0; i--) {
@@ -209,26 +211,32 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 				if (ent.Ticker != ticker)
 					continue;
 				bool consumeInput = st.Has(LayerPassMask.Input);
+				/*
 				ReadOnlySpan<InputActionEvent> events = consumeInput ?
 					InputCollector.ReadSince(ent.NextInputSeq) :
 					ReadOnlySpan<InputActionEvent>.Empty;
 				InputView input = new InputView(events, ent.Scratch);
+				*/
 
 				double dt = tm.Transform(rawDt);
 				tm.Advance(dt, rawDt);
-				LayerTickContext ctx = new LayerTickContext(info.ActualAt, dt, rawDt, tm.Time, tm.RawTime, tm.TickNum, input);
+				LayerTickContext ctx = new LayerTickContext(info.ActualAt, dt, rawDt, tm.Time, tm.RawTime, tm.TickNum, InputView.Rest);
 				ent.Layer.UpdateCore(in ctx);
+				/*
 				if (consumeInput)
 					ent.NextInputSeq = InputCollector.NextSeq;
+				*/
 			}
 		} finally {
 			callbackDepth--;
 		}
 		applyPending();
+		/*
 		if (tryGetOldestLiveInputSeq(out InputEventSeq oldest))
 			InputCollector.DiscardBefore(oldest);
 		else
 			InputCollector.DiscardAll();
+		*/
 	}
 
 	private void resolvePassStates(Span<ResolvedPassState> dst) {
@@ -251,6 +259,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		}
 	}
 
+	/*
 	private bool tryGetOldestLiveInputSeq(out InputEventSeq oldest) {
 		bool found = false;
 		oldest = InputEventSeq.Zero;
@@ -264,6 +273,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		}
 		return found;
 	}
+	*/
 
 	// ==========================================================================
 	// pending ops
@@ -301,7 +311,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		LayerEntry ent = new LayerEntry {
 			Layer = layer,
 			Ticker = ticker,
-			NextInputSeq = InputCollector.NextSeq,
+			//NextInputSeq = 0,//InputCollector.NextSeq,
 			Tags = new LayerTagSet(layer.Tags)
 		};
 		if (pushToTop)
@@ -342,7 +352,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		entries[idx] = new LayerEntry {
 			Layer = newLayer,
 			Ticker = newTicker,
-			NextInputSeq = InputCollector.NextSeq,
+			//NextInputSeq = 0,//InputCollector.NextSeq,
 			Tags = new LayerTagSet(newLayer.Tags)
 		};
 		if (oldTicker != newTicker)
@@ -360,7 +370,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 			tickers.Unsubscribe(sub.Ticker, sub.Callback);
 		refcounts.Clear();
 		subs.Clear();
-		InputCollector.DiscardAll();
+		//InputCollector.DiscardAll();
 	}
 
 	// ==========================================================================

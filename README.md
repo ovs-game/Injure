@@ -1,3 +1,5 @@
+## completely broken as of right now while i sort out a bunch of internal stuff
+
 game framework thing that was born because XNA/FNA kind of sucked, currently in early active development and not very usable yet, built on top of SDL2, WebGPU, and miniaudio
 
 ----------
@@ -12,16 +14,17 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 ----------
 TODO:
 
-- [active] public optimized swizzle/convert api
+- [active] custom closed enum types, aiming for `[ClosedEnum]` / `[ClosedFlags]` / `[ClosedUnion]`
+- switch over the codebase to the closed enum types
+- finish the input system, it got put on hold because c# enums suck
+- dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
+- add a test game into the source tree so testing is less of a pain in the ass
+- public optimized swizzle/convert api
   - more SIMD kernels, there's barely any right now
   - benchmarks, as well as looking at the codegen to make sure nothing stupid is going on
   - maybe a few more packed formats, also maybe arbitrary RGBA8x4 / mayybe RGB8x3 permutations
-- game-facing renderer config api and some way to adjust the adjustable config settings on the fly
-- add a test game into the source tree so testing is less of a pain in the ass
 - ~~FIX~~ WRITE THE RENDERING DOCS!!! i don't have the image i wanted to attach alongside this
 - add an uncaptured error callback and an error scope api into `Rendering`, right now something like a validation error triggers a panic in `wgpu-native` and then it can't unwind across an ffi boundary so it just aborts the entire process
-- dedicated docs for the asset system. honestly, most of the engine needs dedicated docs, but assets should probably be first, it doesn't work like a traditional asset system
-- stop having the todo here and use github issues
 - the text renderer
   - [priority] write tests for like everything that can be automatically tested, this is also going to involve somehow being able to do things that need `WebGPURenderer` without actually pulling a renderer
   - way to scale/etc text post-make

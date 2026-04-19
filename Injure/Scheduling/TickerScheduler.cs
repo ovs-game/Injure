@@ -6,25 +6,25 @@ using System.Diagnostics;
 
 using Injure.Timing;
 
-namespace Injure.Core;
+namespace Injure.Scheduling;
 
 internal sealed class ScheduledTicker {
 	private readonly TickerOptions options;
 	private TickerTiming timing;
 
 	private bool hadCallback;
-	private PerfTick lastScheduledAt;
-	private PerfTick lastActualAt;
+	private MonoTick lastScheduledAt;
+	private MonoTick lastActualAt;
 	private uint lastBatchID;
 	private int runsThisBatch;
 
-	public PerfTick NextAt { get; private set; }
+	public MonoTick NextAt { get; private set; }
 	public int Priority => options.Priority;
 	public ulong InsertionOrder { get; private set; } // tie breaker for deterministic sorting of equal ones
 	internal event TickerCallback? CallbackEv;
 
 	public ScheduledTicker(in TickerSpec spec) {
-		if (spec.Timing.Period == PerfTick.Zero)
+		if (spec.Timing.Period == MonoTick.Zero)
 			throw new ArgumentOutOfRangeException(nameof(spec), "period must be nonzero");
 		if (spec.Options.OverrunMode == TickerOverrunMode.CatchUp)
 			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(spec.Options.MaxBurst);
@@ -32,18 +32,18 @@ internal sealed class ScheduledTicker {
 		timing = spec.Timing;
 
 		hadCallback = false;
-		lastScheduledAt = PerfTick.Zero;
-		lastActualAt = PerfTick.Zero;
+		lastScheduledAt = MonoTick.Zero;
+		lastActualAt = MonoTick.Zero;
 		lastBatchID = 0;
 		runsThisBatch = 0;
-		NextAt = PerfTick.Zero;
+		NextAt = MonoTick.Zero;
 		InsertionOrder = 0;
 	}
 
-	public void Activate(PerfTick commitAt, ulong insertionOrder) {
+	public void Activate(MonoTick commitAt, ulong insertionOrder) {
 		hadCallback = false;
-		lastScheduledAt = PerfTick.Zero;
-		lastActualAt = PerfTick.Zero;
+		lastScheduledAt = MonoTick.Zero;
+		lastActualAt = MonoTick.Zero;
 		lastBatchID = 0;
 		runsThisBatch = 0;
 		NextAt = options.StartMode switch {
@@ -54,29 +54,29 @@ internal sealed class ScheduledTicker {
 		InsertionOrder = insertionOrder;
 	}
 
-	public void Retime(PerfTick commitAt, in TickerTiming tm, TickerRetimingMode mode) {
-		if (tm.Period == PerfTick.Zero)
+	public void Retime(MonoTick commitAt, in TickerTiming tm, TickerRetimingMode mode) {
+		if (tm.Period == MonoTick.Zero)
 			throw new ArgumentOutOfRangeException(nameof(tm), "period must be nonzero");
 
-		PerfTick oldPeriod = timing.Period;
-		PerfTick oldNextAt = NextAt;
+		MonoTick oldPeriod = timing.Period;
+		MonoTick oldNextAt = NextAt;
 		timing = tm;
 		switch (mode) {
 		case TickerRetimingMode.KeepPhase:
 			hadCallback = false;
-			lastScheduledAt = PerfTick.Zero;
-			lastActualAt = PerfTick.Zero;
+			lastScheduledAt = MonoTick.Zero;
+			lastActualAt = MonoTick.Zero;
 			lastBatchID = 0;
 			runsThisBatch = 0;
 			NextAt = commitAt + timing.InitialOffset;
 			break;
 		case TickerRetimingMode.RestartFromCommitTime:
-			if (oldPeriod == PerfTick.Zero)
+			if (oldPeriod == MonoTick.Zero)
 				throw new InternalStateException("oldPeriod is somehow zero, this should've been rejected earlier");
 			if (oldNextAt > commitAt) {
-				PerfTick rem = oldNextAt - commitAt;
+				MonoTick rem = oldNextAt - commitAt;
 				UInt128 newrem128 = ((UInt128)rem.Value * (UInt128)timing.Period.Value) / (UInt128)oldPeriod.Value;
-				NextAt = commitAt + checked((PerfTick)(ulong)newrem128);
+				NextAt = commitAt + checked((MonoTick)(ulong)newrem128);
 			} else {
 				NextAt = commitAt;
 			}
@@ -84,7 +84,7 @@ internal sealed class ScheduledTicker {
 		}
 	}
 
-	public bool TryRunOneIfDue(PerfTick now, uint batchID) {
+	public bool TryRunOneIfDue(MonoTick now, uint batchID) {
 		if (now < NextAt)
 			return false;
 		switch (options.OverrunMode) {
@@ -100,21 +100,21 @@ internal sealed class ScheduledTicker {
 			runsThisBatch++;
 			return true;
 		case TickerOverrunMode.Once:
-			PerfTick scheduledAt = NextAt;
+			MonoTick scheduledAt = NextAt;
 			doCallback(scheduledAt, now);
-			PerfTick missed = (now - scheduledAt) / timing.Period;
-			NextAt = scheduledAt + checked(timing.Period * (missed + (PerfTick)1));
+			MonoTick missed = (now - scheduledAt) / timing.Period;
+			NextAt = scheduledAt + checked(timing.Period * (missed + (MonoTick)1));
 			return true;
 		default:
 			throw new UnreachableException();
 		}
 	}
 
-	private void doCallback(PerfTick scheduledAt, PerfTick actualAt) {
-		PerfTick previousScheduledAt = hadCallback ? lastScheduledAt : scheduledAt - timing.Period;
-		PerfTick previousActualAt = hadCallback ? lastActualAt : actualAt - timing.Period;
-		PerfTick elapsed = hadCallback ? actualAt - lastActualAt : timing.Period;
-		PerfTick late = actualAt >= scheduledAt ? actualAt - scheduledAt : PerfTick.Zero;
+	private void doCallback(MonoTick scheduledAt, MonoTick actualAt) {
+		MonoTick previousScheduledAt = hadCallback ? lastScheduledAt : scheduledAt - timing.Period;
+		MonoTick previousActualAt = hadCallback ? lastActualAt : actualAt - timing.Period;
+		MonoTick elapsed = hadCallback ? actualAt - lastActualAt : timing.Period;
+		MonoTick late = actualAt >= scheduledAt ? actualAt - scheduledAt : MonoTick.Zero;
 		CallbackEv?.Invoke(new TickCallbackInfo(
 			ScheduledAt: scheduledAt,
 			ActualAt: actualAt,
@@ -133,7 +133,7 @@ internal sealed class ScheduledTicker {
 public readonly record struct TickerSchedulerOptions(
 	int BatchCallLimit = 64,
 	int EventPollInterval = 8,
-	PerfTick MaxBatchDuration = default
+	MonoTick MaxBatchDuration = default
 );
 
 // not thread safe
@@ -213,7 +213,7 @@ public sealed class TickerScheduler(in TickerSchedulerOptions options) : ITicker
 	}
 
 	public void ApplyPending() {
-		PerfTick commitAt = PerfTick.GetCurrent();
+		MonoTick commitAt = MonoTick.GetCurrent();
 		foreach (TickerCommand cmd in pending) {
 			if (!tryGetSlot(cmd.Handle, out int slotIndex))
 				continue;
@@ -242,14 +242,14 @@ public sealed class TickerScheduler(in TickerSchedulerOptions options) : ITicker
 	public void RunDueTickers() {
 		uint batchID = ++nextBatchID;
 		int calls = 0;
-		PerfTick start = PerfTick.GetCurrent();
+		MonoTick start = MonoTick.GetCurrent();
 		for (;;) {
 			rebuildActiveSlots();
 			bool ranAny = false;
 			foreach (TickerSlot slot in slots) {
 				if (slot.State != TickerSlotState.Active)
 					continue;
-				PerfTick now = PerfTick.GetCurrent();
+				MonoTick now = MonoTick.GetCurrent();
 				if (!slot.Scheduled.TryRunOneIfDue(now, batchID))
 					continue;
 				ranAny = true;
@@ -258,8 +258,8 @@ public sealed class TickerScheduler(in TickerSchedulerOptions options) : ITicker
 					rebuildActiveSlots();
 					return;
 				}
-				if (options.MaxBatchDuration > PerfTick.Zero) {
-					PerfTick elapsed = PerfTick.GetCurrent() - start;
+				if (options.MaxBatchDuration > MonoTick.Zero) {
+					MonoTick elapsed = MonoTick.GetCurrent() - start;
 					if (elapsed >= options.MaxBatchDuration) {
 						rebuildActiveSlots();
 						return;
@@ -273,9 +273,9 @@ public sealed class TickerScheduler(in TickerSchedulerOptions options) : ITicker
 		}
 	}
 
-	public bool TryGetEarliestNextAt(out PerfTick nextAt) {
+	public bool TryGetEarliestNextAt(out MonoTick nextAt) {
 		if (activeSlots.Count == 0) {
-			nextAt = PerfTick.Zero;
+			nextAt = MonoTick.Zero;
 			return false;
 		}
 		int firstSlot = activeSlots[0];

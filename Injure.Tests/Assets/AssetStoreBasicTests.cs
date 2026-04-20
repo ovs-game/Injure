@@ -13,7 +13,7 @@ public sealed class AssetStoreBasicTests {
 		TestDependencyWatcher watcher = new TestDependencyWatcher();
 		store.RegisterSource(ownerID, new TestSource(new TestDependency("dep")), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		AssetCreatorHandle ch = store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		AssetCreatorHandle ch = store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
 		AssetDependencyWatcherHandle wh = store.RegisterDependencyWatcher(ownerID, watcher, "watcher");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
@@ -71,7 +71,7 @@ public sealed class AssetStoreBasicTests {
 		AssetStore store = new AssetStore();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		TestAsset v = asset.Borrow().Value;

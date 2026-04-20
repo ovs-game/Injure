@@ -13,7 +13,7 @@ public sealed class AssetStoreDependencyTests {
 		store.RegisterSource(ownerID, new TestSource(new TestDependency("dep-a")), "source");
 		store.RegisterResolver(ownerID, new FetchThenNotHandledResolver(new TestDependency("dep-b")), "resolver-a", localPriority: 1);
 		store.RegisterResolver(ownerID, new TestResolver(new TestDependency("dep-c")), "resolver-b", localPriority: 0);
-		store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		AssetLease<TestAsset> lease = asset.Borrow();

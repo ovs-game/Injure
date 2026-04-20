@@ -98,11 +98,15 @@ public readonly struct AssetDependencyWatcherHandle {
 public sealed class AssetStore {
 	// ==========================================================================
 	// versions/slots
-	private sealed class PendingPrepared(IUntypedAssetCreator creator, AssetPreparedData prepared, ImmutableArray<IAssetDependency> deps, ulong version) {
-		public readonly IUntypedAssetCreator Creator = creator;
-		public readonly AssetPreparedData Prepared = prepared;
+	private interface IPendingAssetValue : IDisposable {
+		object FinalizeValue(AssetID id);
+	}
+
+	private sealed class PendingPrepared(IPendingAssetValue prepared, ImmutableArray<IAssetDependency> deps, ulong version) : IDisposable {
+		public readonly IPendingAssetValue Prepared = prepared;
 		public readonly ImmutableArray<IAssetDependency> Dependencies = deps;
 		public readonly ulong Version = version;
+		public void Dispose() => Prepared.Dispose();
 	}
 
 	private sealed class PendingRetired(object val, ulong epoch) {
@@ -137,11 +141,11 @@ public sealed class AssetStore {
 		private AssetVersion<T>? curr;
 		private PendingPrepared? pending;
 
-		private Task? prepareTask;
+		private Task? reloadPrepareTask;
 		private Task? materializeTask;
 
 		private Exception? lastEx;
-		private ulong nextver = 1;
+		private ulong newestRequestedVersion = 1;
 
 		public readonly ulong SlotID = slotID;
 		public AssetStore Store { get; } = store;
@@ -181,6 +185,7 @@ public sealed class AssetStore {
 		}
 
 		public async Task WarmAsync(CancellationToken ct) {
+			ct.ThrowIfCancellationRequested();
 			if (Volatile.Read(ref curr) is not null)
 				return;
 			await getOrStartMaterialize().WaitAsync(ct).ConfigureAwait(false);
@@ -189,6 +194,8 @@ public sealed class AssetStore {
 		}
 
 		public async Task QueueReloadAsync(CancellationToken ct) {
+			ct.ThrowIfCancellationRequested();
+
 			// if there's nothing to replace that's just a warm
 			if (Volatile.Read(ref curr) is null) {
 				await WarmAsync(ct).ConfigureAwait(false);
@@ -198,141 +205,138 @@ public sealed class AssetStore {
 			Task waitTask;
 			TaskCompletionSource<bool>? startPrepare = null;
 			lock (@lock) {
-				// if we already have a prepared reload, don't queue another one on top
-				if (pending is not null)
-					return;
-				if (prepareTask is not null) {
+				if (curr is null) {
+					waitTask = getOrStartMaterializeLocked(out TaskCompletionSource<bool>? startMaterialize);
+					if (startMaterialize is not null)
+						_ = runMaterializeAsync(startMaterialize);
+					goto wait;
+				}
+
+				checked {
+					++newestRequestedVersion;
+				}
+				pending?.Dispose();
+				pending = null;
+
+				if (reloadPrepareTask is not null) {
 					// if we waited here from inside the same load chain it'd deadlock
 					checkCycle(new AssetKey(AssetID, typeof(T)));
 				} else {
 					startPrepare = new TaskCompletionSource<bool>(
 						TaskCreationOptions.RunContinuationsAsynchronously
 					);
-					prepareTask = startPrepare.Task;
+					reloadPrepareTask = startPrepare.Task;
 				}
-				waitTask = prepareTask;
+				waitTask = reloadPrepareTask;
 			}
 			if (startPrepare is not null)
-				_ = runPrepareAsync(startPrepare, reload: true);
+				_ = runReloadPrepareLoopAsync(startPrepare);
+wait:
 			await waitTask.WaitAsync(ct).ConfigureAwait(false);
-			if (waitTask.IsCompletedSuccessfully && Volatile.Read(ref pending) is null)
-				throw new InternalStateException("queueing a reload finished without actually queueing a reload");
 		}
 
-		private async Task runPrepareAsync(TaskCompletionSource<bool> tcs, bool reload) {
-			IUntypedAssetCreator creator;
-			AssetPreparedData prepared;
-			ImmutableArray<IAssetDependency> deps;
-			try {
-				(creator, prepared, deps) = await Store.tryPrepareValueAsync<T>(AssetID, CancellationToken.None).ConfigureAwait(false);
-			} catch (Exception caught) {
-				lock (@lock) {
-					prepareTask = null;
-					lastEx = caught;
-				}
-				tcs.SetException(caught);
-				return;
-			}
+		private async Task runReloadPrepareLoopAsync(TaskCompletionSource<bool> tcs) {
+			for (;;) {
+				ulong targetVersion;
 
-			lock (@lock) {
-				prepareTask = null;
-				lastEx = null;
-				if (curr is not null && !reload) {
-					// background warm finished after something else already did
-					// a sync load, no reason to put this up for reload
-					(prepared as IDisposable)?.Dispose();
-				} else {
-					(pending?.Prepared as IDisposable)?.Dispose();
-					pending = new PendingPrepared(creator, prepared, deps, nextver++);
+				lock (@lock) {
+					if (curr is null) {
+						reloadPrepareTask = null;
+						tcs.SetResult(true);
+						return;
+					}
+					targetVersion = newestRequestedVersion;
 				}
+
+				PendingPrepared prepared;
+				try {
+					(IPendingAssetValue pendingAssetValue, ImmutableArray<IAssetDependency> deps) =
+						await Store.tryPrepareValueAsync<T>(AssetID).ConfigureAwait(false);
+					prepared = new PendingPrepared(pendingAssetValue, deps, targetVersion);
+				} catch (Exception caught) {
+					lock (@lock) {
+						if (targetVersion == newestRequestedVersion) {
+							reloadPrepareTask = null;
+							lastEx = caught;
+							tcs.SetException(caught);
+							return;
+						}
+					}
+					continue;
+				}
+
+				lock (@lock) {
+					if (targetVersion == newestRequestedVersion) {
+						reloadPrepareTask = null;
+						lastEx = null;
+						pending?.Dispose();
+						pending = prepared;
+						tcs.SetResult(true);
+						return;
+					}
+				}
+				prepared.Dispose();
 			}
-			tcs.SetResult(true);
 		}
 
 		private async Task runMaterializeAsync(TaskCompletionSource<bool> tcs) {
+			PendingPrepared? prepared = null;
+			T? newval = null;
 			try {
-				for (;;) {
-					PendingPrepared? pprep = null;
-					Task? waitPrepare = null;
-					TaskCompletionSource<bool>? startPrepare = null;
-					lock (@lock) {
-						if (curr is not null) {
-							materializeTask = null;
-							tcs.SetResult(true);
-							return;
-						}
-						if (pending is not null) {
-							pprep = pending;
-							pending = null;
-						} else if (prepareTask is not null) {
-							waitPrepare = prepareTask;
-						} else {
-							startPrepare = new TaskCompletionSource<bool>(
-								TaskCreationOptions.RunContinuationsAsynchronously
-							);
-							prepareTask = startPrepare.Task;
-							waitPrepare = prepareTask;
-						}
-					}
-					if (startPrepare is not null)
-						_ = runPrepareAsync(startPrepare, reload: false);
-					if (waitPrepare is not null) {
-						await waitPrepare.ConfigureAwait(false);
-						continue;
-					}
-					if (pprep is null)
-						throw new InternalStateException("expected to have a prepared asset by this point");
+				(IPendingAssetValue pendingAssetValue, ImmutableArray<IAssetDependency> deps) =
+					await Store.tryPrepareValueAsync<T>(AssetID).ConfigureAwait(false);
+				prepared = new PendingPrepared(pendingAssetValue, deps, version: 1);
+				newval = finalizePrepared<T>(AssetID, prepared);
+				AssetVersion<T> newver = new AssetVersion<T>(newval, prepared.Version, prepared.Dependencies);
 
-					// at this point `curr is null` and we exclusively own the
-					// prepared asset, finalize it outside the lock
-					T newval = finalizePrepared<T>(AssetID, pprep);
-					AssetVersion<T> newver = new AssetVersion<T>(newval, pprep.Version, pprep.Dependencies);
-
-					lock (@lock) {
-						if (curr is null) {
-							curr = newver;
-							lastEx = null;
-							Store.onSlotPublished(this, ImmutableArray<IAssetDependency>.Empty, newver.Dependencies);
-						} else {
-							// another thread beat us while we were waiting for the lock
-							(newver.Value as IDisposable)?.Dispose();
-						}
+				lock (@lock) {
+					if (curr is null) {
+						curr = newver;
+						lastEx = null;
 						materializeTask = null;
-						tcs.SetResult(true);
+						newval = null;
+						Store.onSlotPublished(this, ImmutableArray<IAssetDependency>.Empty, newver.Dependencies);
+					} else {
+						materializeTask = null;
 					}
-					(pprep.Prepared as IDisposable)?.Dispose();
-					return;
+					tcs.SetResult(true);
 				}
 			} catch (Exception caught) {
 				lock (@lock) {
 					lastEx = caught;
 					materializeTask = null;
+					tcs.SetException(caught);
 				}
-				tcs.SetException(caught);
+			} finally {
+				prepared?.Dispose();
+				(newval as IDisposable)?.Dispose();
 			}
 		}
 
 		private Task getOrStartMaterialize() {
-			Task waitTask;
-			TaskCompletionSource<bool>? startMaterialize = null;
 			lock (@lock) {
-				// if we already have a materialized curr version don't replace it
-				if (curr is not null)
-					return Task.CompletedTask;
-				if (materializeTask is not null) {
-					// if we waited here from inside the same load chain it'd deadlock
-					checkCycle(new AssetKey(AssetID, typeof(T)));
-				} else {
-					startMaterialize = new TaskCompletionSource<bool>(
-						TaskCreationOptions.RunContinuationsAsynchronously
-					);
-					materializeTask = startMaterialize.Task;
-				}
-				waitTask = materializeTask;
+				Task task = getOrStartMaterializeLocked(out TaskCompletionSource<bool>? startMaterialize);
+				if (startMaterialize is not null)
+					_ = runMaterializeAsync(startMaterialize);
+				return task;
 			}
-			if (startMaterialize is not null)
-				_ = runMaterializeAsync(startMaterialize);
-			return waitTask;
+		}
+
+		private Task getOrStartMaterializeLocked(out TaskCompletionSource<bool>? startMaterialize) {
+			startMaterialize = null;
+
+			if (curr is not null)
+				return Task.CompletedTask;
+			if (materializeTask is not null) {
+				// if we waited here from inside the same load chain it'd deadlock
+				checkCycle(new AssetKey(AssetID, typeof(T)));
+				return materializeTask;
+			}
+			startMaterialize = new TaskCompletionSource<bool>(
+				TaskCreationOptions.RunContinuationsAsynchronously
+			);
+			materializeTask = startMaterialize.Task;
+			return materializeTask;
 		}
 
 		public bool ApplyQueuedReload(ulong epoch) {
@@ -340,6 +344,8 @@ public sealed class AssetStore {
 			lock (@lock) {
 				if (pending is null)
 					return false;
+				if (pending.Version != newestRequestedVersion)
+					throw new InternalStateException("stale pending reload was left publishable");
 				pprep = pending;
 				pending = null;
 			}
@@ -351,7 +357,7 @@ public sealed class AssetStore {
 			} catch (Exception caught) {
 				lock (@lock)
 					lastEx = caught;
-				(pprep.Prepared as IDisposable)?.Dispose();
+				pprep.Dispose();
 				return false;
 			}
 
@@ -363,7 +369,7 @@ public sealed class AssetStore {
 				Store.onSlotPublished(this, oldver?.Dependencies ?? ImmutableArray<IAssetDependency>.Empty, newver.Dependencies);
 			}
 
-			(pprep.Prepared as IDisposable)?.Dispose();
+			pprep.Dispose();
 #pragma warning disable IDE0001 // name can be simplified
 			if (oldver is not null)
 				Store.QueueRetire<T>(oldver.Value, epoch);
@@ -374,58 +380,77 @@ public sealed class AssetStore {
 
 	// ==========================================================================
 	// creation pipeline boilerplate wrappers
-	private interface ISourceEntry {
-		Task<AssetSourceResult> TrySourceAsync(AssetSourceInfo info, IAssetDependencyCollector coll, CancellationToken ct);
-	}
-	private sealed class SyncSourceEntry(IAssetSource source) : ISourceEntry {
-		private readonly IAssetSource source = source;
-		public Task<AssetSourceResult> TrySourceAsync(AssetSourceInfo info, IAssetDependencyCollector coll, CancellationToken ct) {
-			ct.ThrowIfCancellationRequested();
-			return Task.FromResult(source.TrySource(info, coll));
+	private sealed class DirectPendingAssetValue<T>(T val) : IPendingAssetValue where T : class {
+		private T? val = val;
+
+		public object FinalizeValue(AssetID id) {
+			T ret = val ?? throw new InternalStateException("direct asset value finalized twice");
+			val = null;
+			return ret;
 		}
-	}
-	private sealed class AsyncSourceEntry(IAssetSourceAsync source) : ISourceEntry {
-		private readonly IAssetSourceAsync source = source;
-		public Task<AssetSourceResult> TrySourceAsync(AssetSourceInfo info, IAssetDependencyCollector coll, CancellationToken ct) =>
-			source.TrySourceAsync(info, coll, ct);
+
+		public void Dispose() {
+			(val as IDisposable)?.Dispose();
+			val = null;
+		}
 	}
 
-	private interface IResolverEntry {
-		Task<AssetResolveResult> TryResolveAsync(AssetResolveAsyncInfo info, IAssetDependencyCollector coll, CancellationToken ct);
-	}
-	private sealed class SyncResolverEntry(IAssetResolver resolver) : IResolverEntry {
-		private readonly IAssetResolver resolver = resolver;
-		public Task<AssetResolveResult> TryResolveAsync(AssetResolveAsyncInfo info, IAssetDependencyCollector coll, CancellationToken ct) {
-			ct.ThrowIfCancellationRequested();
-			AssetResolveInfo syncInfo = new AssetResolveInfo(info.AssetID,
-				(AssetID id) => info.FetchAsync(id, ct).GetAwaiter().GetResult());
-			return Task.FromResult(resolver.TryResolve(syncInfo, coll));
+	private sealed class StagedPendingAssetValue<T, TPrepared>(IAssetStagedCreator<T, TPrepared> creator, TPrepared prepared)
+		: IPendingAssetValue where T : class where TPrepared : AssetPreparedData {
+		private readonly IAssetStagedCreator<T, TPrepared> creator = creator;
+		private TPrepared? prepared = prepared;
+
+		public object FinalizeValue(AssetID id) {
+			TPrepared p = prepared ?? throw new InternalStateException("staged asset value finalized twice");
+			prepared = null;
+			return creator.Finalize(new AssetFinalizeInfo<TPrepared>(id, p));
+		}
+
+		public void Dispose() {
+			(prepared as IDisposable)?.Dispose();
+			prepared = null;
 		}
 	}
-	private sealed class AsyncResolverEntry(IAssetResolverAsync resolver) : IResolverEntry {
-		private readonly IAssetResolverAsync resolver = resolver;
-		public Task<AssetResolveResult> TryResolveAsync(AssetResolveAsyncInfo info, IAssetDependencyCollector coll, CancellationToken ct) {
-			return resolver.TryResolveAsync(info, coll, ct);
-		}
+
+	private readonly record struct UntypedCreateResult(
+		AssetCreateResultKind Kind,
+		IPendingAssetValue? Value = null
+	) {
+		public static UntypedCreateResult NotHandled() => new UntypedCreateResult(AssetCreateResultKind.NotHandled);
+		public static UntypedCreateResult Success(IPendingAssetValue value) => new UntypedCreateResult(AssetCreateResultKind.Success, value);
 	}
 
 	private interface IUntypedAssetCreator {
 		Type AssetType { get; }
-		Task<AssetCreatePreparedResult> TryCreateAsync(AssetCreateInfo info, IAssetDependencyCollector coll, CancellationToken ct);
-		AssetCreateResult<object> TryFinalize(AssetFinalizeInfo info);
+		ValueTask<UntypedCreateResult> TryCreateAsync(AssetCreateInfo info, IAssetDependencyCollector coll, CancellationToken ct);
 	}
-	private sealed class UntypedAssetCreator<T>(IAssetCreatorAsync<T> creator) : IUntypedAssetCreator where T : class {
-		private readonly IAssetCreatorAsync<T> creator = creator;
+
+	private sealed class UntypedDirectAssetCreator<T>(IAssetCreator<T> creator) : IUntypedAssetCreator where T : class {
+		private readonly IAssetCreator<T> creator = creator;
 		public Type AssetType => typeof(T);
-		public Task<AssetCreatePreparedResult> TryCreateAsync(AssetCreateInfo info, IAssetDependencyCollector coll, CancellationToken ct) {
-			return creator.TryCreateAsync(info, coll, ct);
-		}
-		public AssetCreateResult<object> TryFinalize(AssetFinalizeInfo info) {
-			AssetCreateResult<T> result = creator.TryFinalize(info);
+		public async ValueTask<UntypedCreateResult> TryCreateAsync(AssetCreateInfo info, IAssetDependencyCollector coll, CancellationToken ct) {
+			AssetCreateResult<T> result = await creator.TryCreateAsync(info, coll, ct).ConfigureAwait(false);
 			return result.Kind.Tag switch {
-				AssetCreateResultKind.Case.NotHandled => AssetCreateResult<object>.NotHandled(),
-				AssetCreateResultKind.Case.Success => AssetCreateResult<object>.Success(result.Value!), // null will be handled later
-				AssetCreateResultKind.Case.Error => AssetCreateResult<object>.Error(result.Exception!), // null will be handled later
+				AssetCreateResultKind.Case.NotHandled => UntypedCreateResult.NotHandled(),
+				AssetCreateResultKind.Case.Success => UntypedCreateResult.Success(new DirectPendingAssetValue<T>(
+					result.Value ?? throw new AssetLoadException(info.AssetID, typeof(T), "asset creator returned Success but didn't set Value")
+				)),
+				_ => throw new UnreachableException()
+			};
+		}
+	}
+
+	private sealed class UntypedStagedAssetCreator<T, TPrepared>(IAssetStagedCreator<T, TPrepared> creator)
+		: IUntypedAssetCreator where T : class where TPrepared : AssetPreparedData {
+		private readonly IAssetStagedCreator<T, TPrepared> creator = creator;
+		public Type AssetType => typeof(T);
+		public async ValueTask<UntypedCreateResult> TryCreateAsync(AssetCreateInfo info, IAssetDependencyCollector coll, CancellationToken ct) {
+			AssetPrepareResult<TPrepared> result = await creator.TryPrepareAsync(info, coll, ct).ConfigureAwait(false);
+			return result.Kind.Tag switch {
+				AssetCreateResultKind.Case.NotHandled => UntypedCreateResult.NotHandled(),
+				AssetCreateResultKind.Case.Success => UntypedCreateResult.Success(new StagedPendingAssetValue<T, TPrepared>(creator,
+					result.Prepared ?? throw new AssetLoadException(info.AssetID, typeof(T), "asset staged creator returned Success but didn't set Prepared")
+				)),
 				_ => throw new UnreachableException()
 			};
 		}
@@ -479,7 +504,7 @@ public sealed class AssetStore {
 		public readonly AssetKey Key = key;
 		public readonly AssetLoadStackFrame? Prev = prev;
 	}
-	private static readonly AsyncLocal<AssetLoadStackFrame> loadStackTop = new AsyncLocal<AssetLoadStackFrame>();
+	private static readonly AsyncLocal<AssetLoadStackFrame?> loadStackTop = new AsyncLocal<AssetLoadStackFrame?>();
 
 	// ==========================================================================
 	// general bookkeeping
@@ -489,8 +514,8 @@ public sealed class AssetStore {
 	// ==========================================================================
 	// creation pipeline bookkeeping
 	private readonly Lock registryLock = new Lock();
-	private readonly OwnerOrderedRegistry<ISourceEntry> sources = new OwnerOrderedRegistry<ISourceEntry>();
-	private readonly OwnerOrderedRegistry<IResolverEntry> resolvers = new OwnerOrderedRegistry<IResolverEntry>();
+	private readonly OwnerOrderedRegistry<IAssetSource> sources = new OwnerOrderedRegistry<IAssetSource>();
+	private readonly OwnerOrderedRegistry<IAssetResolver> resolvers = new OwnerOrderedRegistry<IAssetResolver>();
 	private ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>> creators = ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>>.Empty;
 
 	// ==========================================================================
@@ -591,40 +616,7 @@ public sealed class AssetStore {
 	}
 
 	/// <summary>
-	/// Registers a non-async asset source.
-	/// </summary>
-	/// <param name="ownerID">Owner ID to register the source under.</param>
-	/// <param name="source">Source to register.</param>
-	/// <param name="localID">Local ID for the source, used for deterministic ordering and tie-breaking.</param>
-	/// <param name="localPriority">Owner-local priority; higher-priority sources within the same owner are tried first.</param>
-	/// <param name="beforeOwners">
-	/// If not <see langword="null"/>, this source will be tried before any sources registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <param name="afterOwners">
-	/// If not <see langword="null"/>, this source will only be tried after all sources registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <returns>
-	/// An opaque handle that can be passed to <see cref="UnregisterSource(AssetSourceHandle)"/>.
-	/// </returns>
-	/// <exception cref="OwnerOrderingException">
-	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
-	/// </exception>
-	public AssetSourceHandle RegisterSource(string ownerID, IAssetSource source, string localID,
-		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
-		ArgumentNullException.ThrowIfNull(source);
-		lock (registryLock) {
-			ulong id = sources.Register(new OwnerOrderedEntry<ISourceEntry>(
-				new SyncSourceEntry(source),
-				ownerID, localID, localPriority, beforeOwners, afterOwners
-			));
-			return new AssetSourceHandle(id);
-		}
-	}
-
-	/// <summary>
-	/// Registers an async asset source.
+	/// Registers an asset source.
 	/// </summary>
 	/// <param name="ownerID">Owner ID to register the source under.</param>
 	/// <param name="source">Source to register.</param>
@@ -648,12 +640,12 @@ public sealed class AssetStore {
 	/// <exception cref="OwnerOrderingException">
 	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
 	/// </exception>
-	public AssetSourceHandle RegisterSource(string ownerID, IAssetSourceAsync source, string localID,
+	public AssetSourceHandle RegisterSource(string ownerID, IAssetSource source, string localID,
 		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
 		ArgumentNullException.ThrowIfNull(source);
 		lock (registryLock) {
-			ulong id = sources.Register(new OwnerOrderedEntry<ISourceEntry>(
-				new AsyncSourceEntry(source),
+			ulong id = sources.Register(new OwnerOrderedEntry<IAssetSource>(
+				source,
 				ownerID, localID, localPriority, beforeOwners, afterOwners
 			));
 			return new AssetSourceHandle(id);
@@ -661,7 +653,7 @@ public sealed class AssetStore {
 	}
 
 	/// <summary>
-	/// Registers a non-async asset resolver.
+	/// Registers an asset resolver.
 	/// </summary>
 	/// <param name="ownerID">Owner ID to register the resolver under.</param>
 	/// <param name="resolver">Resolver to register.</param>
@@ -689,49 +681,30 @@ public sealed class AssetStore {
 		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
 		ArgumentNullException.ThrowIfNull(resolver);
 		lock (registryLock) {
-			ulong id = resolvers.Register(new OwnerOrderedEntry<IResolverEntry>(
-				new SyncResolverEntry(resolver),
+			ulong id = resolvers.Register(new OwnerOrderedEntry<IAssetResolver>(
+				resolver,
 				ownerID, localID, localPriority, beforeOwners, afterOwners
 			));
 			return new AssetResolverHandle(id);
 		}
 	}
 
-	/// <summary>
-	/// Registers an async asset resolver.
-	/// </summary>
-	/// <param name="ownerID">Owner ID to register the resolver under.</param>
-	/// <param name="resolver">Resolver to register.</param>
-	/// <param name="localID">Local ID for the resolver, used for deterministic ordering and tie-breaking.</param>
-	/// <param name="localPriority">Owner-local priority; higher-priority resolvers within the same owner are tried first.</param>
-	/// <param name="beforeOwners">
-	/// If not <see langword="null"/>, this resolver will be tried before any resolvers registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <param name="afterOwners">
-	/// If not <see langword="null"/>, this resolver will only be tried after all resolvers registered
-	/// under one of the specified owner IDs.
-	/// </param>
-	/// <returns>
-	/// An opaque handle that can be passed to <see cref="UnregisterResolver(AssetResolverHandle)"/>.
-	/// </returns>
-	/// <remarks>
-	/// <paramref name="localID"/> must be unique among all other resolvers registered in
-	/// this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
-	/// </remarks>
-	/// <exception cref="OwnerOrderingException">
-	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
-	/// </exception>
-	public AssetResolverHandle RegisterResolver(string ownerID, IAssetResolverAsync resolver, string localID,
+	private AssetCreatorHandle registerCreatorLocked(string ownerID, IUntypedAssetCreator creator, Type type, string localID,
 		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
-		ArgumentNullException.ThrowIfNull(resolver);
-		lock (registryLock) {
-			ulong id = resolvers.Register(new OwnerOrderedEntry<IResolverEntry>(
-				new AsyncResolverEntry(resolver),
-				ownerID, localID, localPriority, beforeOwners, afterOwners
-			));
-			return new AssetResolverHandle(id);
+		OwnerOrderedEntry<IUntypedAssetCreator> ent = new OwnerOrderedEntry<IUntypedAssetCreator>(
+			creator,
+			ownerID, localID, localPriority, beforeOwners, afterOwners
+		);
+		ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>> old = creators;
+		ulong id;
+		if (old.TryGetValue(type, out OwnerOrderedRegistry<IUntypedAssetCreator>? reg)) {
+			id = reg.Register(ent);
+		} else {
+			reg = new OwnerOrderedRegistry<IUntypedAssetCreator>();
+			id = reg.Register(ent);
+			Volatile.Write(ref creators, old.Add(type, reg));
 		}
+		return new AssetCreatorHandle(type, id);
 	}
 
 	/// <summary>
@@ -754,36 +727,35 @@ public sealed class AssetStore {
 	/// An opaque handle that can be passed to <see cref="UnregisterCreator(AssetCreatorHandle)"/>.
 	/// </returns>
 	/// <remarks>
-	/// <para>
 	/// <paramref name="localID"/> must be unique among all other creators for the type <typeparamref name="T"/>
 	/// registered in this <see cref="AssetStore"/> instance under this <paramref name="ownerID"/>.
-	/// </para>
-	/// <para>
-	/// Non-async creators are not supported.
-	/// </para>
 	/// </remarks>
 	/// <exception cref="OwnerOrderingException">
 	/// Thrown if the new ordering constraints are invalid or unsatisfiable.
 	/// </exception>
-	public AssetCreatorHandle RegisterCreator<T>(string ownerID, IAssetCreatorAsync<T> creator, string localID,
+	public AssetCreatorHandle RegisterCreator<T>(string ownerID, IAssetCreator<T> creator, string localID,
 		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null)
 		where T : class {
 		ArgumentNullException.ThrowIfNull(creator);
 		lock (registryLock) {
-			OwnerOrderedEntry<IUntypedAssetCreator> ent = new OwnerOrderedEntry<IUntypedAssetCreator>(
-				new UntypedAssetCreator<T>(creator),
-				ownerID, localID, localPriority, beforeOwners, afterOwners
-			);
-			ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>> old = creators;
-			ulong id;
-			if (old.TryGetValue(typeof(T), out OwnerOrderedRegistry<IUntypedAssetCreator>? reg)) {
-				id = reg.Register(ent);
-			} else {
-				reg = new OwnerOrderedRegistry<IUntypedAssetCreator>();
-				id = reg.Register(ent);
-				Volatile.Write(ref creators, old.Add(typeof(T), reg));
-			}
-			return new AssetCreatorHandle(typeof(T), id);
+			return registerCreatorLocked(ownerID, new UntypedDirectAssetCreator<T>(creator), typeof(T), localID,
+				localPriority, beforeOwners, afterOwners);
+		}
+	}
+
+	/// <summary>
+	/// Registers a staged asset creator of a specific asset type.
+	/// </summary>
+	/// <typeparam name="T">Asset type produced by the creator.</typeparam>
+	/// <typeparam name="TPrepared">Prepared-data intermediate type used by the creator.</typeparam>
+	/// <inheritdoc cref="RegisterCreator{T}(string, IAssetCreator{T}, string, int, IEnumerable{string}?, IEnumerable{string}?)"/>
+	public AssetCreatorHandle RegisterStagedCreator<T, TPrepared>(string ownerID, IAssetStagedCreator<T, TPrepared> creator, string localID,
+		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null)
+		where T : class where TPrepared : AssetPreparedData {
+		ArgumentNullException.ThrowIfNull(creator);
+		lock (registryLock) {
+			return registerCreatorLocked(ownerID, new UntypedStagedAssetCreator<T, TPrepared>(creator), typeof(T), localID,
+				localPriority, beforeOwners, afterOwners);
 		}
 	}
 
@@ -977,8 +949,8 @@ public sealed class AssetStore {
 				throw makeCycleException(key, prev!);
 	}
 
-	private async Task<(IUntypedAssetCreator Creator, AssetPreparedData Prepared, ImmutableArray<IAssetDependency> Dependencies)>
-		tryPrepareValueAsync<T>(AssetID id, CancellationToken ct) where T : class {
+	private async ValueTask<(IPendingAssetValue Prepared, ImmutableArray<IAssetDependency> Dependencies)>
+		tryPrepareValueAsync<T>(AssetID id, CancellationToken ct = default) where T : class {
 		AssetKey key = new AssetKey(id, typeof(T));
 		AssetLoadStackFrame? prev = loadStackTop.Value;
 		for (AssetLoadStackFrame? f = prev; f is not null; f = f.Prev)
@@ -988,24 +960,24 @@ public sealed class AssetStore {
 
 		try {
 			DependencyCollector rootColl = new DependencyCollector();
-			AssetData data = await tryAllResolversAsync(id, rootColl, typeof(T), ct).ConfigureAwait(false);
+			using AssetData data = await tryAllResolversAsync(id, rootColl, typeof(T), ct).ConfigureAwait(false);
+
 			AssetCreateInfo info = new AssetCreateInfo(id, data);
 			ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>> dictsnap = Volatile.Read(ref creators);
 			if (dictsnap.TryGetValue(typeof(T), out OwnerOrderedRegistry<IUntypedAssetCreator>? reg)) {
 				IReadOnlyList<IUntypedAssetCreator> snapshot = reg.ReadSnapshot();
+
 				foreach (IUntypedAssetCreator creator in snapshot) {
 					DependencyCollector childColl = new DependencyCollector();
-					AssetCreatePreparedResult res = await creator.TryCreateAsync(info, childColl, ct).ConfigureAwait(false);
+					UntypedCreateResult res = await creator.TryCreateAsync(info, childColl, ct).ConfigureAwait(false);
 					switch (res.Kind.Tag) {
 					case AssetCreateResultKind.Case.NotHandled:
 						continue;
 					case AssetCreateResultKind.Case.Success:
-						if (res.Prepared is null)
-							throw new AssetLoadException(id, typeof(T), "asset creator prepare returned Success but didn't set Prepared");
+						if (res.Value is null)
+							throw new InternalStateException("untyped asset creator prepare returned Success but didn't set Value");
 						rootColl.MergeFrom(childColl);
-						return (creator, res.Prepared, rootColl.Snapshot());
-					case AssetCreateResultKind.Case.Error:
-						throw res.Exception ?? new AssetLoadException(id, typeof(T), "asset creator prepare returned Error with no exception attached");
+						return (res.Value, rootColl.Snapshot());
 					default:
 						throw new UnreachableException();
 					}
@@ -1013,25 +985,20 @@ public sealed class AssetStore {
 			}
 			throw new AssetUnhandledException(id, typeof(T), "no registered asset creator accepted the asset");
 		} finally {
-			if (prev is not null)
-				loadStackTop.Value = prev;
+			loadStackTop.Value = prev;
 		}
 	}
 
 	private static T finalizePrepared<T>(AssetID id, PendingPrepared pprep) where T : class {
-		AssetFinalizeInfo info = new AssetFinalizeInfo(id, pprep.Prepared);
-		AssetCreateResult<object> res = pprep.Creator.TryFinalize(info);
-		return res.Kind.Tag switch {
-			AssetCreateResultKind.Case.NotHandled => throw new AssetLoadException(id, typeof(T), "prepared asset was unexpectedly not handled by the creator during finalize"),
-			AssetCreateResultKind.Case.Success => (T)(res.Value ?? throw new AssetLoadException(id, typeof(T), "asset creator finalize returned Success but didn't set Value")),
-			AssetCreateResultKind.Case.Error => throw res.Exception ?? new AssetLoadException(id, typeof(T), "asset creator finalize returned Error with no exception attached"),
-			_ => throw new UnreachableException()
-		};
+		object v = pprep.Prepared.FinalizeValue(id);
+		if (v is not T typed)
+			throw new InternalStateException($"pending asset value returned some value of type {v.GetType().FullName}, expected the {typeof(T).FullName} from the creator");
+		return typed;
 	}
 
 	// ==========================================================================
 	// the rest of the asset pipeline
-	private static async Task<Stream> fixstream(Stream stream, CancellationToken ct) {
+	private static async ValueTask<Stream> fixstream(Stream stream, CancellationToken ct) {
 		if (stream.CanSeek)
 			return stream;
 		MemoryStream ms = new MemoryStream();
@@ -1041,12 +1008,12 @@ public sealed class AssetStore {
 		return ms;
 	}
 
-	private async Task<Stream> tryAllSourcesAsync(AssetID id, DependencyCollector parentColl, Type t, CancellationToken ct) {
-		IReadOnlyList<ISourceEntry> snapshot = sources.ReadSnapshot();
+	private async ValueTask<Stream?> tryAllSourcesAsyncOrNull(AssetID id, DependencyCollector parentColl, Type t, CancellationToken ct) {
+		IReadOnlyList<IAssetSource> snapshot = sources.ReadSnapshot();
 		AssetSourceInfo info = new AssetSourceInfo(id);
-		foreach (ISourceEntry ent in snapshot) {
+		foreach (IAssetSource source in snapshot) {
 			DependencyCollector childColl = new DependencyCollector();
-			AssetSourceResult res = await ent.TrySourceAsync(info, childColl, ct).ConfigureAwait(false);
+			AssetSourceResult res = await source.TrySourceAsync(info, childColl, ct).ConfigureAwait(false);
 			switch (res.Kind.Tag) {
 			case AssetSourceResultKind.Case.NotHandled:
 				continue;
@@ -1055,22 +1022,25 @@ public sealed class AssetStore {
 					throw new AssetLoadException(id, t, "asset source returned Success but didn't set Stream");
 				parentColl.MergeFrom(childColl);
 				return await fixstream(res.Stream, ct).ConfigureAwait(false);
-			case AssetSourceResultKind.Case.Error:
-				throw res.Exception ?? new AssetLoadException(id, t, "asset source returned Error with no exception attached");
 			default:
 				throw new UnreachableException();
 			}
 		}
-		throw new AssetUnhandledException(id, t, "no registered asset source managed to provide the asset");
+		return null;
 	}
 
-	private async Task<AssetData> tryAllResolversAsync(AssetID id, DependencyCollector parentColl, Type t, CancellationToken ct) {
-		IReadOnlyList<IResolverEntry> snapshot = resolvers.ReadSnapshot();
-		foreach (IResolverEntry ent in snapshot) {
+	private async ValueTask<Stream> tryAllSourcesAsync(AssetID id, DependencyCollector parentColl, Type t, CancellationToken ct) =>
+		await tryAllSourcesAsyncOrNull(id, parentColl, t, ct) ?? throw new AssetUnhandledException(id, t, "no registered asset source managed to provide the asset");
+
+	private async ValueTask<AssetData> tryAllResolversAsync(AssetID id, DependencyCollector parentColl, Type t, CancellationToken ct) {
+		IReadOnlyList<IAssetResolver> snapshot = resolvers.ReadSnapshot();
+		foreach (IAssetResolver resolver in snapshot) {
 			DependencyCollector childColl = new DependencyCollector();
-			AssetResolveAsyncInfo info = new AssetResolveAsyncInfo(id,
-				(AssetID toFetch, CancellationToken passedCt) => tryAllSourcesAsync(toFetch, childColl, t, passedCt));
-			AssetResolveResult res = await ent.TryResolveAsync(info, childColl, ct).ConfigureAwait(false);
+			AssetResolveInfo info = new AssetResolveInfo(id,
+				(AssetID toFetch, CancellationToken passedCt) => tryAllSourcesAsync(toFetch, childColl, t, passedCt),
+				(AssetID toFetch, CancellationToken passedCt) => tryAllSourcesAsyncOrNull(toFetch, childColl, t, passedCt)
+			);
+			AssetResolveResult res = await resolver.TryResolveAsync(info, childColl, ct).ConfigureAwait(false);
 			switch (res.Kind.Tag) {
 			case AssetResolveResultKind.Case.NotHandled:
 				continue;
@@ -1079,8 +1049,6 @@ public sealed class AssetStore {
 					throw new AssetLoadException(id, t, "asset resolver returned Success but didn't set Data");
 				parentColl.MergeFrom(childColl);
 				return res.Data;
-			case AssetResolveResultKind.Case.Error:
-				throw res.Exception ?? new AssetLoadException(id, t, "asset resolver returned Error with no exception attached");
 			default:
 				throw new UnreachableException();
 			}

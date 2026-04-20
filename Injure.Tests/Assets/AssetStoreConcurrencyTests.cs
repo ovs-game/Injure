@@ -18,12 +18,12 @@ public sealed class AssetStoreConcurrencyTests {
 		TestCreator creator = new TestCreator();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, creator, "creator");
+		store.RegisterStagedCreator(ownerID, creator, "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		Assert.False(asset.IsLoaded);
 
-		ulong[] ids = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() => asset.Borrow().Value.ID))).WaitAsync(TimeSpan.FromMilliseconds(100));
+		ulong[] ids = await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => Task.Run(() => asset.Borrow().Value.ID))).WaitAsync(TimeSpan.FromMilliseconds(100));
 		Assert.Equal(1, creator.PrepareCalls);
 		Assert.Equal(1, creator.FinalizeCalls);
 		Assert.True(ids.All(id => id == ids[0]));
@@ -35,12 +35,12 @@ public sealed class AssetStoreConcurrencyTests {
 		TestCreator creator = new TestCreator();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, creator, "creator");
+		store.RegisterStagedCreator(ownerID, creator, "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		Assert.False(asset.IsLoaded);
 
-		await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => asset.WarmAsync())).WaitAsync(TimeSpan.FromMilliseconds(100));
+		await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => asset.WarmAsync())).WaitAsync(TimeSpan.FromMilliseconds(100));
 		Assert.Equal(1, creator.PrepareCalls);
 		Assert.Equal(1, creator.FinalizeCalls);
 		Assert.True(asset.TryPassiveBorrow(out AssetLease<TestAsset> lease));
@@ -48,39 +48,47 @@ public sealed class AssetStoreConcurrencyTests {
 	}
 
 	[Fact]
-	public async Task ConcurrentQueueReloadsAreHarmless() {
+	public async Task ConcurrentQueueReloadsWork() {
 		AssetStore store = new AssetStore();
 		TestCreator creator = new TestCreator();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, creator, "creator");
+		store.RegisterStagedCreator(ownerID, creator, "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		await asset.WarmAsync();
 
-		await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => asset.QueueReloadAsync()));
+		await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => asset.QueueReloadAsync()));
 		Assert.True(asset.HasQueuedReload);
 		int published = store.ApplyQueuedReloads();
 		Assert.Equal(1, published);
 
-		Assert.Equal(2, creator.PrepareCalls);
+		Assert.InRange(creator.PrepareCalls, 2, 16);
 		Assert.Equal(2, creator.FinalizeCalls);
-		Assert.Equal(2ul, asset.Borrow().Version);
+		Assert.Equal(16ul, asset.Borrow().Version);
 	}
 
 	[Fact]
-	public async Task ConcurrentWatcherEventsAreHarmless() {
+	public async Task ConcurrentWatcherEventsWork() {
 		AssetStore store = new AssetStore();
+		TestCreator creator = new TestCreator();
 		TestDependencyWatcher watcher = new TestDependencyWatcher();
 		store.RegisterSource(ownerID, new TestSource(new TestDependency("dep")), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		store.RegisterStagedCreator(ownerID, creator, "creator");
 		store.RegisterDependencyWatcher(ownerID, watcher, "watcher");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		await asset.WarmAsync();
-		await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() => watcher.Raise(new TestDependency("dep")))));
+
+		await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => Task.Run(() => watcher.Raise(new TestDependency("dep")))));
 		Assert.True(asset.HasQueuedReload);
+		int published = store.ApplyQueuedReloads();
+		Assert.Equal(1, published);
+
+		Assert.InRange(creator.PrepareCalls, 2, 16);
+		Assert.Equal(2, creator.FinalizeCalls);
+		Assert.Equal(16ul, asset.Borrow().Version);
 	}
 
 	[Fact]
@@ -96,7 +104,7 @@ public sealed class AssetStoreConcurrencyTests {
 		TestCreator creator = new TestCreator(onPrepareAsync: (_, ct) => ckp.WaitAsync(ct));
 		store.RegisterSource(ownerID, source, "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, creator, "creator");
+		store.RegisterStagedCreator(ownerID, creator, "creator");
 
 		AssetRef<TestAsset> assetA = store.GetAsset<TestAsset>(a);
 		AssetRef<TestAsset> assetB = store.GetAsset<TestAsset>(b);
@@ -119,7 +127,7 @@ public sealed class AssetStoreConcurrencyTests {
 		TestCreator creator = new TestCreator(onPrepareAsync: (_, ct) => ckp.WaitAsync(ct));
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, creator, "creator");
+		store.RegisterStagedCreator(ownerID, creator, "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		using CancellationTokenSource cts1 = new CancellationTokenSource();

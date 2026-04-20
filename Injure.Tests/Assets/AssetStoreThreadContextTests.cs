@@ -29,7 +29,7 @@ public sealed class AssetStoreThreadContextTests {
 		using AssetThreadContext mainCtx = store.AttachCurrentThread();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		TestAsset v = asset.Borrow().Value;
@@ -80,7 +80,7 @@ public sealed class AssetStoreThreadContextTests {
 		using AssetThreadContext mainCtx = store.AttachCurrentThread();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
-		store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		TestAsset v = asset.Borrow().Value;

@@ -19,7 +19,7 @@ public sealed class AssetStoreCycleTests {
 		});
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, resolver, "resolver");
-		store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "assetA"));
 		asset.Warm();
@@ -32,7 +32,7 @@ public sealed class AssetStoreCycleTests {
 		store.RegisterResolver(ownerID, new AssetLoadingResolver(store, new Dictionary<AssetID, AssetID> {
 			[new AssetID(ownerID, "assetA")] = new AssetID(ownerID, "assetA")
 		}), "resolver");
-		store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "assetA"));
 		AssetLoadCycleException ex = Assert.Throws<AssetLoadCycleException>(() => asset.Warm());
@@ -48,7 +48,7 @@ public sealed class AssetStoreCycleTests {
 		});
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, resolver, "resolver");
-		store.RegisterCreator(ownerID, new TestCreator(), "creator");
+		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "assetA"));
 		AssetLoadCycleException ex = Assert.Throws<AssetLoadCycleException>(() => asset.Warm());

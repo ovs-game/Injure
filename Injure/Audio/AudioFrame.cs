@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-using Injure.SourceGen;
+using Injure.Analyzers.Attributes;
 
 namespace Injure.Audio;
 

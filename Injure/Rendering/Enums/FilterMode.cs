@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: MIT
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Rendering;
 
-public enum FilterMode {
-	None = 0,
-	Undefined = 0,
-	Nearest = 1,
-	Linear = 2
+[ClosedEnum]
+[ClosedEnumMirror(typeof(WebGPU.WGPUFilterMode))]
+public readonly partial struct FilterMode {
+	public enum Case {
+		Undefined = 0,
+		Nearest = 1,
+		Linear = 2
+	}
 }

@@ -1,6 +1,6 @@
 <Solution>
 	<Project Path="Injure/Injure.csproj" />
+	<Project Path="Injure.Analyzers/Injure.Analyzers.csproj" />
 	<Project Path="Injure.Native/Injure.Native.csproj" />
-	<Project Path="Injure.SourceGen/Injure.SourceGen.csproj" />
 	<Project Path="Injure.Tests/Injure.Tests.csproj" />
 </Solution>

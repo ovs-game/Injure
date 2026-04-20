@@ -37,7 +37,7 @@ public sealed record GPUBufferBindingLayout(
 /// </summary>
 /// <param name="Type">Sampler binding type.</param>
 public sealed record GPUSamplerBindingLayout(
-	SamplerBindingType Type = SamplerBindingType.Filtering
+	SamplerBindingType Type
 ) : GPUBindingLayout;
 
 /// <summary>
@@ -49,7 +49,7 @@ public sealed record GPUSamplerBindingLayout(
 public sealed record GPUStorageTextureBindingLayout(
 	StorageTextureAccess Access,
 	TextureFormat Format,
-	TextureViewDimension ViewDimension = TextureViewDimension.Dimension2D
+	TextureViewDimension ViewDimension
 ) : GPUBindingLayout;
 
 /// <summary>
@@ -60,6 +60,6 @@ public sealed record GPUStorageTextureBindingLayout(
 /// <param name="Multisampled">Whether the bound view is multisampled.</param>
 public sealed record GPUTextureBindingLayout(
 	TextureSampleType SampleType,
-	TextureViewDimension ViewDimension = TextureViewDimension.Dimension2D,
+	TextureViewDimension ViewDimension,
 	bool Multisampled = false
 ) : GPUBindingLayout;

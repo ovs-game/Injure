@@ -5,14 +5,20 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Assets;
 
 // ==========================================================================
 // asset creation
-public enum AssetSourceResultKind {
-	NotHandled,
-	Success,
-	Error
+
+[ClosedEnum]
+public readonly partial struct AssetSourceResultKind {
+	public enum Case {
+		NotHandled,
+		Success,
+		Error
+	}
 }
 
 public readonly record struct AssetSourceResult(
@@ -39,10 +45,13 @@ public interface IAssetSourceAsync {
 
 // ==========================================================================
 // asset resolution
-public enum AssetResolveResultKind {
-	NotHandled,
-	Success,
-	Error
+[ClosedEnum]
+public readonly partial struct AssetResolveResultKind {
+	public enum Case {
+		NotHandled,
+		Success,
+		Error
+	}
 }
 
 public readonly record struct AssetResolveResult(
@@ -75,10 +84,13 @@ public interface IAssetResolverAsync {
 
 // ==========================================================================
 // asset creation
-public enum AssetCreateResultKind {
-	NotHandled,
-	Success,
-	Error
+[ClosedEnum]
+public readonly partial struct AssetCreateResultKind {
+	public enum Case {
+		NotHandled,
+		Success,
+		Error
+	}
 }
 
 public readonly record struct AssetCreatePreparedResult(

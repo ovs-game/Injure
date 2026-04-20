@@ -46,9 +46,9 @@ internal sealed class ScheduledTicker {
 		lastActualAt = MonoTick.Zero;
 		lastBatchID = 0;
 		runsThisBatch = 0;
-		NextAt = options.StartMode switch {
-			TickerStartMode.FromCommitTime => commitAt + timing.InitialOffset,
-			TickerStartMode.AtAbsoluteTick => options.StartAt,
+		NextAt = options.StartMode.Tag switch {
+			TickerStartMode.Case.FromCommitTime => commitAt + timing.InitialOffset,
+			TickerStartMode.Case.AtAbsoluteTick => options.StartAt,
 			_ => throw new UnreachableException()
 		};
 		InsertionOrder = insertionOrder;
@@ -61,8 +61,8 @@ internal sealed class ScheduledTicker {
 		MonoTick oldPeriod = timing.Period;
 		MonoTick oldNextAt = NextAt;
 		timing = tm;
-		switch (mode) {
-		case TickerRetimingMode.KeepPhase:
+		switch (mode.Tag) {
+		case TickerRetimingMode.Case.KeepPhase:
 			hadCallback = false;
 			lastScheduledAt = MonoTick.Zero;
 			lastActualAt = MonoTick.Zero;
@@ -70,7 +70,7 @@ internal sealed class ScheduledTicker {
 			runsThisBatch = 0;
 			NextAt = commitAt + timing.InitialOffset;
 			break;
-		case TickerRetimingMode.RestartFromCommitTime:
+		case TickerRetimingMode.Case.RestartFromCommitTime:
 			if (oldPeriod == MonoTick.Zero)
 				throw new InternalStateException("oldPeriod is somehow zero, this should've been rejected earlier");
 			if (oldNextAt > commitAt) {
@@ -87,8 +87,8 @@ internal sealed class ScheduledTicker {
 	public bool TryRunOneIfDue(MonoTick now, uint batchID) {
 		if (now < NextAt)
 			return false;
-		switch (options.OverrunMode) {
-		case TickerOverrunMode.CatchUp:
+		switch (options.OverrunMode.Tag) {
+		case TickerOverrunMode.Case.CatchUp:
 			if (lastBatchID != batchID) {
 				lastBatchID = batchID;
 				runsThisBatch = 0;
@@ -99,7 +99,7 @@ internal sealed class ScheduledTicker {
 			NextAt += timing.Period;
 			runsThisBatch++;
 			return true;
-		case TickerOverrunMode.Once:
+		case TickerOverrunMode.Case.Once:
 			MonoTick scheduledAt = NextAt;
 			doCallback(scheduledAt, now);
 			MonoTick missed = (now - scheduledAt) / timing.Period;
@@ -191,7 +191,7 @@ public sealed class TickerScheduler(in TickerSchedulerOptions options) : ITicker
 		return true;
 	}
 
-	public bool Retime(TickerHandle handle, in TickerTiming timing, TickerRetimingMode mode = TickerRetimingMode.KeepPhase) {
+	public bool Retime(TickerHandle handle, in TickerTiming timing, TickerRetimingMode mode = default) {
 		if (!tryGetSlot(handle, out int slotidx) || slots[slotidx].State == TickerSlotState.Empty)
 			return false;
 		pending.Add(new TickerCommand(TickerCommandKind.Retime, handle, timing, mode));

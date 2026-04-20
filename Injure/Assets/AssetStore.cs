@@ -422,10 +422,10 @@ public sealed class AssetStore {
 		}
 		public AssetCreateResult<object> TryFinalize(AssetFinalizeInfo info) {
 			AssetCreateResult<T> result = creator.TryFinalize(info);
-			return result.Kind switch {
-				AssetCreateResultKind.NotHandled => AssetCreateResult<object>.NotHandled(),
-				AssetCreateResultKind.Success => AssetCreateResult<object>.Success(result.Value!), // null will be handled later
-				AssetCreateResultKind.Error => AssetCreateResult<object>.Error(result.Exception!), // null will be handled later
+			return result.Kind.Tag switch {
+				AssetCreateResultKind.Case.NotHandled => AssetCreateResult<object>.NotHandled(),
+				AssetCreateResultKind.Case.Success => AssetCreateResult<object>.Success(result.Value!), // null will be handled later
+				AssetCreateResultKind.Case.Error => AssetCreateResult<object>.Error(result.Exception!), // null will be handled later
 				_ => throw new UnreachableException()
 			};
 		}
@@ -996,15 +996,15 @@ public sealed class AssetStore {
 				foreach (IUntypedAssetCreator creator in snapshot) {
 					DependencyCollector childColl = new DependencyCollector();
 					AssetCreatePreparedResult res = await creator.TryCreateAsync(info, childColl, ct).ConfigureAwait(false);
-					switch (res.Kind) {
-					case AssetCreateResultKind.NotHandled:
+					switch (res.Kind.Tag) {
+					case AssetCreateResultKind.Case.NotHandled:
 						continue;
-					case AssetCreateResultKind.Success:
+					case AssetCreateResultKind.Case.Success:
 						if (res.Prepared is null)
 							throw new AssetLoadException(id, typeof(T), "asset creator prepare returned Success but didn't set Prepared");
 						rootColl.MergeFrom(childColl);
 						return (creator, res.Prepared, rootColl.Snapshot());
-					case AssetCreateResultKind.Error:
+					case AssetCreateResultKind.Case.Error:
 						throw res.Exception ?? new AssetLoadException(id, typeof(T), "asset creator prepare returned Error with no exception attached");
 					default:
 						throw new UnreachableException();
@@ -1021,10 +1021,10 @@ public sealed class AssetStore {
 	private static T finalizePrepared<T>(AssetID id, PendingPrepared pprep) where T : class {
 		AssetFinalizeInfo info = new AssetFinalizeInfo(id, pprep.Prepared);
 		AssetCreateResult<object> res = pprep.Creator.TryFinalize(info);
-		return res.Kind switch {
-			AssetCreateResultKind.NotHandled => throw new AssetLoadException(id, typeof(T), "prepared asset was unexpectedly not handled by the creator during finalize"),
-			AssetCreateResultKind.Success => (T)(res.Value ?? throw new AssetLoadException(id, typeof(T), "asset creator finalize returned Success but didn't set Value")),
-			AssetCreateResultKind.Error => throw res.Exception ?? new AssetLoadException(id, typeof(T), "asset creator finalize returned Error with no exception attached"),
+		return res.Kind.Tag switch {
+			AssetCreateResultKind.Case.NotHandled => throw new AssetLoadException(id, typeof(T), "prepared asset was unexpectedly not handled by the creator during finalize"),
+			AssetCreateResultKind.Case.Success => (T)(res.Value ?? throw new AssetLoadException(id, typeof(T), "asset creator finalize returned Success but didn't set Value")),
+			AssetCreateResultKind.Case.Error => throw res.Exception ?? new AssetLoadException(id, typeof(T), "asset creator finalize returned Error with no exception attached"),
 			_ => throw new UnreachableException()
 		};
 	}
@@ -1047,15 +1047,15 @@ public sealed class AssetStore {
 		foreach (ISourceEntry ent in snapshot) {
 			DependencyCollector childColl = new DependencyCollector();
 			AssetSourceResult res = await ent.TrySourceAsync(info, childColl, ct).ConfigureAwait(false);
-			switch (res.Kind) {
-			case AssetSourceResultKind.NotHandled:
+			switch (res.Kind.Tag) {
+			case AssetSourceResultKind.Case.NotHandled:
 				continue;
-			case AssetSourceResultKind.Success:
+			case AssetSourceResultKind.Case.Success:
 				if (res.Stream is null)
 					throw new AssetLoadException(id, t, "asset source returned Success but didn't set Stream");
 				parentColl.MergeFrom(childColl);
 				return await fixstream(res.Stream, ct).ConfigureAwait(false);
-			case AssetSourceResultKind.Error:
+			case AssetSourceResultKind.Case.Error:
 				throw res.Exception ?? new AssetLoadException(id, t, "asset source returned Error with no exception attached");
 			default:
 				throw new UnreachableException();
@@ -1071,15 +1071,15 @@ public sealed class AssetStore {
 			AssetResolveAsyncInfo info = new AssetResolveAsyncInfo(id,
 				(AssetID toFetch, CancellationToken passedCt) => tryAllSourcesAsync(toFetch, childColl, t, passedCt));
 			AssetResolveResult res = await ent.TryResolveAsync(info, childColl, ct).ConfigureAwait(false);
-			switch (res.Kind) {
-			case AssetResolveResultKind.NotHandled:
+			switch (res.Kind.Tag) {
+			case AssetResolveResultKind.Case.NotHandled:
 				continue;
-			case AssetResolveResultKind.Success:
+			case AssetResolveResultKind.Case.Success:
 				if (res.Data is null)
 					throw new AssetLoadException(id, t, "asset resolver returned Success but didn't set Data");
 				parentColl.MergeFrom(childColl);
 				return res.Data;
-			case AssetResolveResultKind.Error:
+			case AssetResolveResultKind.Case.Error:
 				throw res.Exception ?? new AssetLoadException(id, t, "asset resolver returned Error with no exception attached");
 			default:
 				throw new UnreachableException();

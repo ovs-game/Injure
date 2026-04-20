@@ -80,17 +80,17 @@ internal sealed class CoroWaitForHandle(CoroutineHandle handle, bool propagateFa
 			throw new InvalidOperationException($"coroutine {ctx.Handle} tried to wait on its own handle");
 		if (!ctx.Scheduler.TryGetInfo(handle, out CoroutineInfo info))
 			throw new InvalidOperationException($"failed to get info for coroutine handle {handle}");
-		switch (info.Status) {
-			case CoroutineStatus.Running:
-			case CoroutineStatus.Paused:
+		switch (info.Status.Tag) {
+			case CoroutineStatus.Case.Running:
+			case CoroutineStatus.Case.Paused:
 				return true;
-			case CoroutineStatus.Completed:
+			case CoroutineStatus.Case.Completed:
 				return false;
-			case CoroutineStatus.Cancelled:
+			case CoroutineStatus.Case.Cancelled:
 				if (throwOnChildCancelled)
 					throw new CoroutineCancelledException(handle, info.CancellationReason ?? CoroCancellationReason.ManualStop);
 				return false;
-			case CoroutineStatus.Faulted:
+			case CoroutineStatus.Case.Faulted:
 				// XXX we need a nicer api than just "null-suppress Fault if the status is Faulted"
 				if (propagateFault)
 					throw new CoroutineChildFaultException(handle, info.Fault!);

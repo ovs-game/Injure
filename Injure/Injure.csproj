@@ -15,9 +15,14 @@
 		<RepositoryUrl>https://github.com/ovs-game/Injure</RepositoryUrl>
 	</PropertyGroup>
 
+	<PropertyGroup>
+                <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+                <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+        </PropertyGroup>
+
 	<ItemGroup>
+		<ProjectReference Include="../Injure.Analyzers/Injure.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
 		<ProjectReference Include="../Injure.Native/Injure.Native.csproj" />
-		<ProjectReference Include="../Injure.SourceGen/Injure.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
 		<InternalsVisibleTo Include="Injure.Tests" />
 	</ItemGroup>
 

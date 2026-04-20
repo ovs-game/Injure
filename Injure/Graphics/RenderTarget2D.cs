@@ -206,7 +206,7 @@ public sealed class RenderTarget2D : IDisposable {
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static bool formatHasStencil(TextureFormat format) =>
-		format is TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32FloatStencil8 or TextureFormat.Stencil8;
+		format.Tag is TextureFormat.Case.Depth24PlusStencil8 or TextureFormat.Case.Depth32FloatStencil8 or TextureFormat.Case.Stencil8;
 
 	/// <summary>
 	/// Releases the owned GPU resources.

@@ -1,24 +1,34 @@
 // SPDX-License-Identifier: MIT
 
+using Injure.Analyzers.Attributes;
 using Injure.Timing;
 
 namespace Injure.Scheduling;
 
 public readonly record struct TickerTiming(MonoTick Period, MonoTick InitialOffset = default);
 
-public enum TickerOverrunMode {
-	CatchUp,
-	Once
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct TickerOverrunMode {
+	public enum Case {
+		CatchUp = 1,
+		Once
+	}
 }
 
-public enum TickerStartMode {
-	FromCommitTime,
-	AtAbsoluteTick
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct TickerStartMode {
+	public enum Case {
+		FromCommitTime = 1,
+		AtAbsoluteTick
+	}
 }
 
-public enum TickerRetimingMode {
-	KeepPhase,
-	RestartFromCommitTime
+[ClosedEnum(CheckZeroName = false)]
+public readonly partial struct TickerRetimingMode {
+	public enum Case {
+		KeepPhase,
+		RestartFromCommitTime
+	}
 }
 
 public readonly record struct TickerOptions(

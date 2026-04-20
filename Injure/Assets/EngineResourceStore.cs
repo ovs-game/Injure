@@ -40,15 +40,15 @@ public sealed class EngineResourceStore {
 		SourceEntry[] snapshot = Volatile.Read(ref sources);
 		foreach (SourceEntry ent in snapshot) {
 			EngineResourceSourceResult res = ent.Source.TrySource(id);
-			switch (res.Kind) {
-			case EngineResourceSourceResultKind.NotHandled:
+			switch (res.Kind.Tag) {
+			case EngineResourceSourceResultKind.Case.NotHandled:
 				continue;
-			case EngineResourceSourceResultKind.Success:
+			case EngineResourceSourceResultKind.Case.Success:
 				if (res.Data is null)
 					throw new EngineResourceException(id, "engine resource source returned Success but didn't set Data");
 				data = res.Data;
 				return true;
-			case EngineResourceSourceResultKind.Error:
+			case EngineResourceSourceResultKind.Case.Error:
 				throw res.Exception ?? new EngineResourceException(id, "engine resource source returned Error with no exception attached");
 			default:
 				throw new UnreachableException();

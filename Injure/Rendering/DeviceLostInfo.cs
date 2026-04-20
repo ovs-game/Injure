@@ -2,26 +2,36 @@
 
 using System;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Rendering;
 
-public enum DeviceState {
-	Alive,
-	Lost,
-	Disposed
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct DeviceState {
+	public enum Case {
+		Alive = 1,
+		Lost,
+		Disposed
+	}
 }
 
-public enum DeviceLossInfoKind {
-	Provisional,
-	Final
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct DeviceLossInfoKind {
+	public enum Case {
+		Provisional = 1,
+		Final
+	}
 }
 
-public enum DeviceLossEventReason {
-	_Invalid = 0,
-	Unknown = 1,
-	Destroyed = 2,
-	InstanceDropped = 3,
-	FailedCreation = 4,
-	SurfaceAcquireDeviceLost = 5
+[ClosedEnum]
+public readonly partial struct DeviceLossEventReason {
+	public enum Case {
+		Unknown,
+		Destroyed,
+		InstanceDropped,
+		FailedCreation,
+		SurfaceAcquireDeviceLost
+	}
 }
 
 public sealed record DeviceLostInfo(

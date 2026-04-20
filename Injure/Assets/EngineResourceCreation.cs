@@ -2,12 +2,17 @@
 
 using System;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Assets;
 
-public enum EngineResourceSourceResultKind {
-	NotHandled,
-	Success,
-	Error
+[ClosedEnum]
+public readonly partial struct EngineResourceSourceResultKind {
+	public enum Case {
+		NotHandled,
+		Success,
+		Error
+	}
 }
 
 public readonly record struct EngineResourceSourceResult(

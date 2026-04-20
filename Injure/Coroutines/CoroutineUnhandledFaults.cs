@@ -2,13 +2,18 @@
 
 using System;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Coroutines;
 
-public enum CoroUnhandledFaultMode {
-	Ignore,
-	LogAfterTick,
-	ThrowAfterTick,
-	LogAndThrowAfterTick
+[ClosedEnum]
+public readonly partial struct CoroUnhandledFaultMode {
+	public enum Case {
+		Ignore,
+		LogAfterTick,
+		ThrowAfterTick,
+		LogAndThrowAfterTick
+	}
 }
 
 public sealed class CoroutineUnhandledFaultInfo {

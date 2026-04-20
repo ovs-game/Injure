@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -145,7 +144,7 @@ public sealed class Texture2DAssetCreator(WebGPUDevice gpuDevice) : IAssetCreato
 				Texture2DSamplerMode.LinearClamp => SamplerStates.LinearClamp,
 				Texture2DSamplerMode.NearestRepeat => SamplerStates.NearestRepeat,
 				Texture2DSamplerMode.LinearRepeat => SamplerStates.LinearRepeat,
-				_ => throw new UnreachableException()
+				_ => throw new InvalidDataException($"invalid {nameof(Texture2DSamplerMode)} value '{p.Metadata.SamplerMode}'")
 			};
 			ReadOnlySpan<byte> src;
 			uint srcStride, w, h;

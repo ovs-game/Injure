@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: MIT
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Rendering;
 
-public enum PowerPreference {
-	None = 0,
-	Undefined = 0,
-	LowPower = 1,
-	HighPerformance = 2
+[ClosedEnum]
+[ClosedEnumMirror(typeof(WebGPU.WGPUPowerPreference))]
+public readonly partial struct PowerPreference {
+	public enum Case {
+		Undefined = 0,
+		LowPower = 1,
+		HighPerformance = 2
+	}
 }

@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: MIT
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Rendering;
 
-public enum BlendOperation {
-	None = 0,
-	Undefined = 0,
-	Add = 1,
-	Subtract = 2,
-	ReverseSubtract = 3,
-	Min = 4,
-	Max = 5
+[ClosedEnum]
+[ClosedEnumMirror(typeof(WebGPU.WGPUBlendOperation))]
+public readonly partial struct BlendOperation {
+	public enum Case {
+		Undefined = 0,
+		Add = 1,
+		Subtract = 2,
+		ReverseSubtract = 3,
+		Min = 4,
+		Max = 5
+	}
 }

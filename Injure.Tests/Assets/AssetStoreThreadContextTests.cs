@@ -57,7 +57,7 @@ public sealed class AssetStoreThreadContextTests {
 			throw ex;
 		asset.QueueReload();
 		store.AtSafeBoundary();
-		int published = store.ApplyQueuedReloads();
+		int published = store.ApplyQueuedReloadsOrThrow();
 		Assert.Equal(1, published);
 		Assert.Equal($"{ownerID}::asset", v.Val);
 
@@ -104,7 +104,7 @@ public sealed class AssetStoreThreadContextTests {
 			throw ex;
 		asset.QueueReload();
 		store.AtSafeBoundary();
-		int published = store.ApplyQueuedReloads();
+		int published = store.ApplyQueuedReloadsOrThrow();
 		Assert.Equal(1, published);
 		Assert.Equal($"{ownerID}::asset", v.Val);
 

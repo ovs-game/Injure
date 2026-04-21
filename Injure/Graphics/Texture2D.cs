@@ -53,7 +53,7 @@ public sealed class Texture2D : IRevokable, IDisposable {
 	/// Returns the underlying <see cref="GPUTexture"/>, bypassing ownership/lifetime/revocation contracts.
 	/// </summary>
 	/// <remarks>
-	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// See <c>Docs/Conventions/dangerous-get.md</c> on <c>DangerousGet*</c> methods for more info.
 	/// </remarks>
 	public GPUTexture DangerousGetGPUTexture() => Texture;
 
@@ -61,7 +61,7 @@ public sealed class Texture2D : IRevokable, IDisposable {
 	/// Returns the underlying <see cref="GPUSampler"/>, bypassing ownership/lifetime/revocation contracts.
 	/// </summary>
 	/// <remarks>
-	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// See <c>Docs/Conventions/dangerous-get.md</c> on <c>DangerousGet*</c> methods for more info.
 	/// </remarks>
 	public GPUSampler DangerousGetGPUSampler() => Sampler;
 
@@ -70,7 +70,7 @@ public sealed class Texture2D : IRevokable, IDisposable {
 	/// view and sampler, bypassing ownership/lifetime/revocation contracts.
 	/// </summary>
 	/// <remarks>
-	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// See <c>Docs/Conventions/dangerous-get.md</c> on <c>DangerousGet*</c> methods for more info.
 	/// </remarks>
 	public GPUBindGroupRef DangerousGetBindGroup() => BindGroup;
 

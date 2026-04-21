@@ -89,6 +89,34 @@ public sealed class DictionarySource : IAssetSource {
 	}
 }
 
+public sealed class NonSeekableMemoryStream(byte[] data) : Stream {
+	private readonly MemoryStream inner = new MemoryStream(data, writable: false);
+	public bool Disposed { get; private set; }
+	public override bool CanRead => inner.CanRead;
+	public override bool CanSeek => false;
+	public override bool CanWrite => false;
+	public override long Length => throw new NotSupportedException();
+	public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+	public override void Flush() => inner.Flush();
+	public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+	public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+	public override void SetLength(long value) => throw new NotSupportedException();
+	public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+	protected override void Dispose(bool disposing) {
+		Disposed = true;
+		inner.Dispose();
+		base.Dispose(disposing);
+	}
+}
+
+public sealed class NonSeekableSource : IAssetSource {
+	public NonSeekableMemoryStream? LastStream { get; private set; }
+	public ValueTask<AssetSourceResult> TrySourceAsync(AssetSourceInfo info, IAssetDependencyCollector coll, CancellationToken ct) {
+		LastStream = new NonSeekableMemoryStream(Encoding.UTF8.GetBytes(info.AssetID.ToString()));
+		return ValueTask.FromResult(AssetSourceResult.Success(LastStream));
+	}
+}
+
 public sealed class TestAssetData(Stream stream, string debugName) : AssetData(debugName) {
 	public Stream Stream { get; } = stream;
 }
@@ -110,6 +138,28 @@ public sealed class FetchThenNotHandledResolver(TestDependency? dep = null) : IA
 		if (dep is not null)
 			coll.Add(dep);
 		return AssetResolveResult.NotHandled();
+	}
+}
+
+public sealed class OptionalExtraFetchResolver(AssetID optionalID) : IAssetResolver {
+	private readonly AssetID optionalID = optionalID;
+	public bool SawOptionalStream { get; private set; }
+
+	public async ValueTask<AssetResolveResult> TryResolveAsync(AssetResolveInfo info, IAssetDependencyCollector coll, CancellationToken ct) {
+		await using Stream main = await info.FetchAsync(info.AssetID, ct);
+		Stream? optional = await info.TryFetchAsync(optionalID, ct);
+		SawOptionalStream = optional is not null;
+		optional?.Dispose();
+		return AssetResolveResult.Success(new TestAssetData(new MemoryStream(main.ReadAll(), writable: false), info.AssetID.ToString()));
+	}
+}
+
+public sealed class RequiredExtraFetchResolver(AssetID extraID) : IAssetResolver {
+	private readonly AssetID extraID = extraID;
+	public async ValueTask<AssetResolveResult> TryResolveAsync(AssetResolveInfo info, IAssetDependencyCollector coll, CancellationToken ct) {
+		await using Stream main = await info.FetchAsync(info.AssetID, ct);
+		await using Stream extra = await info.FetchAsync(extraID, ct);
+		return AssetResolveResult.Success(new TestAssetData(new MemoryStream(main.ReadAll(), writable: false), info.AssetID.ToString()));
 	}
 }
 
@@ -212,6 +262,19 @@ public sealed class CountingTaskCheckpoint(int target) {
 	}
 }
 
+public sealed class BlockingOnNthPrepare(int n) {
+	private int count;
+
+	public int N { get; } = n;
+	public TaskCheckpoint Checkpoint { get; } = new TaskCheckpoint();
+
+	public Task OnPrepareAsync(AssetCreateInfo info, CancellationToken ct) {
+		if (Interlocked.Increment(ref count) == N)
+			return Checkpoint.WaitAsync(ct);
+		return Task.CompletedTask;
+	}
+}
+
 public sealed class ThreadCheckpoint {
 	private readonly ManualResetEventSlim _entered = new ManualResetEventSlim(false);
 	private readonly ManualResetEventSlim _continue = new ManualResetEventSlim(false);
@@ -223,4 +286,80 @@ public sealed class ThreadCheckpoint {
 		_continue.Wait();
 	}
 	public void ForceSet() => _entered.Set();
+}
+
+public static class AssetTestWait {
+	public static async Task UntilAsync(Func<bool> condition, int timeoutMs = 100) {
+		long deadline = Environment.TickCount64 + timeoutMs;
+		while (Environment.TickCount64 < deadline) {
+			if (condition())
+				return;
+			await Task.Delay(1).ConfigureAwait(false);
+		}
+		if (condition())
+			return;
+		throw new TimeoutException("timed out waiting for asset test condition");
+	}
+
+	public static Task ForQueuedReloadAsync<T>(AssetRef<T> asset, int timeoutMs = 100) where T : class =>
+		UntilAsync(() => asset.HasQueuedReload, timeoutMs);
+
+	public static Task ForReloadFailureAsync<T>(AssetRef<T> asset, int timeoutMs = 100) where T : class =>
+		UntilAsync(() => asset.LastReloadFailure is not null, timeoutMs);
+}
+
+public sealed class TrackingPreparedData(byte[] data, Action onDispose) : AssetPreparedData {
+	private readonly Action onDispose = onDispose;
+	private int disposed;
+
+	public byte[] Data { get; } = data;
+	public bool IsDisposed => Volatile.Read(ref disposed) != 0;
+
+	public override void Dispose() {
+		if (Interlocked.Exchange(ref disposed, 1) == 0)
+			onDispose();
+	}
+}
+
+public sealed class ControllableCreator(Func<AssetCreateInfo, CancellationToken, Task>? onPrepareAsync = null) : IAssetStagedCreator<TestAsset, TrackingPreparedData> {
+	private readonly Func<AssetCreateInfo, CancellationToken, Task>? onPrepareAsync = onPrepareAsync;
+	private int prepareCalls;
+	private int finalizeCalls;
+	private int preparedDisposeCalls;
+
+	public Exception? PrepareException { get; set; }
+	public Exception? FinalizeException { get; set; }
+	public string? OverrideValue { get; set; }
+
+	public int PrepareCalls => Volatile.Read(ref prepareCalls);
+	public int FinalizeCalls => Volatile.Read(ref finalizeCalls);
+	public int PreparedDisposeCalls => Volatile.Read(ref preparedDisposeCalls);
+
+	public async ValueTask<AssetPrepareResult<TrackingPreparedData>> TryPrepareAsync(AssetCreateInfo info, IAssetDependencyCollector coll, CancellationToken ct = default) {
+		Interlocked.Increment(ref prepareCalls);
+		ct.ThrowIfCancellationRequested();
+
+		if (onPrepareAsync is not null)
+			await onPrepareAsync(info, ct).ConfigureAwait(false);
+
+		ct.ThrowIfCancellationRequested();
+		if (PrepareException is not null)
+			throw PrepareException;
+		if (info.Data is not TestAssetData d)
+			return AssetPrepareResult<TrackingPreparedData>.NotHandled();
+
+		byte[] data = OverrideValue is null ? d.Stream.ReadAll() : Encoding.UTF8.GetBytes(OverrideValue);
+
+		return AssetPrepareResult<TrackingPreparedData>.Success(new TrackingPreparedData(
+			data,
+			() => Interlocked.Increment(ref preparedDisposeCalls)
+		));
+	}
+
+	public TestAsset Finalize(AssetFinalizeInfo<TrackingPreparedData> info) {
+		Interlocked.Increment(ref finalizeCalls);
+		if (FinalizeException is not null)
+			throw FinalizeException;
+		return new TestAsset(Encoding.UTF8.GetString(info.Prepared.Data));
+	}
 }

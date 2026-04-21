@@ -4,21 +4,14 @@ using System;
 
 namespace Injure.Assets;
 
-public sealed class AssetUnhandledException : Exception {
-	public AssetID AssetID { get; }
-	public Type AssetType { get; }
-
-	public AssetUnhandledException(AssetID id, Type type, string message) : base(fmt(id, type, message)) {
-		AssetID = id;
-		AssetType = type;
+/// <summary>
+/// Exception thrown when the entire asset pipeline has been tried but no suitable
+/// source/resolver/creator has been found.
+/// </summary>
+public sealed class AssetUnhandledException : AssetLoadException {
+	public AssetUnhandledException(AssetID id, Type type, string message) : base(id, type, message) {
 	}
 
-	public AssetUnhandledException(AssetID id, Type type, string message, Exception ex)
-			: base(fmt(id, type, message), ex) {
-		AssetID = id;
-		AssetType = type;
+	public AssetUnhandledException(AssetID id, Type type, string message, Exception ex) : base(id, type, message, ex) {
 	}
-
-	private static string fmt(AssetID id, Type type, string message) =>
-		type is null ? $"{id}: {message}" : $"{type.Name} {id}: {message}";
 }

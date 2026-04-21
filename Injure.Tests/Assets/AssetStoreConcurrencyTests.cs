@@ -56,11 +56,32 @@ public sealed class AssetStoreConcurrencyTests {
 		store.RegisterStagedCreator(ownerID, creator, "creator");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
-		await asset.WarmAsync();
+		await asset.WarmAsync().WaitAsync(TimeSpan.FromMilliseconds(100));
 
-		await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => asset.QueueReloadAsync()));
+		await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => asset.QueueReloadAsync())).WaitAsync(TimeSpan.FromMilliseconds(100));
 		Assert.True(asset.HasQueuedReload);
-		int published = store.ApplyQueuedReloads();
+		int published = store.ApplyQueuedReloadsOrThrow();
+		Assert.Equal(1, published);
+
+		Assert.InRange(creator.PrepareCalls, 2, 16);
+		Assert.Equal(2, creator.FinalizeCalls);
+		Assert.Equal(16ul, asset.Borrow().Version);
+	}
+
+	[Fact]
+	public async Task ConcurrentQueueReloadsFromThreadPoolWork() {
+		AssetStore store = new AssetStore();
+		TestCreator creator = new TestCreator();
+		store.RegisterSource(ownerID, new TestSource(), "source");
+		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
+		store.RegisterStagedCreator(ownerID, creator, "creator");
+
+		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
+		await asset.WarmAsync().WaitAsync(TimeSpan.FromMilliseconds(100));
+
+		await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => Task.Run(() => asset.QueueReloadAsync()))).WaitAsync(TimeSpan.FromMilliseconds(100));
+		Assert.True(asset.HasQueuedReload);
+		int published = store.ApplyQueuedReloadsOrThrow();
 		Assert.Equal(1, published);
 
 		Assert.InRange(creator.PrepareCalls, 2, 16);
@@ -79,11 +100,11 @@ public sealed class AssetStoreConcurrencyTests {
 		store.RegisterDependencyWatcher(ownerID, watcher, "watcher");
 
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
-		await asset.WarmAsync();
+		await asset.WarmAsync().WaitAsync(TimeSpan.FromMilliseconds(100));
 
-		await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => Task.Run(() => watcher.Raise(new TestDependency("dep")))));
-		Assert.True(asset.HasQueuedReload);
-		int published = store.ApplyQueuedReloads();
+		await Task.WhenAll(Enumerable.Range(0, 15).Select(_ => Task.Run(() => watcher.Raise(new TestDependency("dep"))))).WaitAsync(TimeSpan.FromMilliseconds(100));
+		await AssetTestWait.ForQueuedReloadAsync(asset);
+		int published = store.ApplyQueuedReloadsOrThrow();
 		Assert.Equal(1, published);
 
 		Assert.InRange(creator.PrepareCalls, 2, 16);
@@ -139,7 +160,7 @@ public sealed class AssetStoreConcurrencyTests {
 
 		await ckp.Entered.WaitAsync(TimeSpan.FromMilliseconds(100));
 		cts2.Cancel();
-		await Assert.ThrowsAsync<TaskCanceledException>(() => warm2);
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => warm2.WaitAsync(TimeSpan.FromMilliseconds(100)));
 
 		ckp.Proceed();
 		await Task.WhenAll(warm1, warm3).WaitAsync(TimeSpan.FromMilliseconds(100));
@@ -147,5 +168,33 @@ public sealed class AssetStoreConcurrencyTests {
 		Assert.Equal(1, creator.FinalizeCalls);
 		Assert.True(asset.TryPassiveBorrow(out AssetLease<TestAsset> lease));
 		Assert.Equal($"{ownerID}::asset", lease.Value.Val);
+	}
+
+	[Fact]
+	public async Task CancelledQueueReloadDoesntCancelSharedReloadWork() {
+		AssetStore store = new AssetStore();
+		BlockingOnNthPrepare block = new BlockingOnNthPrepare(2);
+		TestCreator creator = new TestCreator(onPrepareAsync: block.OnPrepareAsync);
+		store.RegisterSource(ownerID, new TestSource(), "source");
+		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
+		store.RegisterStagedCreator(ownerID, creator, "creator");
+
+		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
+		await asset.WarmAsync().WaitAsync(TimeSpan.FromMilliseconds(100));
+
+		using CancellationTokenSource cts1 = new CancellationTokenSource();
+		using CancellationTokenSource cts2 = new CancellationTokenSource();
+		Task reload1 = asset.QueueReloadAsync(cts1.Token);
+		await block.Checkpoint.Entered.WaitAsync(TimeSpan.FromMilliseconds(100));
+		Task reload2 = asset.QueueReloadAsync(cts2.Token);
+
+		cts1.Cancel();
+		await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reload1.WaitAsync(TimeSpan.FromMilliseconds(100)));
+
+		block.Checkpoint.Proceed();
+		await reload2.WaitAsync(TimeSpan.FromMilliseconds(100));
+		Assert.Equal(1, store.ApplyQueuedReloadsOrThrow());
+		Assert.Equal(3ul, asset.Borrow().Version);
+		Assert.Null(asset.LastReloadFailure);
 	}
 }

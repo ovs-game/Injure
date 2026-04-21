@@ -9,22 +9,52 @@ using System.Linq;
 namespace Injure.Assets;
 
 /// <summary>
-/// Untyped wrapper over an <see cref="AssetRef{T}"/> used by bulk warm / reload helpers.
+/// Untyped wrapper over an <see cref="AssetRef{T}"/> used by bulk operations and
+/// generic tooling.
 /// </summary>
 public interface IUntypedAssetRef {
-	AssetID AssetID { get; }
-	bool IsLoaded { get; }
-	bool HasQueuedReload { get; }
-	Exception? LastException { get; }
+	/// <summary>Asset type.</summary>
+	Type AssetType { get; }
 
+	/// <summary>The asset ID.</summary>
+	AssetID AssetID { get; }
+
+	/// <summary>Whether a live version currently exists.</summary>
+	bool IsLoaded { get; }
+
+	/// <summary>Whether a prepared replacement version is waiting to be applied.</summary>
+	bool HasQueuedReload { get; }
+
+	/// <summary>Last exception that occurred while initially loading this asset, if any.</summary>
+	Exception? LastLoadException { get; }
+
+	/// <summary>Last reload failure recorded for this asset, if any.</summary>
+	AssetReloadFailure? LastReloadFailure { get; }
+
+	/// <summary>Ensures that a current live version exists.</summary>
 	Task WarmAsync(CancellationToken ct = default);
+
+	/// <summary>Prepares a replacement version to later be applied by <see cref="AssetStore.ApplyQueuedReloads()"/>.</summary>
 	Task QueueReloadAsync(CancellationToken ct = default);
+
+	/// <summary>Synchronous blocking wrapper over <see cref="WarmAsync(CancellationToken)"/>.</summary>
+	void Warm(CancellationToken ct = default);
+
+	/// <summary>Synchronous blocking wrapper over <see cref="QueueReloadAsync(CancellationToken)"/>.</summary>
+	void QueueReload(CancellationToken ct = default);
 }
 
 /// <summary>
 /// Stable handle for an asset.
 /// </summary>
 /// <typeparam name="T">Asset type.</typeparam>
+/// <remarks>
+/// An <see cref="AssetRef{T}"/> is cheap to keep and copy. It is a logical representation
+/// of an asset (be it a file in an "assets" directory, a database entry, an HTTP resource...)
+/// that stays steady even if the underlying value changes, since the identity is the same.
+/// Use <see cref="Borrow()"/> or <see cref="TryPassiveBorrow(out AssetLease{T})"/> to access
+/// the current live version.
+/// </remarks>
 public sealed class AssetRef<T> : IUntypedAssetRef where T : class {
 	internal readonly AssetStore.AssetSlot<T> Slot;
 	internal ulong SlotID => Slot.SlotID;
@@ -33,41 +63,57 @@ public sealed class AssetRef<T> : IUntypedAssetRef where T : class {
 	}
 
 	/// <summary>
-	/// Gets the asset ID.
+	/// Asset type; provided for <see cref="IUntypedAssetRef"/> convenience.
+	/// </summary>
+	public Type AssetType => Slot.AssetType; // should be equivalent to typeof(T)
+
+	/// <summary>
+	/// The asset ID.
 	/// </summary>
 	public AssetID AssetID => Slot.AssetID;
 
 	/// <summary>
-	/// Gets whether a live version currently exists.
+	/// Whether a live version currently exists.
 	/// </summary>
 	public bool IsLoaded => Slot.HasCurrent;
 
 	/// <summary>
-	/// Gets whether a replacement version has been prepared and is in queue to be applied.
+	/// Whether a prepared replacement version is waiting to be applied.
 	/// </summary>
 	public bool HasQueuedReload => Slot.HasQueuedReload;
 
 	/// <summary>
-	/// Gets the last exception that occurred during load, warm, or reload.
+	/// Last exception that occurred while initially loading this asset, if any.
 	/// </summary>
-	public Exception? LastException => Slot.LastException;
+	/// <remarks>
+	/// Reload failures are reported separately through <see cref="LastReloadFailure"/>.
+	/// </remarks>
+	public Exception? LastLoadException => Slot.LastLoadException;
+
+	/// <summary>
+	/// Last reload failure recorded for this asset, if any.
+	/// </summary>
+	/// <remarks>
+	/// Cleared by a successful reload.
+	/// </remarks>
+	public AssetReloadFailure? LastReloadFailure => Slot.LastReloadFailure;
 
 	/// <summary>
 	/// Actively borrows the current live version.
 	/// </summary>
 	/// <returns>
-	/// An <see cref="AssetLease{T}"/> for the current live version.
+	/// An <see cref="AssetLease{T}"/> over the current live version.
 	/// </returns>
 	/// <remarks>
-	/// <para>
-	/// If the asset is unloaded (doesn't have a live version), this method may
-	/// do a blocking materialize of the first live version; if that materialize
-	/// operation sets <see cref="LastException"/>, this method will also throw it.
-	/// </para>
-	/// <para>
-	/// This method never applies a queued reload over an existing live version.
-	/// </para>
+	/// If the asset is unloaded (doesn't have a live version), this method may block and
+	/// synchronously materialize the first live version.
 	/// </remarks>
+	/// <exception cref="AssetLoadException">
+	/// Thrown if the asset has no live version and initial materialization fails.
+	/// </exception>
+	/// <exception cref="AssetUnhandledException">
+	/// Thrown if the pipeline did not provide the requested asset.
+	/// </exception>
 	public AssetLease<T> Borrow() => Slot.Borrow();
 
 	/// <summary>
@@ -78,44 +124,56 @@ public sealed class AssetRef<T> : IUntypedAssetRef where T : class {
 	/// <see langword="true"/> if a current live version exists; otherwise <see langword="false"/>.
 	/// </returns>
 	/// <remarks>
-	/// This method never blocks, materializes, or applies queued reloads.
+	/// <para>This method never blocks or creates any new versions of the asset, including initial materialization.</para>
+	/// <para>Guaranteed to succeed after <see cref="WarmAsync(CancellationToken)"/> or its blocking wrapper.</para>
 	/// </remarks>
 	public bool TryPassiveBorrow(out AssetLease<T> lease) => Slot.TryPassiveBorrow(out lease);
 
 	/// <summary>
 	/// Ensures that a current live version exists.
 	/// </summary>
-	/// <param name="ct">Cancellation token.</param>
 	/// <remarks>
-	/// After successful completion, <see cref="TryPassiveBorrow(out AssetLease{T})"/> is guaranteed to succeed.
+	/// <para>Concurrent calls share the same initial materialization work.</para>
+	/// <para>After successful completion, <see cref="TryPassiveBorrow(out AssetLease{T})"/> is guaranteed to succeed.</para>
 	/// </remarks>
+	/// <exception cref="AssetLoadException">
+	/// Thrown if the asset has no live version and initial materialization fails.
+	/// </exception>
+	/// <exception cref="AssetUnhandledException">
+	/// Thrown if the pipeline did not provide the requested asset.
+	/// </exception>
 	public Task WarmAsync(CancellationToken ct = default) => Slot.WarmAsync(ct);
 
 	/// <summary>
 	/// Prepares a replacement version to later be applied by <see cref="AssetStore.ApplyQueuedReloads()"/>.
 	/// </summary>
-	/// <param name="ct">Cancellation token.</param>
 	/// <remarks>
+	/// <para>
+	/// Concurrent reload requests are coalesced; the published version number reflects accepted
+	/// reload request count, but fewer prepares of the asset may happen.
+	/// </para>
+	/// <para>
 	/// If the asset is currently unloaded, behaves like <see cref="WarmAsync(CancellationToken)"/>.
+	/// </para>
 	/// </remarks>
+	/// <exception cref="AssetLoadException">
+	/// Thrown if the asset has no live version and initial materialization fails.
+	/// </exception>
+	/// <exception cref="AssetUnhandledException">
+	/// Thrown if the pipeline did not provide the requested asset.
+	/// </exception>
 	public Task QueueReloadAsync(CancellationToken ct = default) => Slot.QueueReloadAsync(ct);
 
 	/// <summary>
 	/// Synchronous blocking wrapper over <see cref="WarmAsync(CancellationToken)"/>.
 	/// </summary>
-	/// <param name="ct">Cancellation token.</param>
-	/// <remarks>
-	/// After successful completion, <see cref="TryPassiveBorrow(out AssetLease{T})"/> is guaranteed to succeed.
-	/// </remarks>
+	/// <inheritdoc cref="WarmAsync(CancellationToken)"/>
 	public void Warm(CancellationToken ct = default) => WarmAsync(ct).GetAwaiter().GetResult();
 
 	/// <summary>
 	/// Synchronous blocking wrapper over <see cref="QueueReloadAsync(CancellationToken)"/>.
 	/// </summary>
-	/// <param name="ct">Cancellation token.</param>
-	/// <remarks>
-	/// If the asset is currently unloaded, behaves like <see cref="Warm(CancellationToken)"/>.
-	/// </remarks>
+	/// <inheritdoc cref="QueueReloadAsync(CancellationToken)"/>
 	public void QueueReload(CancellationToken ct = default) => QueueReloadAsync(ct).GetAwaiter().GetResult();
 }
 

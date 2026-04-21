@@ -1,4 +1,4 @@
-# Conventions/DangerousGet.md
+# Conventions/dangerous-get.md
 
 Some types expose methods starting with `DangerousGet`, for example `Graphics.Texture2D.DangerousGetBindGroup()`. Such methods return some underlying value/resource that basically lets you bypass some ownership/lifetime/revocation model or API. Usually, this means either:
 - Exposing a native handle / pointer / something else that can't carry ownership data. Example: most of the `GPU*` types in `Rendering` are just wrappers over a WebGPU object + some metadata. Once an owning object gets disposed, all the non-owning views created from it update accordingly, but if you grab the pointer to the underlying WebGPU object, once the owner is disposed you're just left with a dangling pointer. Additionally, there's nothing stopping you from just calling into WebGPU to release that pointer, even if you got it from a non-owning view, which weakens the model.
@@ -11,6 +11,6 @@ Additionally, since some of these methods expose native handles and such, their 
 ```csharp
 /// <remarks>
 /// <b>The return type is not a stable API and may change without notice.</b>
-/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+/// See <c>Docs/Conventions/dangerous-get.md</c> on <c>DangerousGet*</c> methods for more info.
 /// </remarks>
 ```

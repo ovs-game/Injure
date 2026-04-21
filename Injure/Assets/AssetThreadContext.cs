@@ -29,7 +29,6 @@ public sealed class AssetThreadContext : IDisposable {
 	/// By calling this, the current thread is declaring that it is okay with any
 	/// asset leases borrowed before this call being reclaimed and invalidated.
 	/// </remarks>
-	/// <see cref="AssetStore"/>.
 	public void AtSafeBoundary() {
 		ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
 		Volatile.Write(ref QuiescentEpoch, owner.GetPublishedEpoch());

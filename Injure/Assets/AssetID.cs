@@ -12,9 +12,24 @@ namespace Injure.Assets;
 /// </summary>
 [JsonConverter(typeof(AssetIDJsonConverter))]
 public readonly struct AssetID : IEquatable<AssetID>, ISpanParsable<AssetID> {
-	public readonly string Namespace;
-	public readonly string Path;
+	/// <summary>
+	/// Namespace portion of the asset ID.
+	/// </summary>
+	public string Namespace { get; }
 
+	/// <summary>
+	/// Slash-separated path portion of the asset ID.
+	/// </summary>
+	public string Path { get; }
+
+	/// <summary>
+	/// Creates an asset ID from a namespace and path.
+	/// </summary>
+	/// <param name="ns">Asset namespace.</param>
+	/// <param name="path">Asset path.</param>
+	/// <exception cref="ArgumentException">
+	/// Thrown if <paramref name="ns"/> or <paramref name="path"/> is not valid.
+	/// </exception>
 	public AssetID(string ns, string path) : this(ns, path, skipValidation: false) {
 	}
 
@@ -238,12 +253,18 @@ public readonly struct AssetID : IEquatable<AssetID>, ISpanParsable<AssetID> {
 	}
 }
 
+/// <summary>
+/// <see cref="JsonConverter{T}"/> for <see cref="AssetID"/>s.
+/// </summary>
 public sealed class AssetIDJsonConverter : JsonConverter<AssetID> {
+	/// <summary>Reads a JSON string value and parses it with <see cref="AssetID.Parse(string?)"/>.</summary>
 	public override AssetID Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => AssetID.Parse(reader.GetString());
+
+	/// <summary>Writes an <see cref="AssetID"/> as a JSON string value using <see cref="AssetID.ToString()"/>.</summary>
 	public override void Write(Utf8JsonWriter writer, AssetID val, JsonSerializerOptions options) => writer.WriteStringValue(val.ToString());
 }
 
 /// <summary>
-/// Typed asset identity used for cycle reporting and internal storage/lookups.
+/// Asset identity used for cycle reporting and internal storage/lookups.
 /// </summary>
 public readonly record struct AssetKey(AssetID AssetID, Type AssetType);

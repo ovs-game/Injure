@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using System.Collections.Generic;
+using System.Collections.Immutable;
 
 namespace Injure.Assets;
 
-public sealed class AssetLoadCycleException(AssetID id, Type type, string message, IReadOnlyList<AssetKey> cycle) :
+/// <summary>
+/// Exception thrown when recursive asset loading would create a cycle.
+/// </summary>
+/// <remarks>
+/// Informally speaking, honestly, you probably shouldn't even be loading full assets
+/// inside an asset pipeline component.
+/// </remarks>
+public sealed class AssetLoadCycleException(AssetID id, Type type, string message, ImmutableArray<AssetKey> cycle) :
 	AssetLoadException(id, type, message) {
-	public IReadOnlyList<AssetKey> Cycle { get; } = cycle;
+	/// <summary>
+	/// The detected cycle, in traversal order.
+	/// </summary>
+	public ImmutableArray<AssetKey> Cycle { get; } = cycle;
 }

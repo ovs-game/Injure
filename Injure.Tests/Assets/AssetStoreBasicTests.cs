@@ -1,5 +1,7 @@
 ﻿// SPDX-License-Identifier: MIT
 
+using System.Threading.Tasks;
+
 using Injure.Assets;
 
 namespace Injure.Tests.Assets;
@@ -8,7 +10,7 @@ public sealed class AssetStoreBasicTests {
 	private const string ownerID = "test";
 
 	[Fact]
-	public void BasicFunctionality() {
+	public async Task BasicFunctionality() {
 		AssetStore store = new AssetStore();
 		TestDependencyWatcher watcher = new TestDependencyWatcher();
 		store.RegisterSource(ownerID, new TestSource(new TestDependency("dep")), "source");
@@ -29,7 +31,7 @@ public sealed class AssetStoreBasicTests {
 		Assert.Equal(["watch:dep"], watcher.Log);
 
 		watcher.Raise(new TestDependency("dep"));
-		Assert.True(asset.HasQueuedReload);
+		await AssetTestWait.ForQueuedReloadAsync(asset);
 
 		store.UnregisterCreator(ch);
 		AssetRef<TestAsset> asset2 = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset2"));
@@ -57,7 +59,7 @@ public sealed class AssetStoreBasicTests {
 
 		asset.QueueReload();
 		Assert.True(asset.HasQueuedReload);
-		int published = store.ApplyQueuedReloads();
+		int published = store.ApplyQueuedReloadsOrThrow();
 		Assert.Equal(1, published);
 
 		lease = asset.Borrow();
@@ -78,7 +80,7 @@ public sealed class AssetStoreBasicTests {
 		Assert.Equal($"{ownerID}::asset", v.Val);
 
 		asset.QueueReload();
-		int published = store.ApplyQueuedReloads();
+		int published = store.ApplyQueuedReloadsOrThrow();
 		Assert.Equal(1, published);
 
 		Assert.Throws<AssetLeaseExpiredException>(() => _ = v.Val);

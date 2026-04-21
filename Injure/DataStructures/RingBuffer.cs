@@ -27,6 +27,9 @@ namespace Injure.DataStructures;
 /// <para>
 /// Standard enumeration goes from oldest to newest. Reverse enumeration is supported.
 /// </para>
+/// <para>
+/// Not thread-safe/synchronized. Concurrent mutating operations must be externally mutexed.
+/// </para>
 /// </remarks>
 [DebuggerDisplay("Count = {Count}, Capacity = {Capacity}, Head = {head}")]
 [DebuggerTypeProxy(typeof(RingBufferDebugView<>))]
@@ -129,7 +132,8 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 	/// </exception>
 	public T this[int idx] {
 		get {
-			ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)idx, (uint)count);
+			if ((uint)idx >= (uint)count)
+				throw new ArgumentOutOfRangeException(nameof(idx));
 			return buf[(head + idx) % buf.Length];
 		}
 	}
@@ -355,7 +359,7 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 	/// Determines whether the buffer contains the specified element, using
 	/// the specified equality comparer for the type.
 	/// </summary>
-	public bool Contains(T item, EqualityComparer<T> comparer) => IndexOf(item, comparer) >= 0;
+	public bool Contains(T item, IEqualityComparer<T> comparer) => IndexOf(item, comparer) >= 0;
 
 	/// <summary>
 	/// Determines whether the buffer contains the specified element, using
@@ -367,7 +371,8 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 	/// Returns the logical index of the first occurrence of the specified element,
 	/// using the specified equality comparer for the type.
 	/// </summary>
-	public int IndexOf(T item, EqualityComparer<T> comparer) {
+	public int IndexOf(T item, IEqualityComparer<T> comparer) {
+		ArgumentNullException.ThrowIfNull(comparer);
 		int firstPart = Math.Min(count, buf.Length - head);
 		for (int i = 0; i < firstPart; i++)
 			if (comparer.Equals(buf[head + i], item))
@@ -399,11 +404,11 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 	/// Thrown if <paramref name="dst"/> is <see langword="null"/>.
 	/// </exception>
 	/// <exception cref="ArgumentOutOfRangeException">
-	/// Thrown if <paramref name="dst"/> is negative.
+	/// Thrown if <paramref name="dstOffset"/> is negative.
 	/// </exception>
 	/// <exception cref="ArgumentException">
 	/// Thrown if <paramref name="dstOffset"/> is out of bounds of <paramref name="dst"/>,
-	/// or if <paramref name="dst"/> is too small to recieve all of the elements.
+	/// or if <paramref name="dst"/> is too small to receive all of the elements.
 	/// </exception>
 	public void CopyTo(T[] dst, int dstOffset = 0) {
 		ArgumentNullException.ThrowIfNull(dst);
@@ -411,7 +416,7 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 		if (dstOffset > dst.Length)
 			throw new ArgumentException($"destination offset is out of bounds (dst length = {dst.Length}, offset = {dstOffset})", nameof(dst));
 		if (dst.Length - dstOffset < count)
-			throw new ArgumentException($"destination array is too small (length - offset = {dst.Length - dstOffset}, expected at least {count}", nameof(dst));
+			throw new ArgumentException($"destination array is too small (length - offset = {dst.Length - dstOffset}, expected at least {count})", nameof(dst));
 		CopyTo(dst.AsSpan(dstOffset));
 	}
 
@@ -564,10 +569,10 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 
 		public bool MoveNext() {
 			throwIfVerChanged();
-			if (idx + 1 >= ringbuf.count)
+			if (idx == ringbuf.count)
 				return false;
 			idx++;
-			return true;
+			return idx != ringbuf.count;
 		}
 
 		public void Reset() {
@@ -631,10 +636,10 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 
 		public bool MoveNext() {
 			throwIfVerChanged();
-			if (idx <= 0)
+			if (idx < 0)
 				return false;
 			idx--;
-			return true;
+			return idx >= 0;
 		}
 
 		public void Reset() {

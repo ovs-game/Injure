@@ -19,7 +19,7 @@ public abstract class GPURenderPipelineHandle {
 	/// </summary>
 	/// <remarks>
 	/// <b>The return type is not a stable API and may change without notice.</b>
-	/// See <c>Docs/Conventions/DangerousGet.md</c> on <c>DangerousGet*</c> methods for more info.
+	/// See <c>Docs/Conventions/dangerous-get.md</c> on <c>DangerousGet*</c> methods for more info.
 	/// </remarks>
 	public WGPURenderPipeline DangerousGetNative() => WGPURenderPipeline;
 }

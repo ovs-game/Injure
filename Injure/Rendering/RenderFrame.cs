@@ -113,7 +113,7 @@ public sealed unsafe class RenderFrame : IDisposable {
 	[StackTraceHidden]
 	private static void validateView(GPUTextureViewHandle view, string paramName) {
 		ArgumentNullException.ThrowIfNull(view);
-		if ((view.Usage & TextureUsage.RenderAttachment) == 0)
+		if (view.Usage.HasNone(TextureUsage.RenderAttachment))
 			throw new ArgumentException("view must have RenderAttachment set in its usages", paramName);
 		if (view.Dimension != TextureViewDimension.Dimension2D)
 			throw new ArgumentException("view must be 2D", paramName);
@@ -122,22 +122,22 @@ public sealed unsafe class RenderFrame : IDisposable {
 	[StackTraceHidden]
 	private static void validateColorView(GPUTextureViewHandle colorView, string paramName) {
 		validateView(colorView, paramName);
-		if (colorView.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float
-			or TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32FloatStencil8 or TextureFormat.Stencil8)
+		if (colorView.Format.Tag is TextureFormat.Case.Depth16Unorm or TextureFormat.Case.Depth24Plus or TextureFormat.Case.Depth32Float
+			or TextureFormat.Case.Depth24PlusStencil8 or TextureFormat.Case.Depth32FloatStencil8 or TextureFormat.Case.Stencil8)
 			throw new ArgumentException("color view must be a color format", paramName);
 	}
 
 	[StackTraceHidden]
 	private static void validateDepthView(GPUTextureViewHandle depthView, string paramName) {
 		validateView(depthView, paramName);
-		if (!(depthView.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float))
+		if (!(depthView.Format.Tag is TextureFormat.Case.Depth16Unorm or TextureFormat.Case.Depth24Plus or TextureFormat.Case.Depth32Float))
 			throw new ArgumentException("depth view must be a depth-only format (no stencil)", paramName);
 	}
 
 	[StackTraceHidden]
 	private static void validateDepthStencilView(GPUTextureViewHandle depthStencilView, string paramName) {
 		validateView(depthStencilView, paramName);
-		if (!(depthStencilView.Format is TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32FloatStencil8))
+		if (!(depthStencilView.Format.Tag is TextureFormat.Case.Depth24PlusStencil8 or TextureFormat.Case.Depth32FloatStencil8))
 			throw new ArgumentException("depth+stencil view must be a depth+stencil format", paramName);
 	}
 

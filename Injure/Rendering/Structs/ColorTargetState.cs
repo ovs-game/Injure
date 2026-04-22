@@ -8,12 +8,12 @@ namespace Injure.Rendering;
 /// Describes a color attachment in a render pipeline.
 /// </summary>
 /// <param name="Format">Color attachment format.</param>
-/// <param name="Blend">Optional blend state.</param>
+/// <param name="Blend">Optional blend state; use <see langword="null"/> for none.</param>
 /// <param name="WriteMask">Enabled color channels for writes.</param>
 public readonly record struct ColorTargetState(
 	TextureFormat Format,
-	BlendState? Blend = null,
-	ColorWriteMask WriteMask = ColorWriteMask.All
+	BlendState? Blend,
+	ColorWriteMask WriteMask
 ) {
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUColorTargetState"/>.

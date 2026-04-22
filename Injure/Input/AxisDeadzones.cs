@@ -4,12 +4,17 @@ using System;
 using System.Diagnostics;
 using System.Numerics;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Input;
 
-public enum AxisDeadzoneKind {
-	None,
-	Threshold,
-	Scaled
+[ClosedEnum]
+public readonly partial struct AxisDeadzoneKind {
+	public enum Case {
+		None,
+		Threshold,
+		Scaled
+	}
 }
 
 public readonly record struct AxisDeadzone(
@@ -39,12 +44,15 @@ public readonly record struct AxisDeadzone(
 	}
 }
 
-public enum Axis2DDeadzoneKind {
-	None,
-	Radial,
-	ScaledRadial,
-	Axial,
-	ScaledAxial
+[ClosedEnum]
+public readonly partial struct Axis2DDeadzoneKind {
+	public enum Case {
+		None,
+		Radial,
+		ScaledRadial,
+		Axial,
+		ScaledAxial
+	}
 }
 
 public readonly record struct Axis2DDeadzone(
@@ -63,11 +71,11 @@ public readonly record struct Axis2DDeadzone(
 			return v;
 		if (Outer <= Inner)
 			return Vector2.Zero;
-		return Kind switch {
-			Axis2DDeadzoneKind.Radial => applyRadial(v, scaled: false),
-			Axis2DDeadzoneKind.ScaledRadial => applyRadial(v, scaled: true),
-			Axis2DDeadzoneKind.Axial => new Vector2(applyAxis(v.X, scaled: false), applyAxis(v.Y, scaled: false)),
-			Axis2DDeadzoneKind.ScaledAxial => new Vector2(applyAxis(v.X, scaled: true), applyAxis(v.Y, scaled: true)),
+		return Kind.Tag switch {
+			Axis2DDeadzoneKind.Case.Radial => applyRadial(v, scaled: false),
+			Axis2DDeadzoneKind.Case.ScaledRadial => applyRadial(v, scaled: true),
+			Axis2DDeadzoneKind.Case.Axial => new Vector2(applyAxis(v.X, scaled: false), applyAxis(v.Y, scaled: false)),
+			Axis2DDeadzoneKind.Case.ScaledAxial => new Vector2(applyAxis(v.X, scaled: true), applyAxis(v.Y, scaled: true)),
 			_ => throw new UnreachableException()
 		};
 	}

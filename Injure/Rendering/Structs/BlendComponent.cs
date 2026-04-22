@@ -11,12 +11,10 @@ namespace Injure.Rendering;
 /// <param name="SrcFactor">Factor applied to the source value.</param>
 /// <param name="DstFactor">Factor applied to the destination value.</param>
 public readonly record struct BlendComponent(
-	BlendOperation Operation = BlendOperation.Add,
-	BlendFactor SrcFactor = BlendFactor.One,
-	BlendFactor DstFactor = BlendFactor.Zero
+	BlendOperation Operation,
+	BlendFactor SrcFactor,
+	BlendFactor DstFactor
 ) {
-	public BlendComponent() : this(BlendOperation.Add) {}
-
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUBlendComponent"/>.
 	/// </summary>

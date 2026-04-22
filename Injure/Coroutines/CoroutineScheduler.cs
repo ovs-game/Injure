@@ -826,10 +826,10 @@ public sealed class CoroutineScheduler {
 			for (int i = 0; i < pendingUnhandledFaults.Count; i++) {
 				CoroutineUnhandledFaultInfo info = pendingUnhandledFaults[i];
 				UnhandledFault?.Invoke(info);
-				if (UnhandledFaultMode is CoroUnhandledFaultMode.LogAfterTick or CoroUnhandledFaultMode.LogAndThrowAfterTick)
+				if (UnhandledFaultMode.Tag is CoroUnhandledFaultMode.Case.LogAfterTick or CoroUnhandledFaultMode.Case.LogAndThrowAfterTick)
 					DiagnosticLogSink?.Invoke(CoroDiagnostics.FormatFault(info));
 			}
-			if (UnhandledFaultMode is CoroUnhandledFaultMode.ThrowAfterTick or CoroUnhandledFaultMode.LogAndThrowAfterTick) {
+			if (UnhandledFaultMode.Tag is CoroUnhandledFaultMode.Case.ThrowAfterTick or CoroUnhandledFaultMode.Case.LogAndThrowAfterTick) {
 				CoroutineUnhandledFaultInfo[] arr = pendingUnhandledFaults.ToArray();
 				throw new CoroutineUnhandledFaultsException(arr);
 			}

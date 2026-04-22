@@ -12,13 +12,11 @@ namespace Injure.Rendering;
 /// <param name="DepthFailOp">Operation applied when the stencil test passes but the depth test fails.</param>
 /// <param name="PassOp">Operation applied when both stencil and depth tests pass.</param>
 public readonly record struct StencilFaceState(
-	CompareFunction Compare = CompareFunction.Always,
-	StencilOperation FailOp = StencilOperation.Keep,
-	StencilOperation DepthFailOp = StencilOperation.Keep,
-	StencilOperation PassOp = StencilOperation.Keep
+	CompareFunction Compare,
+	StencilOperation FailOp,
+	StencilOperation DepthFailOp,
+	StencilOperation PassOp
 ) {
-	public StencilFaceState() : this(CompareFunction.Always) {}
-
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUStencilFaceState"/>.
 	/// </summary>

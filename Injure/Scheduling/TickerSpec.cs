@@ -23,10 +23,10 @@ public readonly partial struct TickerStartMode {
 	}
 }
 
-[ClosedEnum(CheckZeroName = false)]
+[ClosedEnum(DefaultIsInvalid = true)]
 public readonly partial struct TickerRetimingMode {
 	public enum Case {
-		KeepPhase,
+		KeepPhase = 1,
 		RestartFromCommitTime
 	}
 }

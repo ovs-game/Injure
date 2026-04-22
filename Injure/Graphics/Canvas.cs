@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 
+using Injure.Analyzers.Attributes;
 using Injure.Assets;
 using Injure.Rendering;
 
@@ -61,22 +62,26 @@ public readonly struct CanvasTarget : IEquatable<CanvasTarget> {
 /// <summary>
 /// Describes how a <see cref="CanvasScissor"/> should be interpreted.
 /// </summary>
-public enum CanvasScissorKind {
-	/// <summary>
-	/// Disable clipping (use the full active target as the scissor).
-	/// </summary>
-	None,
+[ClosedEnum]
+public readonly partial struct CanvasScissorKind {
+	/// <summary>Raw switch tag for <see cref="CanvasScissorKind"/>.</summary>
+	public enum Case {
+		/// <summary>
+		/// Disable clipping (use the full active target as the scissor).
+		/// </summary>
+		None,
 
-	/// <summary>
-	/// Set the current scissor to the given rectangle.
-	/// </summary>
-	Set,
+		/// <summary>
+		/// Set the current scissor to the given rectangle.
+		/// </summary>
+		Set,
 
-	/// <summary>
-	/// Intersect the current scissor with the given rectangle. Only valid on
-	/// overrides, not base params.
-	/// </summary>
-	Intersect
+		/// <summary>
+		/// Intersect the current scissor with the given rectangle. Only valid on
+		/// overrides, not base params.
+		/// </summary>
+		Intersect
+	}
 }
 
 /// <summary>
@@ -127,7 +132,7 @@ public readonly struct CanvasScissor : IEquatable<CanvasScissor> {
 
 	public bool Equals(CanvasScissor other) => Kind == other.Kind && Rect.Equals(other.Rect);
 	public override bool Equals(object? obj) => obj is CanvasScissor other && Equals(other);
-	public override int GetHashCode() => HashCode.Combine((int)Kind, Rect);
+	public override int GetHashCode() => HashCode.Combine((int)Kind.Tag, Rect);
 	public static bool operator ==(CanvasScissor left, CanvasScissor right) => left.Equals(right);
 	public static bool operator !=(CanvasScissor left, CanvasScissor right) => !left.Equals(right);
 }
@@ -152,14 +157,14 @@ public readonly struct CanvasOutputState : IEquatable<CanvasOutputState> {
 		if (blendState is not BlendState s)
 			return 0;
 		return HashCode.Combine(
-			(int)s.Alpha.Operation, (int)s.Alpha.SrcFactor, (int)s.Alpha.DstFactor,
-			(int)s.Color.Operation, (int)s.Color.SrcFactor, (int)s.Color.DstFactor
+			(int)s.Alpha.Operation.Tag, (int)s.Alpha.SrcFactor.Tag, (int)s.Alpha.DstFactor.Tag,
+			(int)s.Color.Operation.Tag, (int)s.Color.SrcFactor.Tag, (int)s.Color.DstFactor.Tag
 		);
 	}
 
 	public bool Equals(CanvasOutputState other) => eq(Blend, other.Blend) && WriteMask == other.WriteMask;
 	public override bool Equals(object? obj) => obj is CanvasOutputState other && Equals(other);
-	public override int GetHashCode() => HashCode.Combine(hash(Blend), (int)WriteMask);
+	public override int GetHashCode() => HashCode.Combine(hash(Blend), (int)WriteMask.Mask);
 	public static bool operator ==(CanvasOutputState left, CanvasOutputState right) => left.Equals(right);
 	public static bool operator !=(CanvasOutputState left, CanvasOutputState right) => !left.Equals(right);
 }
@@ -198,7 +203,7 @@ public readonly struct CanvasMaterial : IEquatable<CanvasMaterial> {
 
 	public bool Equals(CanvasMaterial other) => TextureInterpretation == other.TextureInterpretation && SdfParams == other.SdfParams;
 	public override bool Equals(object? obj) => obj is CanvasMaterial other && Equals(other);
-	public override int GetHashCode() => HashCode.Combine((int)TextureInterpretation, SdfParams);
+	public override int GetHashCode() => HashCode.Combine((int)TextureInterpretation.Tag, SdfParams);
 	public static bool operator ==(CanvasMaterial left, CanvasMaterial right) => left.Equals(right);
 	public static bool operator !=(CanvasMaterial left, CanvasMaterial right) => !left.Equals(right);
 }
@@ -237,27 +242,30 @@ public static class CanvasMaterials {
 /// </summary>
 /// <remarks>
 /// This changes rendering order; it is not merely a batching/performance hint.
-/// <see cref="SwapAndFlush"/> preserves draw-call order across primitive/textured
+/// <see cref="FlushAndSwap"/> preserves draw-call order across primitive/textured
 /// transitions by flushing when the active batch type changes. The other modes
 /// group work together and flush only on canvas flush, reordering visible results.
 /// </remarks>
-public enum CanvasSubmitMode {
-	/// <summary>
-	/// Accumulate primitive and textured draws separately, then submit primitives first
-	/// and textured draws second when flushed.
-	/// </summary>
-	PrimitivesThenTextures,
+[ClosedEnum(CheckZeroName = false)]
+public readonly partial struct CanvasSubmitMode {
+	public enum Case {
+		/// <summary>
+		/// Preserve draw-call order by flushing whenever the active batch type changes.
+		/// </summary>
+		FlushAndSwap,
 
-	/// <summary>
-	/// Accumulate primitive and textured draws separately, then submit textured draws
-	/// first and primitives second when flushed.
-	/// </summary>
-	TexturesThenPrimitives,
+		/// <summary>
+		/// Accumulate primitive and textured draws separately, then submit primitives first
+		/// and textured draws second when flushed.
+		/// </summary>
+		PrimitivesThenTextures,
 
-	/// <summary>
-	/// Preserve draw-call order by flushing whenever the active batch type changes.
-	/// </summary>
-	SwapAndFlush
+		/// <summary>
+		/// Accumulate primitive and textured draws separately, then submit textured draws
+		/// first and primitives second when flushed.
+		/// </summary>
+		TexturesThenPrimitives
+	}
 }
 
 /// <summary>
@@ -299,7 +307,7 @@ public readonly record struct CanvasParams(
 	Matrix3x2 Transform,
 	CanvasOutputState OutputState,
 	CanvasMaterial Material,
-	CanvasSubmitMode SubmitMode = CanvasSubmitMode.SwapAndFlush
+	CanvasSubmitMode SubmitMode = default
 );
 
 /// <summary>
@@ -1130,14 +1138,14 @@ public sealed class Canvas : IDisposable {
 	private static CanvasScissor mergeScissor(CanvasScissor curr, CanvasScissor? ov) {
 		if (ov is not CanvasScissor s)
 			return curr;
-		if (curr.Kind is CanvasScissorKind.Intersect)
+		if (curr.Kind == CanvasScissorKind.Intersect)
 			throw new InternalStateException("Intersect scissor made it to mergeScissor");
-		return s.Kind switch {
-			CanvasScissorKind.None => CanvasScissor.None,
-			CanvasScissorKind.Set => CanvasScissor.Set(s.Rect),
-			CanvasScissorKind.Intersect => curr.Kind switch {
-				CanvasScissorKind.None => CanvasScissor.Set(s.Rect),
-				CanvasScissorKind.Set => CanvasScissor.Set(intersect(curr.Rect, s.Rect)),
+		return s.Kind.Tag switch {
+			CanvasScissorKind.Case.None => CanvasScissor.None,
+			CanvasScissorKind.Case.Set => CanvasScissor.Set(s.Rect),
+			CanvasScissorKind.Case.Intersect => curr.Kind.Tag switch {
+				CanvasScissorKind.Case.None => CanvasScissor.Set(s.Rect),
+				CanvasScissorKind.Case.Set => CanvasScissor.Set(intersect(curr.Rect, s.Rect)),
 				_ => throw new UnreachableException()
 			},
 			_ => throw new UnreachableException()
@@ -1149,10 +1157,10 @@ public sealed class Canvas : IDisposable {
 		int w = (int)(p.Target.IsPrimary ? frame.PrimaryView.Width : p.Target.RenderTarget.Width);
 		int h = (int)(p.Target.IsPrimary ? frame.PrimaryView.Height : p.Target.RenderTarget.Height);
 		RectI full = new RectI(0, 0, w, h);
-		RectI effective = p.Scissor.Kind switch {
-			CanvasScissorKind.None => full,
-			CanvasScissorKind.Set => intersect(full, p.Scissor.Rect),
-			CanvasScissorKind.Intersect =>
+		RectI effective = p.Scissor.Kind.Tag switch {
+			CanvasScissorKind.Case.None => full,
+			CanvasScissorKind.Case.Set => intersect(full, p.Scissor.Rect),
+			CanvasScissorKind.Case.Intersect =>
 				throw new InternalStateException("Intersect scissor made it to applyScissor"),
 			_ => throw new UnreachableException()
 		};
@@ -1196,16 +1204,16 @@ public sealed class Canvas : IDisposable {
 
 	[MemberNotNull(nameof(primbatch))]
 	private void ensurePrimBatch() {
-		switch (CurrentParams.SubmitMode) {
-		case CanvasSubmitMode.PrimitivesThenTextures:
-		case CanvasSubmitMode.TexturesThenPrimitives:
-			primbatch ??= createPrimBatch();
-			break;
-		case CanvasSubmitMode.SwapAndFlush:
+		switch (CurrentParams.SubmitMode.Tag) {
+		case CanvasSubmitMode.Case.FlushAndSwap:
 			if (active != ActiveBatchType.Primitive) {
 				flushActiveBatch();
 				active = ActiveBatchType.Primitive;
 			}
+			primbatch ??= createPrimBatch();
+			break;
+		case CanvasSubmitMode.Case.PrimitivesThenTextures:
+		case CanvasSubmitMode.Case.TexturesThenPrimitives:
 			primbatch ??= createPrimBatch();
 			break;
 		default:
@@ -1226,16 +1234,16 @@ public sealed class Canvas : IDisposable {
 
 	[MemberNotNull(nameof(texbatch))]
 	private void ensureTexBatch() {
-		switch (CurrentParams.SubmitMode) {
-		case CanvasSubmitMode.PrimitivesThenTextures:
-		case CanvasSubmitMode.TexturesThenPrimitives:
-			texbatch ??= createTexBatch();
-			break;
-		case CanvasSubmitMode.SwapAndFlush:
+		switch (CurrentParams.SubmitMode.Tag) {
+		case CanvasSubmitMode.Case.FlushAndSwap:
 			if (active != ActiveBatchType.Textured) {
 				flushActiveBatch();
 				active = ActiveBatchType.Textured;
 			}
+			texbatch ??= createTexBatch();
+			break;
+		case CanvasSubmitMode.Case.PrimitivesThenTextures:
+		case CanvasSubmitMode.Case.TexturesThenPrimitives:
 			texbatch ??= createTexBatch();
 			break;
 		default:
@@ -1279,17 +1287,17 @@ public sealed class Canvas : IDisposable {
 	}
 
 	private void flush(CanvasSubmitMode mode) {
-		switch (mode) {
-		case CanvasSubmitMode.PrimitivesThenTextures:
-			flushPrimBatch();
-			flushTexBatch();
-			break;
-		case CanvasSubmitMode.TexturesThenPrimitives:
-			flushTexBatch();
-			flushPrimBatch();
-			break;
-		case CanvasSubmitMode.SwapAndFlush:
+		switch (mode.Tag) {
+		case CanvasSubmitMode.Case.FlushAndSwap:
 			flushActiveBatch();
+			break;
+		case CanvasSubmitMode.Case.PrimitivesThenTextures:
+			flushPrimBatch();
+			flushTexBatch();
+			break;
+		case CanvasSubmitMode.Case.TexturesThenPrimitives:
+			flushTexBatch();
+			flushPrimBatch();
 			break;
 		}
 		if (primbatch is not null || texbatch is not null)

@@ -19,10 +19,10 @@ namespace Injure.Rendering;
 /// <param name="DepthBiasClamp">Clamp applied to the final depth bias.</param>
 public readonly record struct DepthStencilState(
 	TextureFormat Format,
-	bool DepthWriteEnabled = false,
-	CompareFunction DepthCompare = CompareFunction.Always,
-	StencilFaceState StencilFront = default,
-	StencilFaceState StencilBack = default,
+	bool DepthWriteEnabled,
+	CompareFunction DepthCompare,
+	StencilFaceState StencilFront,
+	StencilFaceState StencilBack,
 	uint StencilReadMask = uint.MaxValue,
 	uint StencilWriteMask = uint.MaxValue,
 	int DepthBias = 0,

@@ -22,7 +22,6 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 
 	private readonly struct ResolvedPassState(LayerPassMask activePasses) {
 		public readonly LayerPassMask ActivePasses = activePasses;
-		public bool Has(LayerPassMask pass) => (ActivePasses & pass) != 0;
 	}
 
 	private struct BlockAccumulator {
@@ -44,11 +43,11 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 			for (int i = 0; i < rules.Length; i++) {
 				ref readonly LayerBlockRule rule = ref rules[i];
 				LayerPassMask passes = rule.Passes & activePasses;
-				if ((passes & LayerPassMask.Update) != 0)
+				if (passes.HasAny(LayerPassMask.Update))
 					merge(ref updateTags, rule.MatchTags);
-				if ((passes & LayerPassMask.Render) != 0)
+				if (passes.HasAny(LayerPassMask.Render))
 					merge(ref renderTags, rule.MatchTags);
-				if ((passes & LayerPassMask.Input) != 0)
+				if (passes.HasAny(LayerPassMask.Input))
 					merge(ref inputTags, rule.MatchTags);
 			}
 		}
@@ -206,11 +205,11 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 				LayerEntry ent = entries[i];
 				ref readonly ResolvedPassState st = ref states[i];
 				LayerTimeDomain tm = ent.Layer.Runtime!.Time;
-				if (!st.Has(LayerPassMask.Update))
+				if (st.ActivePasses.HasNone(LayerPassMask.Update))
 					continue;
 				if (ent.Ticker != ticker)
 					continue;
-				bool consumeInput = st.Has(LayerPassMask.Input);
+				bool consumeInput = st.ActivePasses.HasAny(LayerPassMask.Input);
 				/*
 				ReadOnlySpan<InputActionEvent> events = consumeInput ?
 					InputCollector.ReadSince(ent.NextInputSeq) :
@@ -247,11 +246,11 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 			LayerEntry ent = entries[i];
 			LayerPassMask ptcp = ent.Layer.ParticipatingPasses;
 			LayerPassMask active = LayerPassMask.None;
-			if ((ptcp & LayerPassMask.Update) != 0 && !blocked.IsBlocked(LayerPassMask.Update, in ent.Tags))
+			if (ptcp.HasAny(LayerPassMask.Update) && !blocked.IsBlocked(LayerPassMask.Update, in ent.Tags))
 				active |= LayerPassMask.Update;
-			if ((ptcp & LayerPassMask.Render) != 0 && !blocked.IsBlocked(LayerPassMask.Render, in ent.Tags))
+			if (ptcp.HasAny(LayerPassMask.Render) && !blocked.IsBlocked(LayerPassMask.Render, in ent.Tags))
 				active |= LayerPassMask.Render;
-			if ((ptcp & LayerPassMask.Input) != 0 && !blocked.IsBlocked(LayerPassMask.Input, in ent.Tags))
+			if (ptcp.HasAny(LayerPassMask.Input) && !blocked.IsBlocked(LayerPassMask.Input, in ent.Tags))
 				active |= LayerPassMask.Input;
 			dst[i] = new ResolvedPassState(active);
 			if (active != LayerPassMask.None)

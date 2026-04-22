@@ -45,32 +45,32 @@ internal readonly unsafe struct KernelFallbackChain(Kernel avx2, Kernel ssse3, K
 
 	public bool TryPickSpecific(PlanBackend selected, out Kernel kernel) {
 		kernel = null;
-		switch (selected) {
-		case PlanBackend.AVX2:
+		switch (selected.Tag) {
+		case PlanBackend.Case.AVX2:
 			if (Avx2.IsSupported && AVX2 is not null) {
 				kernel = AVX2;
 				return true;
 			}
 			return false;
-		case PlanBackend.SSSE3:
+		case PlanBackend.Case.SSSE3:
 			if (Ssse3.IsSupported && SSSE3 is not null) {
 				kernel = SSSE3;
 				return true;
 			}
 			return false;
-		case PlanBackend.SSE2:
+		case PlanBackend.Case.SSE2:
 			if (Sse2.IsSupported && SSE2 is not null) {
 				kernel = SSE2;
 				return true;
 			}
 			return false;
-		case PlanBackend.AdvSIMD:
+		case PlanBackend.Case.AdvSIMD:
 			if (AdvSimd.Arm64.IsSupported && AdvSIMD is not null) {
 				kernel = AdvSIMD;
 				return true;
 			}
 			return false;
-		case PlanBackend.Scalar:
+		case PlanBackend.Case.Scalar:
 			if (Scalar is not null) {
 				kernel = Scalar;
 				return true;

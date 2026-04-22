@@ -123,6 +123,12 @@ public sealed class RenderTarget2D : IDisposable {
 	public bool HasStencil => depthStencilTexture is not null && formatHasStencil(depthStencilTexture.Format);
 
 	/// <summary>
+	/// Creates a new <see cref="RenderTarget2D"/> with the given size and <see cref="TextureFormat.RGBA8Unorm"/>.
+	/// </summary>
+	public RenderTarget2D(WebGPUDevice device, uint width, uint height) : this(device, new RenderTarget2DCreateParams(width, height, TextureFormat.RGBA8Unorm)) {
+	}
+
+	/// <summary>
 	/// Creates a new <see cref="RenderTarget2D"/>.
 	/// </summary>
 	public RenderTarget2D(WebGPUDevice device, in RenderTarget2DCreateParams @params) {
@@ -158,6 +164,8 @@ public sealed class RenderTarget2D : IDisposable {
 				));
 				// if the format has stencil we need a separate view for sampling
 				depthSample = formatHasStencil(fmt) ? depthStencil.CreateView(new GPUTextureViewCreateParams(
+					Format: null,
+					Dimension: null,
 					Aspect: TextureAspect.DepthOnly
 				)) : null;
 			}
@@ -240,7 +248,7 @@ public sealed class RenderTarget2D : IDisposable {
 public readonly record struct RenderTarget2DCreateParams(
 	uint Width,
 	uint Height,
-	TextureFormat ColorFormat = TextureFormat.RGBA8Unorm,
+	TextureFormat ColorFormat,
 	TextureFormat? DepthStencilFormat = null,
 	GPUSamplerCreateParams? ColorSampler = null
 );

@@ -5,11 +5,16 @@ using System.Collections.Generic;
 using System.Numerics;
 using HarfBuzzSharp;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Graphics.Text;
 
-public enum TextWrapMode {
-	None,
-	Greedy
+[ClosedEnum]
+public readonly partial struct TextWrapMode {
+	public enum Case {
+		None,
+		Greedy
+	}
 }
 
 internal enum LineBreakKind {

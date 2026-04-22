@@ -29,8 +29,8 @@ public sealed class ActionMapSnapshot {
 		ReadOnlySpan<StateAxisBinding> stateAxisBindings,
 		ReadOnlySpan<StateAxis2DBinding> stateAxis2DBindings,
 		ReadOnlySpan<ImpulseAxisBinding> impulseAxisBindings,
-		StateAxisMergePolicy stateAxisMergePolicy = StateAxisMergePolicy.MaxAbs,
-		StateAxis2DMergePolicy stateAxis2DMergePolicy = StateAxis2DMergePolicy.MaxMagnitude
+		StateAxisMergePolicy stateAxisMergePolicy,
+		StateAxis2DMergePolicy stateAxis2DMergePolicy
 	) {
 		this.buttonBindings = validate(buttonBindings, b => (b.Action, b.Source), "button");
 		this.stateAxisBindings = validate(stateAxisBindings, b => (b.Action, b.Source), "state axis");

@@ -2,6 +2,8 @@
 
 using System.Numerics;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Input;
 
 public readonly record struct ButtonBinding(
@@ -29,12 +31,18 @@ public readonly record struct ImpulseAxisBinding(
 	float Scale
 );
 
-public enum StateAxisMergePolicy {
-	MaxAbs,
-	SumClamp
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct StateAxisMergePolicy {
+	public enum Case {
+		MaxAbs = 1,
+		SumClamp
+	}
 }
 
-public enum StateAxis2DMergePolicy {
-	MaxMagnitude,
-	SumClamp
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct StateAxis2DMergePolicy {
+	public enum Case {
+		MaxMagnitude = 1,
+		SumClamp
+	}
 }

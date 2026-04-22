@@ -17,9 +17,11 @@ public readonly record struct WindowConfig(
 
 public readonly record struct RenderConfig(
 	RenderSettings Settings,
-	PowerPreference PowerPreference = PowerPreference.HighPerformance,
-	BackendType Backend = BackendType.Undefined
-);
+	PowerPreference PowerPreference,
+	BackendType Backend = default
+) {
+	public RenderConfig(RenderSettings Settings) : this(Settings, PowerPreference.HighPerformance) {}
+};
 
 public readonly record struct TimingConfig(
 	TimingSettings Settings

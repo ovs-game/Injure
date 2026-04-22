@@ -12,6 +12,6 @@ namespace Injure.Rendering;
 /// <param name="Attributes">Vertex attribute declarations.</param>
 public readonly record struct VertexBufferLayout(
 	ulong ArrayStride,
-	VertexStepMode StepMode = VertexStepMode.Vertex,
-	ImmutableArray<VertexAttribute> Attributes = default
+	VertexStepMode StepMode,
+	ImmutableArray<VertexAttribute> Attributes
 );

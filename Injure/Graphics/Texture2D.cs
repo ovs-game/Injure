@@ -4,6 +4,8 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
+
+using Injure.Analyzers.Attributes;
 using Injure.Assets;
 using Injure.Graphics.PixelConv;
 using Injure.Rendering;
@@ -13,13 +15,17 @@ namespace Injure.Graphics;
 /// <summary>
 /// High-level storage formats supported by <see cref="Texture2D"/>.
 /// </summary>
-public enum Texture2DFormat {
-	R8_UNorm,
-	RG16_UNorm,
-	RGBA32_UNorm,
-	RGBA32_UNorm_Srgb,
-	BGRA32_UNorm,
-	BGRA32_UNorm_Srgb
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct Texture2DFormat {
+	/// <summary>Raw switch tag for <see cref="Texture2DFormat"/>.</summary>
+	public enum Case {
+		R8_UNorm = 1,
+		RG16_UNorm,
+		RGBA32_UNorm,
+		RGBA32_UNorm_Srgb,
+		BGRA32_UNorm,
+		BGRA32_UNorm_Srgb
+	}
 }
 
 /// <summary>
@@ -95,8 +101,7 @@ public sealed class Texture2D : IRevokable, IDisposable {
 	public PixelFormat UploadPixelFormat { get; }
 
 	/// <summary>
-	/// Creates an empty <see cref="Texture2D"/> with the given size and
-	/// <see cref="Texture2DFormat.RGBA32_UNorm"/>.
+	/// Creates an empty <see cref="Texture2D"/> with the given size and <see cref="Texture2DFormat.RGBA32_UNorm"/>.
 	/// </summary>
 	public Texture2D(WebGPUDevice device, uint width, uint height)
 		: this(device, new Texture2DCreateParams(width, height)) {
@@ -118,8 +123,9 @@ public sealed class Texture2D : IRevokable, IDisposable {
 		ArgumentOutOfRangeException.ThrowIfZero(@params.Height);
 
 		this.device = device;
-		Format = @params.Format;
-		UploadPixelFormat = getUploadPixelFormat(@params.Format);
+		Texture2DFormat fmt = @params.Format ?? Texture2DFormat.RGBA32_UNorm;
+		Format = fmt;
+		UploadPixelFormat = getUploadPixelFormat(fmt);
 
 		GPUTexture? texture = null;
 		GPUSampler? sampler = null;
@@ -131,7 +137,7 @@ public sealed class Texture2D : IRevokable, IDisposable {
 				MipLevelCount: 1,
 				SampleCount: 1,
 				Dimension: TextureDimension.Dimension2D,
-				Format: getTextureFormat(@params.Format),
+				Format: getTextureFormat(fmt),
 				Usage: TextureUsage.TextureBinding | TextureUsage.CopyDst
 			));
 			sampler = device.CreateSampler(@params.SamplerParams ?? SamplerStates.NearestClamp);
@@ -186,7 +192,8 @@ public sealed class Texture2D : IRevokable, IDisposable {
 				Width: (uint)width,
 				Height: (uint)height,
 				DepthOrArrayLayers: 1,
-				MipLevel: 0
+				MipLevel: 0,
+				Aspect: TextureAspect.All
 			),
 			converted,
 			new GPUTextureLayout(
@@ -221,23 +228,23 @@ public sealed class Texture2D : IRevokable, IDisposable {
 		texture.Dispose();
 	}
 
-	private static TextureFormat getTextureFormat(Texture2DFormat fmt) => fmt switch {
-		Texture2DFormat.R8_UNorm          => TextureFormat.R8Unorm,
-		Texture2DFormat.RG16_UNorm        => TextureFormat.RG8Unorm,
-		Texture2DFormat.RGBA32_UNorm      => TextureFormat.RGBA8Unorm,
-		Texture2DFormat.RGBA32_UNorm_Srgb => TextureFormat.RGBA8UnormSrgb,
-		Texture2DFormat.BGRA32_UNorm      => TextureFormat.BGRA8Unorm,
-		Texture2DFormat.BGRA32_UNorm_Srgb => TextureFormat.BGRA8UnormSrgb,
+	private static TextureFormat getTextureFormat(Texture2DFormat fmt) => fmt.Tag switch {
+		Texture2DFormat.Case.R8_UNorm          => TextureFormat.R8Unorm,
+		Texture2DFormat.Case.RG16_UNorm        => TextureFormat.RG8Unorm,
+		Texture2DFormat.Case.RGBA32_UNorm      => TextureFormat.RGBA8Unorm,
+		Texture2DFormat.Case.RGBA32_UNorm_Srgb => TextureFormat.RGBA8UnormSrgb,
+		Texture2DFormat.Case.BGRA32_UNorm      => TextureFormat.BGRA8Unorm,
+		Texture2DFormat.Case.BGRA32_UNorm_Srgb => TextureFormat.BGRA8UnormSrgb,
 		_ => throw new UnreachableException()
 	};
 
-	private static PixelFormat getUploadPixelFormat(Texture2DFormat fmt) => fmt switch {
-		Texture2DFormat.R8_UNorm          => PixelFormat.R8_UNorm,
-		Texture2DFormat.RG16_UNorm        => PixelFormat.RG16_UNorm,
-		Texture2DFormat.RGBA32_UNorm      => PixelFormat.RGBA32_UNorm,
-		Texture2DFormat.RGBA32_UNorm_Srgb => PixelFormat.RGBA32_UNorm,
-		Texture2DFormat.BGRA32_UNorm      => PixelFormat.BGRA32_UNorm,
-		Texture2DFormat.BGRA32_UNorm_Srgb => PixelFormat.BGRA32_UNorm,
+	private static PixelFormat getUploadPixelFormat(Texture2DFormat fmt) => fmt.Tag switch {
+		Texture2DFormat.Case.R8_UNorm          => PixelFormat.R8_UNorm,
+		Texture2DFormat.Case.RG16_UNorm        => PixelFormat.RG16_UNorm,
+		Texture2DFormat.Case.RGBA32_UNorm      => PixelFormat.RGBA32_UNorm,
+		Texture2DFormat.Case.RGBA32_UNorm_Srgb => PixelFormat.RGBA32_UNorm,
+		Texture2DFormat.Case.BGRA32_UNorm      => PixelFormat.BGRA32_UNorm,
+		Texture2DFormat.Case.BGRA32_UNorm_Srgb => PixelFormat.BGRA32_UNorm,
 		_ => throw new UnreachableException()
 	};
 
@@ -255,7 +262,10 @@ public sealed class Texture2D : IRevokable, IDisposable {
 /// </summary>
 /// <param name="Width">Texture width in texels.</param>
 /// <param name="Height">Texture height in texels.</param>
-/// <param name="Format">GPU storage format of the texture.</param>
+/// <param name="Format">
+/// GPU storage format of the texture.
+/// If <see langword="null"/>, some sane default (currently <see cref="Texture2DFormat.RGBA32_UNorm"/>) will be chosen.
+/// </param>
 /// <param name="SamplerParams">
 /// Sampler creation parameters for the sampler created alongside the texture.
 /// If <see langword="null"/>, <see cref="SamplerStates.NearestClamp"/> will be used.
@@ -263,6 +273,6 @@ public sealed class Texture2D : IRevokable, IDisposable {
 public readonly record struct Texture2DCreateParams(
 	uint Width,
 	uint Height,
-	Texture2DFormat Format = Texture2DFormat.RGBA32_UNorm,
+	Texture2DFormat? Format = null,
 	GPUSamplerCreateParams? SamplerParams = null
 );

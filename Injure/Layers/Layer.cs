@@ -2,17 +2,22 @@
 
 using System;
 using System.Diagnostics.CodeAnalysis;
+
+using Injure.Analyzers.Attributes;
 using Injure.Coroutines;
 using Injure.Graphics;
 
 namespace Injure.Layers;
 
-[Flags]
-public enum LayerPassMask {
-	None   = 0,
-	Update = 1 << 0,
-	Render = 1 << 1,
-	Input  = 1 << 2
+[ClosedFlags]
+public readonly partial struct LayerPassMask {
+	[Flags]
+	public enum Bits {
+		None   = 0,
+		Update = 1 << 0,
+		Render = 1 << 1,
+		Input  = 1 << 2
+	}
 }
 
 public readonly record struct LayerBlockRule(

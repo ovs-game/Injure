@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: MIT
 
+using Injure.Analyzers.Attributes;
 using Injure.Graphics;
 
 namespace Injure.Core;
 
-public enum LoadingPhase {
-	Start,
-	Tick,
-	Finish
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct LoadingPhase {
+	public enum Case {
+		Start = 1,
+		Tick,
+		Finish
+	}
 }
 
 public readonly struct LoadingContext(LoadingPhase phase, double elapsed = 0.0, bool redrawRequested = false) {
@@ -16,13 +20,16 @@ public readonly struct LoadingContext(LoadingPhase phase, double elapsed = 0.0, 
 	public readonly bool RedrawRequested = redrawRequested;
 }
 
-public enum HostEventKind {
-	Resized,
-	Minimized,
-	Maximized,
-	Restored,
-	FocusGained,
-	FocusLost
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct HostEventKind {
+	public enum Case {
+		Resized = 1,
+		Minimized,
+		Maximized,
+		Restored,
+		FocusGained,
+		FocusLost
+	}
 }
 
 public readonly struct HostEvent(HostEventKind kind, uint width = 0, uint height = 0) {

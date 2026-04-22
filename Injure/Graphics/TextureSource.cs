@@ -9,7 +9,7 @@ using Injure.Rendering;
 
 namespace Injure.Graphics;
 
-public enum TextureSourceKind {
+internal enum TextureSourceKind {
 	Texture2D,
 	RenderTarget2D,
 	Texture2DAssetRef
@@ -17,7 +17,7 @@ public enum TextureSourceKind {
 
 public readonly struct TextureSource : IEquatable<TextureSource> {
 	private readonly object val;
-	public TextureSourceKind Kind { get; }
+	internal TextureSourceKind Kind { get; }
 
 	private TextureSource(object val, TextureSourceKind kind) {
 		ArgumentNullException.ThrowIfNull(val);

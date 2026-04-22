@@ -2,14 +2,20 @@
 
 using System;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Rendering;
 
-[Flags]
-public enum TextureUsage : ulong {
-	None = 0ul,
-	CopySrc = 1ul,
-	CopyDst = 2ul,
-	TextureBinding = 4ul,
-	StorageBinding = 8ul,
-	RenderAttachment = 0x10ul
+[ClosedFlags]
+[ClosedFlagsMirror(typeof(WebGPU.WGPUTextureUsage))]
+public readonly partial struct TextureUsage {
+	[Flags]
+	public enum Bits : ulong {
+		None = 0ul,
+		CopySrc = 1ul,
+		CopyDst = 2ul,
+		TextureBinding = 4ul,
+		StorageBinding = 8ul,
+		RenderAttachment = 0x10ul
+	}
 }

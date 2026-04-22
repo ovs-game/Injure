@@ -218,13 +218,11 @@ public sealed class GPUTextureViewRef : GPUTextureViewHandle {
 /// Usage flags are currently not settable; proper support is planned.
 /// </remarks>
 public readonly record struct GPUTextureViewCreateParams(
-	TextureFormat? Format = null,
-	TextureViewDimension? Dimension = null,
-	TextureAspect Aspect = TextureAspect.All,
+	TextureFormat? Format,
+	TextureViewDimension? Dimension,
+	TextureAspect Aspect,
 	uint BaseMipLevel = 0,
 	uint? MipLevelCount = null,
 	uint BaseArrayLayer = 0,
 	uint? ArrayLayerCount = null
-) {
-	public GPUTextureViewCreateParams() : this(null) {}
-};
+);

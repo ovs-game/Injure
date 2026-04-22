@@ -89,8 +89,8 @@ internal sealed class ResolvedFontFallbackChain {
 			BinaryPrimitives.WriteUInt64LittleEndian(buf[i..], t.Key.ID); i += 8;
 			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], unchecked((uint)t.Key.FaceIndex)); i += 4;
 			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], unchecked((uint)t.Key.Options.PixelSize)); i += 4;
-			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], (uint)t.Key.Options.RasterMode); i += 4;
-			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], (uint)t.Key.Options.Hinting); i += 4;
+			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], (uint)t.Key.Options.RasterMode.Tag); i += 4;
+			BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], (uint)t.Key.Options.Hinting.Tag); i += 4;
 			buf[i++] = t.Key.Options.UseEmbeddedBitmaps ? (byte)1 : (byte)0;
 			BinaryPrimitives.WriteUInt64LittleEndian(buf[i..], t.Version); i += 8;
 			h.Append(buf);

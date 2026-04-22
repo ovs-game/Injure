@@ -6,6 +6,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Injure.Analyzers.Attributes;
 using Injure.Assets;
 using Injure.Assets.Builtin;
 using Injure.Rendering;
@@ -15,26 +16,30 @@ namespace Injure.Graphics;
 /// <summary>
 /// Describes how <see cref="TexturedBatch"/> should interpret sampled texture data.
 /// </summary>
-public enum TextureInterpretation {
-	/// <summary>
-	/// Interprets the texture as ordinary color data.
-	/// </summary>
-	Color,
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct TextureInterpretation {
+	/// <summary>Raw switch tag for <see cref="TextureInterpretation"/>.</summary>
+	public enum Case {
+		/// <summary>
+		/// Interprets the texture as ordinary color data.
+		/// </summary>
+		Color = 1,
 
-	/// <summary>
-	/// Interprets the texture's red channel as a coverage mask.
-	/// </summary>
-	RMask,
+		/// <summary>
+		/// Interprets the texture's red channel as a coverage mask.
+		/// </summary>
+		RMask,
 
-	/// <summary>
-	/// Interprets the texture as a signed distance field.
-	/// </summary>
-	/// <remarks>
-	/// Typically, whatever is exposing a <see cref="TextureInterpretation"/> enum
-	/// parameter will also expose some way to pass in a <see cref="SdfParams"/> struct,
-	/// as setting those parameters is required for this interpretation mode.
-	/// </remarks>
-	SDF
+		/// <summary>
+		/// Interprets the texture as a signed distance field.
+		/// </summary>
+		/// <remarks>
+		/// Typically, whatever is exposing a <see cref="TextureInterpretation"/> enum
+		/// parameter will also expose some way to pass in a <see cref="SdfParams"/> struct,
+		/// as setting those parameters is required for this interpretation mode.
+		/// </remarks>
+		SDF
+	}
 }
 
 /// <summary>
@@ -85,10 +90,10 @@ public sealed class TexturedBatchSharedState : IDisposable {
 		ColorWriteMask colorWriteMask, TextureInterpretation interp, TextureFormat colorTargetFormat) {
 		TextureInterpretation = interp;
 		ColorTargetFormat = colorTargetFormat;
-		BuiltinShaderInfo shaderInfo = interp switch {
-			TextureInterpretation.Color => BuiltinShaders.Textured2DColor,
-			TextureInterpretation.RMask => BuiltinShaders.Textured2DRMask,
-			TextureInterpretation.SDF => BuiltinShaders.Textured2DSDF,
+		BuiltinShaderInfo shaderInfo = interp.Tag switch {
+			TextureInterpretation.Case.Color => BuiltinShaders.Textured2DColor,
+			TextureInterpretation.Case.RMask => BuiltinShaders.Textured2DRMask,
+			TextureInterpretation.Case.SDF => BuiltinShaders.Textured2DSDF,
 			_ => throw new UnreachableException()
 		};
 		_shader = device.CreateShaderModuleWGSL(engineResources.GetText(shaderInfo.ResourceID));
@@ -109,6 +114,7 @@ public sealed class TexturedBatchSharedState : IDisposable {
 				Buffers: [
 					new VertexBufferLayout(
 						ArrayStride: (ulong)Vertex2DTextureColor.Size,
+						StepMode: VertexStepMode.Vertex,
 						Attributes: [
 							new VertexAttribute(
 								Format: VertexFormat.Float32x2,

@@ -29,7 +29,7 @@ internal sealed class LayerRuntime : ILayerTickTracker, IDisposable {
 
 	public void BeforeUpdate(in LayerTickContext ctx) {
 		foreach (ITickTimestampReceiver r in toUpdate)
-			r.Update(ctx.Tick);
+			r.Update(ctx.MonoTick);
 	}
 
 	public void AfterUpdate(in LayerTickContext ctx) {

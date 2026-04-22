@@ -14,11 +14,17 @@ namespace Injure.Rendering;
 /// <param name="UnclippedDepth">If true, depth clipping will be disabled.</param>
 public readonly record struct PrimitiveState(
 	PrimitiveTopology Topology,
-	IndexFormat StripIndexFormat = IndexFormat.Undefined,
-	FrontFace FrontFace = FrontFace.CCW,
-	CullMode CullMode = CullMode.None,
-	bool UnclippedDepth = false
+	IndexFormat StripIndexFormat,
+	FrontFace FrontFace,
+	CullMode CullMode,
+	bool UnclippedDepth
 ) {
+	public PrimitiveState(PrimitiveTopology Topology) : this(Topology, IndexFormat.Undefined, FrontFace.CCW, CullMode.None, false) {
+	}
+	public PrimitiveState(PrimitiveTopology Topology, FrontFace FrontFace, CullMode CullMode) :
+		this(Topology, IndexFormat.Undefined, FrontFace, CullMode, false) {
+	}
+
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUPrimitiveState"/>.
 	/// </summary>

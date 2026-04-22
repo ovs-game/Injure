@@ -6,11 +6,9 @@ namespace Injure.Analyzers.Shared;
 
 internal static class Diagnostics {
 	// IJ0001-IJ0099 infrastructure/shared
-	// IJ0100-IJ0199 ClosedEnum
-	// IJ0200-IJ0299 ClosedFlags
-	// IJ0300-IJ0399 ClosedUnion
-	// IJ0400-IJ0499 StronglyTypedInt
-	// IJ9900-IJ9999 diagnostics for obsoletion/deprecation
+	// IJ0100-IJ0124 ClosedEnum
+	// IJ0125-IJ0149 ClosedFlags
+	// IJ0200-IJ0249 StronglyTypedInt
 	// TODO: also figure out subranges which also probably means renumbering them Again
 
 #pragma warning disable RS2008 // enable analyzer release tracking
@@ -95,8 +93,98 @@ internal static class Diagnostics {
 		isEnabledByDefault: true
 	);
 
+	public static readonly DiagnosticDescriptor ClosedFlagsInvalidTarget = new DiagnosticDescriptor(
+		id: "IJ0125",
+		title: "invalid target for attribute ClosedFlags",
+		messageFormat: "{0}",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true
+	);
+
+	public static readonly DiagnosticDescriptor ClosedFlagsMustBeReadonly = new DiagnosticDescriptor(
+		id: "IJ0126",
+		title: "ClosedFlags target must be readonly",
+		messageFormat: "ClosedFlags target struct '{0}' must be a readonly struct",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true
+	);
+
+	public static readonly DiagnosticDescriptor ClosedFlagsInvalidSourceShape = new DiagnosticDescriptor(
+		id: "IJ0127",
+		title: "invalid ClosedFlags source shape",
+		messageFormat: "{0}",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true
+	);
+
+	public static readonly DiagnosticDescriptor ClosedFlagsInvalidBitsEnum = new DiagnosticDescriptor(
+		id: "IJ0128",
+		title: "invalid ClosedFlags Bits enum",
+		messageFormat: "{0}",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true
+	);
+
+	public static readonly DiagnosticDescriptor ClosedFlagsAliasNotSupported = new DiagnosticDescriptor(
+		id: "IJ0129",
+		title: "ClosedFlags aliases are not supported",
+		messageFormat: "ClosedFlags Bits member '{0}' has the same numeric value as '{1}' ({2}); aliases are not supported",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true
+	);
+
+	public static readonly DiagnosticDescriptor ClosedFlagsBadMemberValue = new DiagnosticDescriptor(
+		id: "IJ0130",
+		title: "ClosedFlags members must all be atomic powers of two or ORs of previously declared members",
+		messageFormat: "ClosedFlags Bits member '{0}' is not a power of two and does not consist of purely already known power-of-two members",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true
+	);
+
+	public static readonly DiagnosticDescriptor ClosedFlagsDefaultRule = new DiagnosticDescriptor(
+		id: "IJ0131",
+		title: "ClosedFlags default-value rule violation",
+		messageFormat: "{0}",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true
+	);
+
+	public static readonly DiagnosticDescriptor ClosedFlagsSuspiciousZeroName = new DiagnosticDescriptor(
+		id: "IJ0132",
+		title: "ClosedFlags member with zero value does not look neutral",
+		messageFormat: "ClosedFlags zero-valued member '{0}' does not look like a neutral/default state; consider renaming it or using DefaultIsInvalid = true",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Warning,
+		isEnabledByDefault: true
+	);
+
+	public static readonly DiagnosticDescriptor ClosedFlagsMirrorInvalid = new DiagnosticDescriptor(
+		id: "IJ0133",
+		title: "invalid ClosedFlags mirror declaration",
+		messageFormat: "{0}",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true
+	);
+
+	public static readonly DiagnosticDescriptor ClosedFlagsMirrorMismatch = new DiagnosticDescriptor(
+		id: "IJ0134",
+		title: "ClosedFlags mirror numeric values do not match",
+		messageFormat: "{0}",
+		category: "ClosedFlags",
+		defaultSeverity: DiagnosticSeverity.Error,
+		isEnabledByDefault: true
+	);
+
 	public static readonly DiagnosticDescriptor StronglyTypedIntInvalidTarget = new DiagnosticDescriptor(
-		id: "IJ0401",
+		id: "IJ0201",
 		title: "invalid target for attribute StronglyTypedInt",
 		messageFormat: "{0}",
 		category: "StronglyTypedInt",
@@ -105,7 +193,7 @@ internal static class Diagnostics {
 	);
 
 	public static readonly DiagnosticDescriptor StronglyTypedIntMustBeReadonly = new DiagnosticDescriptor(
-		id: "IJ0402",
+		id: "IJ0202",
 		title: "StronglyTypedInt target must be readonly",
 		messageFormat: "StronglyTypedInt target struct '{0}' must be a readonly struct",
 		category: "StronglyTypedInt",
@@ -114,7 +202,7 @@ internal static class Diagnostics {
 	);
 
 	public static readonly DiagnosticDescriptor StronglyTypedIntUnsupportedBacking = new DiagnosticDescriptor(
-		id: "IJ0403",
+		id: "IJ0203",
 		title: "unsupported backing type for StronglyTypedInt",
 		messageFormat: "backing type '{0}' is not supported (supported: int, uint, long, ulong, Int128, UInt128)",
 		category: "StronglyTypedInt",
@@ -123,7 +211,7 @@ internal static class Diagnostics {
 	);
 
 	public static readonly DiagnosticDescriptor StronglyTypedIntMemberCollision = new DiagnosticDescriptor(
-		id: "IJ0404",
+		id: "IJ0204",
 		title: "existing member collides with reserved member for StronglyTypedInt",
 		messageFormat: "{0}",
 		category: "StronglyTypedInt",

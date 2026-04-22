@@ -13,7 +13,7 @@ using Injure.Assets.Builtin;
 using Injure.Audio;
 using Injure.Graphics;
 using Injure.Graphics.Text;
-using Injure.Input;
+//using Injure.Input;
 using Injure.Rendering;
 using Injure.Scheduling;
 using Injure.Timing;
@@ -115,15 +115,15 @@ public static unsafe class Runner {
 		if (s.Borderless) SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_BORDERLESS_BOOLEAN, true);
 		if (s.Fullscreen) SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, true);
 		if (conf.AllowHighDPI) SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
-		switch (s.Mode) {
-		case WindowMode.Minimized: SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_MINIMIZED_BOOLEAN, true); break;
-		case WindowMode.Maximized: SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, true); break;
+		switch (s.Mode.Tag) {
+		case WindowMode.Case.Minimized: SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_MINIMIZED_BOOLEAN, true); break;
+		case WindowMode.Case.Maximized: SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, true); break;
 		}
 		int x, y;
-		switch (s.Positioning) {
-		case WindowPositioning.Undefined: x = y = unchecked((int)SDL.SDL_WINDOWPOS_UNDEFINED_MASK); break;
-		case WindowPositioning.Centered: x = y = unchecked((int)SDL.SDL_WINDOWPOS_CENTERED_MASK); break;
-		case WindowPositioning.Explicit: x = s.X; y = s.Y; break;
+		switch (s.Positioning.Tag) {
+		case WindowPositioning.Case.Undefined: x = y = unchecked((int)SDL.SDL_WINDOWPOS_UNDEFINED_MASK); break;
+		case WindowPositioning.Case.Centered: x = y = unchecked((int)SDL.SDL_WINDOWPOS_CENTERED_MASK); break;
+		case WindowPositioning.Case.Explicit: x = s.X; y = s.Y; break;
 		default: throw new UnreachableException(); // silence "use of unassigned local"
 		}
 		SDL.SetNumberProperty(props, SDL.SDL_PROP_WINDOW_CREATE_X_NUMBER, x);
@@ -140,7 +140,7 @@ public static unsafe class Runner {
 
 		// validation and basic init
 		if (tmst.RenderMode == RenderTimingMode.Capped) ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tmst.TargetFPS);
-		if (tmst.LoopMode == LoopTimingMode.Wait) {
+		if (tmst.LoopMode == LoopTimingMode.Normal) {
 			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(tmst.TargetLoopHz);
 			if (tmst.TargetFPS > tmst.TargetLoopHz)
 				throw new ArgumentException("TargetFPS cannot be higher than TargetLoopHz; if you want to go higher, increase TargetLoopHz");
@@ -201,10 +201,10 @@ bootstrapCancelled:
 
 		// webgpu setup
 		gpuDevice = bootstrap.Result;
-		sfOutput = new SurfaceRenderOutput(gpuDevice, SDLOwner.SurfaceHost!, rconf.Settings.PresentMode switch {
-			PresentMode.TearFree => SurfacePresentModePolicy.AutoMailbox,
-			PresentMode.Adaptive => SurfacePresentModePolicy.AutoFifoRelaxed,
-			PresentMode.LowLatency => SurfacePresentModePolicy.AutoImmediate,
+		sfOutput = new SurfaceRenderOutput(gpuDevice, SDLOwner.SurfaceHost!, rconf.Settings.PresentMode.Tag switch {
+			PresentMode.Case.TearFree => SurfacePresentModePolicy.AutoMailbox,
+			PresentMode.Case.Adaptive => SurfacePresentModePolicy.AutoFifoRelaxed,
+			PresentMode.Case.LowLatency => SurfacePresentModePolicy.AutoImmediate,
 			_ => throw new UnreachableException()
 		});
 		viewGlobals = new ViewGlobals(gpuDevice, sfOutput.Width, sfOutput.Height);
@@ -229,7 +229,7 @@ bootstrapCancelled:
 			assets = new AssetStore();
 			assets.RegisterResolver(ModUtils.Info.OwnerID, new Texture2DJsonAssetResolver(), "Texture2DJsonAssetResolver");
 			assets.RegisterResolver(ModUtils.Info.OwnerID, new Texture2DImageAssetResolver(), "Texture2DImageAssetResolver");
-			assets.RegisterCreator(ModUtils.Info.OwnerID, new Texture2DAssetCreator(gpuDevice), "Texture2DAssetCreator");
+			assets.RegisterStagedCreator(ModUtils.Info.OwnerID, new Texture2DAssetCreator(gpuDevice), "Texture2DAssetCreator");
 			assetCtx = assets.AttachCurrentThread();
 		}
 		AudioEngine? audio = svconf.Audio ? new AudioEngine() : null;
@@ -274,8 +274,8 @@ bootstrapCancelled:
 			if (st.QuitRequested)
 				break;
 
-			switch (tmst.RenderMode) {
-			case RenderTimingMode.Capped:
+			switch (tmst.RenderMode.Tag) {
+			case RenderTimingMode.Case.Capped:
 				renderAccum += dt;
 				if (renderAccum >= renderStep) {
 					render(game);
@@ -284,7 +284,7 @@ bootstrapCancelled:
 						renderAccum = 0.0;
 				}
 				break;
-			case RenderTimingMode.Uncapped:
+			case RenderTimingMode.Case.Uncapped:
 				render(game);
 				break;
 			}
@@ -295,7 +295,7 @@ bootstrapCancelled:
 			// my best attempt to make a reasonably millisecond precise wait
 			// SDL_Delay is unreliable for delays around <15ms due to OS scheduling,
 			// so after a lot of experimentation and trial and error i came up with this
-			if (tmst.LoopMode == LoopTimingMode.Wait) {
+			if (tmst.LoopMode == LoopTimingMode.Normal) {
 				MonoTick deadline = nextLoopDeadline;
 				if (sched.TryGetEarliestNextAt(out MonoTick nextTickDeadline) && nextTickDeadline < deadline)
 					deadline = nextTickDeadline;

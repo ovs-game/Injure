@@ -199,7 +199,7 @@ internal sealed class InputSystem {
 	}
 
 	private void setKey(Key key, bool down) {
-		int idx = (int)key;
+		int idx = (int)key.Tag;
 		if ((uint)idx > 0xffu)
 			return;
 		int word = idx >> 6;
@@ -214,7 +214,7 @@ internal sealed class InputSystem {
 	}
 
 	private void setPointerButton(PointerButton button, bool down) {
-		int idx = (int)button;
+		int idx = (int)button.Tag;
 		if ((uint)idx >= 8u)
 			return;
 		byte mask = (byte)(1u << idx);
@@ -222,18 +222,18 @@ internal sealed class InputSystem {
 	}
 
 	private static void setGamepadAxis(ref MutableGamepadState g, GamepadAxis axis, float value) {
-		switch (axis) {
-		case GamepadAxis.LeftX: g.LeftX = value; break;
-		case GamepadAxis.LeftY: g.LeftY = value; break;
-		case GamepadAxis.RightX: g.RightX = value; break;
-		case GamepadAxis.RightY: g.RightY = value; break;
-		case GamepadAxis.LeftTrigger: g.LeftTrigger = value; break;
-		case GamepadAxis.RightTrigger: g.RightTrigger = value; break;
+		switch (axis.Tag) {
+		case GamepadAxis.Case.LeftX: g.LeftX = value; break;
+		case GamepadAxis.Case.LeftY: g.LeftY = value; break;
+		case GamepadAxis.Case.RightX: g.RightX = value; break;
+		case GamepadAxis.Case.RightY: g.RightY = value; break;
+		case GamepadAxis.Case.LeftTrigger: g.LeftTrigger = value; break;
+		case GamepadAxis.Case.RightTrigger: g.RightTrigger = value; break;
 		}
 	}
 
 	private static void setGamepadButton(ref MutableGamepadState g, GamepadButton button, bool down) {
-		int idx = (int)button;
+		int idx = (int)button.Tag;
 		if ((uint)idx >= 32u)
 			return;
 		uint mask = 1u << idx;
@@ -242,7 +242,7 @@ internal sealed class InputSystem {
 
 	private void synthesizeKeyboardReleaseAll(MonoTick tick) {
 		for (int i = 0; i <= 0xff; i++) {
-			Key key = (Key)i;
+			Key key = Key.Enum.FromTag((Key.Case)i);
 			if (!new KeyboardState(keys0, keys1, keys2, keys3).IsDown(key))
 				continue;
 			Push(new KeyEvent(tick, key, EdgeType.Release));
@@ -251,7 +251,7 @@ internal sealed class InputSystem {
 
 	private void synthesizePointerReleaseAll(MonoTick tick) {
 		for (int i = 0; i < 8; i++) {
-			PointerButton btn = (PointerButton)i;
+			PointerButton btn = PointerButton.Enum.FromTag((PointerButton.Case)i);
 			if (!new PointerState(pointerButtons, pointerX, pointerY, pointerInsideWindow, pointerCaptured).IsDown(btn))
 				continue;
 			Push(new PointerButtonEvent(tick, btn, EdgeType.Release, Clicks: 0, pointerX, pointerY));
@@ -263,7 +263,7 @@ internal sealed class InputSystem {
 			for (int bit = 0; bit < 32; bit++) {
 				if ((g.Buttons & (1u << bit)) == 0)
 					continue;
-				Push(new GamepadButtonEvent(tick, g.ID, (GamepadButton)bit, EdgeType.Release));
+				Push(new GamepadButtonEvent(tick, g.ID, GamepadButton.Enum.FromTag((GamepadButton.Case)bit), EdgeType.Release));
 			}
 			if (g.LeftX != 0f) Push(new GamepadAxisEvent(tick, g.ID, GamepadAxis.LeftX, 0f));
 			if (g.LeftY != 0f) Push(new GamepadAxisEvent(tick, g.ID, GamepadAxis.LeftY, 0f));
@@ -409,7 +409,7 @@ internal sealed class InputSystem {
 		SDLScancode.Space => Key.Space,
 
 		SDLScancode.Minus => Key.Minus,
-		SDLScancode.Equals => Key.Equals,
+		SDLScancode.Equals => Key.Equal,
 		SDLScancode.Leftbracket => Key.LeftBracket,
 		SDLScancode.Rightbracket => Key.RightBracket,
 		SDLScancode.Backslash => Key.Backslash,
@@ -515,9 +515,9 @@ internal sealed class InputSystem {
 	public static float NormalizeGamepadAxis(GamepadAxis axis, short raw) {
 		static float normalizeStick(short v) => v < 0 ? (float)v / 32768f : (float)v / 32767f;
 		static float normalizeTrigger(short v) => Math.Clamp((float)v / 32767f, 0f, 1f);
-		return axis switch {
-			GamepadAxis.LeftX or GamepadAxis.LeftY or GamepadAxis.RightX or GamepadAxis.RightY => normalizeStick(raw),
-			GamepadAxis.LeftTrigger or GamepadAxis.RightTrigger => normalizeTrigger(raw),
+		return axis.Tag switch {
+			GamepadAxis.Case.LeftX or GamepadAxis.Case.LeftY or GamepadAxis.Case.RightX or GamepadAxis.Case.RightY => normalizeStick(raw),
+			GamepadAxis.Case.LeftTrigger or GamepadAxis.Case.RightTrigger => normalizeTrigger(raw),
 			_ => throw new ArgumentOutOfRangeException(nameof(axis), $"unknown gamepad axis '{axis}'")
 		};
 	}

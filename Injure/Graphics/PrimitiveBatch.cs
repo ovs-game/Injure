@@ -48,6 +48,7 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 				Buffers: [
 					new VertexBufferLayout(
 						ArrayStride: (ulong)Vertex2DColor.Size,
+						StepMode: VertexStepMode.Vertex,
 						Attributes: [
 							new VertexAttribute(
 								Format: VertexFormat.Float32x2,

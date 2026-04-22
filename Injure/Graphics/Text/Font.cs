@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 using Injure.Assets;
@@ -24,15 +25,16 @@ public sealed class Font : IRevokable {
 		FaceCount = faceCount;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void chk() {
 		if (Volatile.Read(ref revoked) != 0)
-			throw new AssetLeaseExpiredException("borrowed font source was used after its lease expired");
+			throw new AssetLeaseExpiredException("borrowed font was used after its lease expired");
 	}
 
 	public void Revoke() => Volatile.Write(ref revoked, 1);
 }
 
-public enum FontSourceKind {
+internal enum FontSourceKind {
 	Direct,
 	Asset
 }
@@ -41,9 +43,9 @@ public readonly struct FontSpec {
 	private readonly Font? direct;
 	private readonly AssetRef<Font>? asset;
 
-	public FontSourceKind SourceKind { get; }
 	public int FaceIndex { get; }
 
+	internal FontSourceKind SourceKind { get; }
 	internal Font Direct => (SourceKind == FontSourceKind.Direct) ? direct! : throw new InvalidOperationException("this FontSpec is not sourced from a Font");
 	internal AssetRef<Font> Asset => (SourceKind == FontSourceKind.Asset) ? asset! : throw new InvalidOperationException("this FontSpec is not sourced from an AssetRef<Font>");
 

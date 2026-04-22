@@ -9,7 +9,9 @@ using static FreeTypeSharp.FT;
 using static FreeTypeSharp.FT_LOAD;
 using static FreeTypeSharp.FT_Render_Mode_;
 
+using Injure.Analyzers.Attributes;
 using Injure.Assets;
+using System.Diagnostics;
 
 namespace Injure.Graphics.Text;
 
@@ -20,22 +22,28 @@ public readonly record struct FontLineMetrics(
 	float Height
 );
 
-public enum FontRasterMode {
-	Grayscale,
-	Monochrome
+[ClosedEnum]
+public readonly partial struct FontRasterMode {
+	public enum Case {
+		Normal,
+		Monochrome
+	}
 }
 
-public enum FontHinting {
-	Default,
-	None,
-	Light,
-	Normal
+[ClosedEnum]
+public readonly partial struct FontHinting {
+	public enum Case {
+		Default,
+		None,
+		Light,
+		Normal
+	}
 }
 
 public readonly record struct FontOptions(
 	int PixelSize,
-	FontRasterMode RasterMode = FontRasterMode.Grayscale,
-	FontHinting Hinting = FontHinting.Default,
+	FontRasterMode RasterMode = default,
+	FontHinting Hinting = default,
 	bool UseEmbeddedBitmaps = true
 );
 
@@ -182,29 +190,29 @@ internal readonly record struct FontBackendOptions(
 		if (!settings.UseEmbeddedBitmaps)
 			flags |= FT_LOAD_NO_BITMAP;
 
-		switch (settings.Hinting) {
-		case FontHinting.Default:
+		switch (settings.Hinting.Tag) {
+		case FontHinting.Case.Default:
 			break;
-		case FontHinting.None:
+		case FontHinting.Case.None:
 			flags |= FT_LOAD_NO_HINTING;
 			break;
-		case FontHinting.Light:
+		case FontHinting.Case.Light:
 			flags = clearTargetMode(flags);
 			flags |= (FT_LOAD)FT_LOAD_TARGET_LIGHT;
 			break;
-		case FontHinting.Normal:
+		case FontHinting.Case.Normal:
 			flags = clearTargetMode(flags);
 			flags |= FT_LOAD_TARGET_NORMAL;
 			break;
 		default:
-			throw new ArgumentOutOfRangeException(nameof(settings));
+			throw new UnreachableException();
 		}
 
-		switch (settings.RasterMode) {
-		case FontRasterMode.Grayscale:
+		switch (settings.RasterMode.Tag) {
+		case FontRasterMode.Case.Normal:
 			renderMode = FT_RENDER_MODE_NORMAL;
 			break;
-		case FontRasterMode.Monochrome:
+		case FontRasterMode.Case.Monochrome:
 			renderMode = FT_RENDER_MODE_MONO;
 			flags |= FT_LOAD_MONOCHROME;
 			if ((flags & FT_LOAD_NO_HINTING) == 0) {
@@ -213,7 +221,7 @@ internal readonly record struct FontBackendOptions(
 			}
 			break;
 		default:
-			throw new ArgumentOutOfRangeException(nameof(settings));
+			throw new UnreachableException();
 		}
 
 		return new FontBackendOptions(flags, renderMode);

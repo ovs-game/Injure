@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
@@ -10,7 +12,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
 using Injure.Analyzers.Shared;
-using System;
 
 namespace Injure.Analyzers.Generators;
 
@@ -18,8 +19,9 @@ namespace Injure.Analyzers.Generators;
 public sealed class ClosedEnumGenerator : IIncrementalGenerator {
 	// ==========================================================================
 	// internal types
-	private sealed class TargetInfo(INamedTypeSymbol symbol, string? ns, bool defaultIsInvalid, ImmutableArray<CaseInfo> cases, ImmutableArray<MirrorInfo> mirrors) {
+	private sealed class TargetInfo(INamedTypeSymbol symbol, string accessibility, string? ns, bool defaultIsInvalid, ImmutableArray<CaseInfo> cases, ImmutableArray<MirrorInfo> mirrors) {
 		public INamedTypeSymbol Symbol { get; } = symbol;
+		public string Accessibility { get; } = accessibility;
 		public string? Namespace { get; } = ns;
 		public bool DefaultIsInvalid { get; } = defaultIsInvalid;
 		public ImmutableArray<CaseInfo> Cases { get; } = cases;
@@ -62,8 +64,8 @@ public sealed class ClosedEnumGenerator : IIncrementalGenerator {
 
 	private static TargetInfo? check(GeneratorAttributeSyntaxContext ctx, CancellationToken ct) {
 		INamedTypeSymbol sym = (INamedTypeSymbol)ctx.TargetSymbol;
-		if (sym.TypeKind != TypeKind.Struct || !Util.Partial(sym, ct) || !sym.IsReadOnly ||
-			sym.ContainingType is not null || sym.TypeParameters.Length != 0 || sym.IsRecord)
+		if (sym.TypeKind != TypeKind.Struct || !Util.Partial(sym, ct) || !sym.IsReadOnly || sym.IsRecord ||
+			sym.IsRefLikeType || sym.ContainingType is not null || sym.TypeParameters.Length != 0)
 			return null;
 
 		AttributeData attr = ctx.Attributes[0];
@@ -85,9 +87,7 @@ public sealed class ClosedEnumGenerator : IIncrementalGenerator {
 		Dictionary<ulong, string> seenValues = new Dictionary<ulong, string>();
 		ImmutableArray<CaseInfo>.Builder cases = ImmutableArray.CreateBuilder<CaseInfo>();
 		int zeroCount = 0;
-		foreach (IFieldSymbol field in caseSymbol.GetMembers().OfType<IFieldSymbol>()) {
-			if (field.IsImplicitlyDeclared || !field.HasConstantValue)
-				continue;
+		foreach (IFieldSymbol field in caseSymbol.GetMembers().OfType<IFieldSymbol>().Where(static f => f.HasConstantValue)) {
 			if (Constants.ClosedEnumReservedMemberNames.Contains(field.Name))
 				return null;
 			if (!Util.TryGetEnumMemberUInt64(field, out ulong v))
@@ -117,7 +117,7 @@ public sealed class ClosedEnumGenerator : IIncrementalGenerator {
 				mirrors.Add(new MirrorInfo(typeName));
 		}
 
-		return new TargetInfo(sym, Util.GetNamespace(sym), defaultIsInvalid, cases.ToImmutableArray(), mirrors.ToImmutable());
+		return new TargetInfo(sym, accessibility(sym), Util.GetNamespace(sym), defaultIsInvalid, cases.ToImmutable(), mirrors.ToImmutable());
 	}
 
 	private static bool hasOnlyCaseMember(INamedTypeSymbol sym, CancellationToken ct) {
@@ -149,7 +149,7 @@ public sealed class ClosedEnumGenerator : IIncrementalGenerator {
 		if (info.Namespace is not null)
 			sb.Append("namespace ").Append(info.Namespace).AppendLine(" {");
 
-		sb.Append('\t').Append(accessibility(info.Symbol)).Append("readonly partial struct ").Append(targetType).Append(" : global::System.IEquatable<").Append(targetType).AppendLine("> {");
+		sb.Append('\t').Append(info.Accessibility).Append(" readonly partial struct ").Append(targetType).Append(" : global::System.IEquatable<").Append(targetType).AppendLine("> {");
 		sb.Append("\t\tprivate readonly Case ").Append(Constants.ClosedEnumBackingFieldName).AppendLine(";");
 
 		sb.Append("\t\tprivate ").Append(targetType).AppendLine("(Case tag) {");
@@ -174,7 +174,7 @@ public sealed class ClosedEnumGenerator : IIncrementalGenerator {
 		sb.AppendLine("\t\t/// </exception>");
 		sb.AppendLine("\t\t/// <remarks>");
 		sb.AppendLine("\t\t/// Never returns an undeclared <see cref=\"Case\"/> value; either returns a declared case or throws.");
-		sb.AppendLine("\t\t/// As such, the fallback/default arm of an exhaustive switch is truly dead control flow.");
+		sb.AppendLine("\t\t/// As such, the fallback/default arm of an exhaustive switch is unreachable control flow.");
 		sb.AppendLine("\t\t/// </remarks>");
 		sb.AppendLine("\t\tpublic Case Tag {");
 		sb.AppendLine("\t\t\tget {");
@@ -182,13 +182,13 @@ public sealed class ClosedEnumGenerator : IIncrementalGenerator {
 			sb.Append("\t\t\t\tif (").Append(Constants.ClosedEnumBackingFieldName).AppendLine(" == (Case)0)");
 			sb.Append("\t\t\t\t\tthrow new global::System.InvalidOperationException(").Append(SymbolDisplay.FormatLiteral("default(" + info.Symbol.Name + ") is not a valid " + info.Symbol.Name + " value", true)).AppendLine(");");
 		}
-		sb.Append("\t\t\t\tif (!__ClosedEnum_isDefined(").Append(Constants.ClosedEnumBackingFieldName).AppendLine("))");
+		sb.Append("\t\t\t\tif (!").Append(Constants.ClosedEnumIsDefinedMethodName).Append('(').Append(Constants.ClosedEnumBackingFieldName).AppendLine("))");
 		sb.Append("\t\t\t\t\tthrow new global::System.InvalidOperationException(").Append(SymbolDisplay.FormatLiteral("Invalid " + info.Symbol.Name + " value: ", true)).Append(" + ").Append(Constants.ClosedEnumBackingFieldName).AppendLine(".ToString());");
 		sb.Append("\t\t\t\treturn ").Append(Constants.ClosedEnumBackingFieldName).AppendLine(";");
 		sb.AppendLine("\t\t\t}");
 		sb.AppendLine("\t\t}");
 
-		sb.Append("\t\t[global::System.Runtime.CompilerServices.MethodImplAttribute(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] private static bool __ClosedEnum_isDefined(Case tag) => tag is ");
+		sb.Append("\t\t[global::System.Runtime.CompilerServices.MethodImplAttribute(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] private static bool ").Append(Constants.ClosedEnumIsDefinedMethodName).Append("(Case tag) => tag is ");
 		for (int i = 0; i < info.Cases.Length; i++) {
 			if (i != 0)
 				sb.Append(" or ");
@@ -240,29 +240,38 @@ public sealed class ClosedEnumGenerator : IIncrementalGenerator {
 		sb.AppendLine("\t\t\t};");
 		sb.AppendLine("\t\t\tpublic static global::System.ReadOnlySpan<string> Names => _names;");
 
-		sb.AppendLine("\t\t\tpublic static bool IsDefined(Case tag) => __ClosedEnum_isDefined(tag);");
+		sb.Append("\t\t\tpublic static bool IsDefined(Case tag) => ").Append(Constants.ClosedEnumIsDefinedMethodName).AppendLine("(tag);");
 
-		sb.AppendLine("\t\t\tpublic static bool TryFromTag(Case tag, out " + targetType + " val) {");
-		sb.AppendLine("\t\t\t\tif (__ClosedEnum_isDefined(tag)) {");
-		sb.AppendLine("\t\t\t\t\tval = new " + targetType + "(tag);");
+		sb.Append("\t\t\tpublic static bool TryFromTag(Case tag, out ").Append(targetType).AppendLine(" val) {");
+		sb.Append("\t\t\t\tif (").Append(Constants.ClosedEnumIsDefinedMethodName).AppendLine("(tag)) {");
+		sb.Append("\t\t\t\t\tval = new ").Append(targetType).AppendLine("(tag);");
 		sb.AppendLine("\t\t\t\t\treturn true;");
 		sb.AppendLine("\t\t\t\t}");
 		sb.AppendLine("\t\t\t\tval = default;");
 		sb.AppendLine("\t\t\t\treturn false;");
 		sb.AppendLine("\t\t\t}");
 
-		sb.AppendLine("\t\t\tpublic static " + targetType + " FromTag(Case tag) {");
-		sb.AppendLine("\t\t\t\tif (TryFromTag(tag, out " + targetType + " value))");
-		sb.AppendLine("\t\t\t\t\treturn value;");
+		sb.Append("\t\t\tpublic static ").Append(targetType).AppendLine(" FromTag(Case tag) {");
+		sb.Append("\t\t\t\tif (TryFromTag(tag, out ").Append(targetType).AppendLine(" val))");
+		sb.AppendLine("\t\t\t\t\treturn val;");
 		sb.AppendLine("\t\t\t\tthrow new global::System.ArgumentOutOfRangeException(nameof(tag), tag, null);");
 		sb.AppendLine("\t\t\t}");
+
+		foreach (MirrorInfo mirror in info.Mirrors) {
+			sb.Append("\t\t\tpublic static bool TryFromMirror(").Append(mirror.TypeName).Append(" mirror, out ").Append(targetType).AppendLine(" val) => TryFromTag((Case)mirror, out val);");
+			sb.Append("\t\t\tpublic static ").Append(targetType).Append(" FromMirror(").Append(mirror.TypeName).AppendLine(" mirror) {");
+			sb.Append("\t\t\t\tif (TryFromTag((Case)mirror, out ").Append(targetType).AppendLine(" val))");
+			sb.AppendLine("\t\t\t\t\treturn val;");
+			sb.AppendLine("\t\t\t\tthrow new global::System.ArgumentOutOfRangeException(nameof(mirror), mirror, null);");
+			sb.AppendLine("\t\t\t}");
+		}
 
 		sb.AppendLine("\t\t}");
 	}
 
 	private static string accessibility(INamedTypeSymbol sym) => sym.DeclaredAccessibility switch {
-		Accessibility.Public => "public ",
-		Accessibility.Internal => "internal ",
+		Accessibility.Public => "public",
+		Accessibility.Internal => "internal",
 		_ => ""
 	};
 

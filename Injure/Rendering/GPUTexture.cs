@@ -119,10 +119,10 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 		MipLevelCount = mipLevelCount;
 		SampleCount = sampleCount;
 		Dimension = dimension;
-		DefaultViewDimension = dimension switch {
-			TextureDimension.Dimension1D => TextureViewDimension.Dimension1D,
-			TextureDimension.Dimension2D => (depthOrArrayLayers > 1) ? TextureViewDimension.Dimension2DArray : TextureViewDimension.Dimension2D,
-			TextureDimension.Dimension3D => TextureViewDimension.Dimension3D,
+		DefaultViewDimension = dimension.Tag switch {
+			TextureDimension.Case.Dimension1D => TextureViewDimension.Dimension1D,
+			TextureDimension.Case.Dimension2D => (depthOrArrayLayers > 1) ? TextureViewDimension.Dimension2DArray : TextureViewDimension.Dimension2D,
+			TextureDimension.Case.Dimension3D => TextureViewDimension.Dimension3D,
 			_ => throw new UnreachableException()
 		};
 		Format = format;
@@ -146,20 +146,20 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 	public override ReadOnlySpan<TextureFormat> ViewFormats => viewFormats;
 
 	public override GPUTextureView CreateView(in GPUTextureViewCreateParams @params) {
-		TextureFormat fmt = @params.Format ?? (Format, @params.Aspect) switch {
-			(TextureFormat.Depth24PlusStencil8, TextureAspect.DepthOnly) => TextureFormat.Depth24Plus,
-			(TextureFormat.Depth24PlusStencil8, TextureAspect.StencilOnly) => TextureFormat.Stencil8,
-			(TextureFormat.Depth32FloatStencil8, TextureAspect.DepthOnly) => TextureFormat.Depth32Float,
-			(TextureFormat.Depth32FloatStencil8, TextureAspect.StencilOnly) => TextureFormat.Stencil8,
-			(_, TextureAspect.All) => Format,
+		TextureFormat fmt = @params.Format ?? (Format.Tag, @params.Aspect.Tag) switch {
+			(TextureFormat.Case.Depth24PlusStencil8, TextureAspect.Case.DepthOnly) => TextureFormat.Depth24Plus,
+			(TextureFormat.Case.Depth24PlusStencil8, TextureAspect.Case.StencilOnly) => TextureFormat.Stencil8,
+			(TextureFormat.Case.Depth32FloatStencil8, TextureAspect.Case.DepthOnly) => TextureFormat.Depth32Float,
+			(TextureFormat.Case.Depth32FloatStencil8, TextureAspect.Case.StencilOnly) => TextureFormat.Stencil8,
+			(_, TextureAspect.Case.All) => Format,
 			_ => throw new ArgumentException("texture format/aspect combination has no aspect-specific view format", nameof(@params))
 		};
 		TextureViewDimension dim = @params.Dimension ?? DefaultViewDimension;
 		uint mipLvCount = @params.MipLevelCount ?? checked(MipLevelCount - @params.BaseMipLevel);
-		uint arrLayerCount = @params.ArrayLayerCount ?? dim switch {
-			TextureViewDimension.Dimension1D or TextureViewDimension.Dimension2D or TextureViewDimension.Dimension3D => 1,
-			TextureViewDimension.DimensionCube => 6,
-			TextureViewDimension.Dimension2DArray or TextureViewDimension.DimensionCubeArray => DepthOrArrayLayers - @params.BaseArrayLayer,
+		uint arrLayerCount = @params.ArrayLayerCount ?? dim.Tag switch {
+			TextureViewDimension.Case.Dimension1D or TextureViewDimension.Case.Dimension2D or TextureViewDimension.Case.Dimension3D => 1,
+			TextureViewDimension.Case.DimensionCube => 6,
+			TextureViewDimension.Case.Dimension2DArray or TextureViewDimension.Case.DimensionCubeArray => DepthOrArrayLayers - @params.BaseArrayLayer,
 			_ => throw new UnreachableException()
 		};
 		WGPUTextureViewDescriptor desc = new WGPUTextureViewDescriptor {
@@ -270,7 +270,7 @@ public readonly record struct GPUTextureRegion(
 	uint Height,
 	uint DepthOrArrayLayers,
 	uint MipLevel,
-	TextureAspect Aspect = TextureAspect.All
+	TextureAspect Aspect
 );
 
 /// <summary>

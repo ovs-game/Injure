@@ -2,12 +2,17 @@
 
 using System;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Input;
 
-public enum InputButtonSourceKind {
-	Key,
-	GamepadButton,
-	PointerButton
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct InputButtonSourceKind {
+	public enum Case {
+		Key = 1,
+		GamepadButton,
+		PointerButton
+	}
 }
 
 public readonly struct InputButtonSource : IEquatable<InputButtonSource> {
@@ -76,7 +81,10 @@ public readonly struct DigitalAxisSource : IEquatable<DigitalAxisSource> {
 	public InputButtonSource Positive { get; }
 	public SOCDPolicy SOCD { get; }
 
-	public DigitalAxisSource(InputButtonSource negative, InputButtonSource positive, SOCDPolicy socd = SOCDPolicy.Last) {
+	public DigitalAxisSource(InputButtonSource negative, InputButtonSource positive) : this(negative, positive, SOCDPolicy.Last) {
+	}
+
+	public DigitalAxisSource(InputButtonSource negative, InputButtonSource positive, SOCDPolicy socd) {
 		if (negative == positive)
 			throw new ArgumentException("negative and positive sources must be different");
 		Negative = negative;
@@ -91,9 +99,12 @@ public readonly struct DigitalAxisSource : IEquatable<DigitalAxisSource> {
 	public static bool operator !=(DigitalAxisSource left, DigitalAxisSource right) => !left.Equals(right);
 }
 
-public enum InputStateAxisSourceKind {
-	GamepadAxis,
-	DigitalPair
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct InputStateAxisSourceKind {
+	public enum Case {
+		GamepadAxis = 1,
+		DigitalPair
+	}
 }
 
 public readonly struct InputStateAxisSource : IEquatable<InputStateAxisSource> {
@@ -114,7 +125,9 @@ public readonly struct InputStateAxisSource : IEquatable<InputStateAxisSource> {
 
 	public static InputStateAxisSource GamepadAxis(GamepadAxis axis) =>
 		new InputStateAxisSource(InputStateAxisSourceKind.GamepadAxis, axis, default);
-	public static InputStateAxisSource DigitalPair(InputButtonSource negative, InputButtonSource positive, SOCDPolicy socd = SOCDPolicy.Last) =>
+	public static InputStateAxisSource DigitalPair(InputButtonSource negative, InputButtonSource positive) =>
+		DigitalPair(negative, positive, SOCDPolicy.Last);
+	public static InputStateAxisSource DigitalPair(InputButtonSource negative, InputButtonSource positive, SOCDPolicy socd) =>
 		new InputStateAxisSource(InputStateAxisSourceKind.DigitalPair, default, new DigitalAxisSource(negative, positive, socd));
 
 	public bool Equals(InputStateAxisSource other) => Kind == other.Kind && gamepadAxis == other.gamepadAxis && digital.Equals(other.digital);
@@ -124,15 +137,21 @@ public readonly struct InputStateAxisSource : IEquatable<InputStateAxisSource> {
 	public static bool operator !=(InputStateAxisSource left, InputStateAxisSource right) => !left.Equals(right);
 }
 
-public enum InputStateAxis2DSourceKind {
-	GamepadStick,
-	DigitalButtons,
-	Pair
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct InputStateAxis2DSourceKind {
+	public enum Case {
+		GamepadStick = 1,
+		DigitalButtons,
+		Pair
+	}
 }
 
-public enum GamepadStick {
-	Left,
-	Right
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct GamepadStick {
+	public enum Case {
+		Left = 1,
+		Right
+	}
 }
 
 public readonly struct DigitalAxis2DSource : IEquatable<DigitalAxis2DSource> {
@@ -143,8 +162,12 @@ public readonly struct DigitalAxis2DSource : IEquatable<DigitalAxis2DSource> {
 	public SOCDPolicy XSOCD { get; }
 	public SOCDPolicy YSOCD { get; }
 
+	public DigitalAxis2DSource(InputButtonSource left, InputButtonSource right, InputButtonSource up, InputButtonSource down) :
+		this(left, right, up, down, SOCDPolicy.Last, SOCDPolicy.Last) {
+	}
+
 	public DigitalAxis2DSource(InputButtonSource left, InputButtonSource right, InputButtonSource up, InputButtonSource down,
-		SOCDPolicy xSOCD = SOCDPolicy.Last, SOCDPolicy ySOCD = SOCDPolicy.Last) {
+		SOCDPolicy xSOCD, SOCDPolicy ySOCD) {
 		if (left == right)
 			throw new ArgumentException("left and right sources must be different");
 		if (up == down)
@@ -201,8 +224,11 @@ public readonly struct InputStateAxis2DSource : IEquatable<InputStateAxis2DSourc
 	public static InputStateAxis2DSource GamepadStick(GamepadStick stick) =>
 		new InputStateAxis2DSource(InputStateAxis2DSourceKind.GamepadStick, stick, default, default);
 	public static InputStateAxis2DSource DigitalButtons(
+		InputButtonSource left, InputButtonSource right, InputButtonSource up, InputButtonSource down
+	) => DigitalButtons(left, right, up, down, SOCDPolicy.Last, SOCDPolicy.Last);
+	public static InputStateAxis2DSource DigitalButtons(
 		InputButtonSource left, InputButtonSource right, InputButtonSource up, InputButtonSource down,
-		SOCDPolicy xSOCD = SOCDPolicy.Last, SOCDPolicy ySOCD = SOCDPolicy.Last
+		SOCDPolicy xSOCD, SOCDPolicy ySOCD
 	) => new InputStateAxis2DSource(InputStateAxis2DSourceKind.DigitalButtons, default, new DigitalAxis2DSource(left, right, up, down, xSOCD, ySOCD), default);
 	public static InputStateAxis2DSource Pair(InputStateAxisSource x, InputStateAxisSource y) =>
 		new InputStateAxis2DSource(InputStateAxis2DSourceKind.Pair, default, default, new StateAxis2DPairSource(x, y));
@@ -214,13 +240,19 @@ public readonly struct InputStateAxis2DSource : IEquatable<InputStateAxis2DSourc
 	public static bool operator !=(InputStateAxis2DSource left, InputStateAxis2DSource right) => !left.Equals(right);
 }
 
-public enum PointerWheelAxis {
-	X,
-	Y
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct PointerWheelAxis {
+	public enum Case {
+		X = 1,
+		Y
+	}
 }
 
-public enum InputImpulseAxisSourceKind {
-	PointerWheel
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct InputImpulseAxisSourceKind {
+	public enum Case {
+		PointerWheel = 1
+	}
 }
 
 public readonly struct InputImpulseAxisSource : IEquatable<InputImpulseAxisSource> {

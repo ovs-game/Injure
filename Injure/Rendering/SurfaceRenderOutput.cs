@@ -6,39 +6,44 @@ using System.Diagnostics.CodeAnalysis;
 using WebGPU;
 using static WebGPU.WebGPU;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.Rendering;
 
 /// <summary>
 /// Policy for selecting a surface present mode in <see cref="SurfaceRenderOutput"/>.
 /// </summary>
-public enum SurfacePresentModePolicy {
-	/// <summary>
-	/// Prefer <see cref="PresentMode.Mailbox"/>, fall back to <see cref="PresentMode.Fifo"/>
-	/// if not present.
-	/// </summary>
-	/// <remarks>
-	/// Tear-free.
-	/// </remarks>
-	AutoMailbox,
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct SurfacePresentModePolicy {
+	public enum Case {
+		/// <summary>
+		/// Prefer <see cref="PresentMode.Mailbox"/>, fall back to <see cref="PresentMode.Fifo"/>
+		/// if not present.
+		/// </summary>
+		/// <remarks>
+		/// Tear-free.
+		/// </remarks>
+		AutoMailbox = 1,
 
-	/// <summary>
-	/// Prefer <see cref="PresentMode.FifoRelaxed"/>, fall back to <see cref="PresentMode.Mailbox"/>
-	/// and then <see cref="PresentMode.Fifo"/> if not present.
-	/// </summary>
-	/// <remarks>
-	/// Normally tear-free; may tear if a frame remains on the frontbuffer for more than one vblank.
-	/// </remarks>
-	AutoFifoRelaxed,
+		/// <summary>
+		/// Prefer <see cref="PresentMode.FifoRelaxed"/>, fall back to <see cref="PresentMode.Mailbox"/>
+		/// and then <see cref="PresentMode.Fifo"/> if not present.
+		/// </summary>
+		/// <remarks>
+		/// Normally tear-free; may tear if a frame remains on the frontbuffer for more than one vblank.
+		/// </remarks>
+		AutoFifoRelaxed,
 
-	/// <summary>
-	/// Prefer <see cref="PresentMode.Immediate"/>, fall back to <see cref="PresentMode.Mailbox"/>,
-	/// then <see cref="PresentMode.FifoRelaxed"/>, and finally <see cref="PresentMode.Fifo"/>
-	/// if not present.
-	/// </summary>
-	/// <remarks>
-	/// May tear. Lowest latency.
-	/// </remarks>
-	AutoImmediate
+		/// <summary>
+		/// Prefer <see cref="PresentMode.Immediate"/>, fall back to <see cref="PresentMode.Mailbox"/>,
+		/// then <see cref="PresentMode.FifoRelaxed"/>, and finally <see cref="PresentMode.Fifo"/>
+		/// if not present.
+		/// </summary>
+		/// <remarks>
+		/// May tear. Lowest latency.
+		/// </remarks>
+		AutoImmediate
+	}
 }
 
 public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
@@ -99,14 +104,14 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 			bool haverelaxed = modes.Contains(WGPUPresentMode.FifoRelaxed);
 			bool havemailbox = modes.Contains(WGPUPresentMode.Mailbox);
 			bool haveimmediate = modes.Contains(WGPUPresentMode.Immediate);
-			switch (presentPolicy) {
-			case SurfacePresentModePolicy.AutoMailbox:
+			switch (presentPolicy.Tag) {
+			case SurfacePresentModePolicy.Case.AutoMailbox:
 				return havemailbox ? WGPUPresentMode.Mailbox : WGPUPresentMode.Fifo;
-			case SurfacePresentModePolicy.AutoFifoRelaxed:
+			case SurfacePresentModePolicy.Case.AutoFifoRelaxed:
 				if (haverelaxed)
 					return WGPUPresentMode.FifoRelaxed;
 				return havemailbox ? WGPUPresentMode.Mailbox : WGPUPresentMode.Fifo;
-			case SurfacePresentModePolicy.AutoImmediate:
+			case SurfacePresentModePolicy.Case.AutoImmediate:
 				if (haveimmediate)
 					return WGPUPresentMode.Immediate;
 				if (havemailbox)

@@ -348,7 +348,8 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		void *userdata1, void *userdata2) {
 		GCHandle h = GCHandle.FromIntPtr((nint)userdata1);
 		DeviceLostCallbackState st = (DeviceLostCallbackState)h.Target!;
-		st.Owner.NotifyLost(new DeviceLostInfo(DeviceLossInfoKind.Final, (DeviceLossEventReason)(int)reason, message.ToString()));
+		DeviceLossEventReason r = DeviceLossEventReason.Enum.FromTag((DeviceLossEventReason.Case)((int)reason - 1)); // TODO this fucking sucks
+		st.Owner.NotifyLost(new DeviceLostInfo(DeviceLossInfoKind.Final, r, message.ToString()));
 	}
 
 	// ==========================================================================
@@ -900,7 +901,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				throw new ArgumentException("fragment state must have at least one color target", nameof(@params));
 		}
 
-		bool stripTopo = prim.Topology is PrimitiveTopology.LineStrip or PrimitiveTopology.TriangleStrip;
+		bool stripTopo = prim.Topology.Tag is PrimitiveTopology.Case.LineStrip or PrimitiveTopology.Case.TriangleStrip;
 		if (stripTopo && prim.StripIndexFormat == IndexFormat.Undefined)
 			throw new ArgumentException("strip topologies must specify a strip index format", nameof(@params));
 		if (!stripTopo && prim.StripIndexFormat != IndexFormat.Undefined)
@@ -1102,14 +1103,14 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		chk();
 		ArgumentNullException.ThrowIfNull(view);
 		ArgumentNullException.ThrowIfNull(sampler);
-		if ((view.Usage & TextureUsage.TextureBinding) == 0)
+		if (view.Usage.HasNone(TextureUsage.TextureBinding))
 			throw new ArgumentException("view must have TextureBinding set in its usages", nameof(view));
 		if (view.Dimension != TextureViewDimension.Dimension2D)
 			throw new ArgumentException("view must be 2D", nameof(view));
 		if (view.SampleCount != 1)
 			throw new ArgumentException("view must not be multisampled", nameof(view));
-		if (view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float
-			or TextureFormat.Depth24PlusStencil8 or TextureFormat.Depth32FloatStencil8 or TextureFormat.Stencil8)
+		if (view.Format.Tag is TextureFormat.Case.Depth16Unorm or TextureFormat.Case.Depth24Plus or TextureFormat.Case.Depth32Float
+			or TextureFormat.Case.Depth24PlusStencil8 or TextureFormat.Case.Depth32FloatStencil8 or TextureFormat.Case.Stencil8)
 			throw new ArgumentException("view must be a color format", nameof(view));
 		return CreateBindGroup(StdColorTexture2DLayout, [
 			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
@@ -1165,13 +1166,13 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		chk();
 		ArgumentNullException.ThrowIfNull(view);
 		ArgumentNullException.ThrowIfNull(sampler);
-		if ((view.Usage & TextureUsage.TextureBinding) == 0)
+		if (view.Usage.HasNone(TextureUsage.TextureBinding))
 			throw new ArgumentException("view must have TextureBinding set in its usages", nameof(view));
 		if (view.Dimension != TextureViewDimension.Dimension2D)
 			throw new ArgumentException("view must be 2D", nameof(view));
 		if (view.SampleCount != 1)
 			throw new ArgumentException("view must not be multisampled", nameof(view));
-		if (!(view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float))
+		if (!(view.Format.Tag is TextureFormat.Case.Depth16Unorm or TextureFormat.Case.Depth24Plus or TextureFormat.Case.Depth32Float))
 			throw new ArgumentException("view must be a depth-only format", nameof(view));
 		return CreateBindGroup(StdFilteringDepthTexture2DLayout, [
 			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
@@ -1207,13 +1208,13 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		chk();
 		ArgumentNullException.ThrowIfNull(view);
 		ArgumentNullException.ThrowIfNull(sampler);
-		if ((view.Usage & TextureUsage.TextureBinding) == 0)
+		if (view.Usage.HasNone(TextureUsage.TextureBinding))
 			throw new ArgumentException("view must have TextureBinding set in its usages", nameof(view));
 		if (view.Dimension != TextureViewDimension.Dimension2D)
 			throw new ArgumentException("view must be 2D", nameof(view));
 		if (view.SampleCount != 1)
 			throw new ArgumentException("view must not be multisampled", nameof(view));
-		if (!(view.Format is TextureFormat.Depth16Unorm or TextureFormat.Depth24Plus or TextureFormat.Depth32Float))
+		if (!(view.Format.Tag is TextureFormat.Case.Depth16Unorm or TextureFormat.Case.Depth24Plus or TextureFormat.Case.Depth32Float))
 			throw new ArgumentException("view must be a depth-only format", nameof(view));
 		return CreateBindGroup(StdComparisonDepthTexture2DLayout, [
 			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),

@@ -3,13 +3,17 @@
 using System;
 using System.Numerics;
 
+using Injure.Analyzers.Attributes;
 using Injure.Timing;
 
 namespace Injure.Input;
 
-public enum ButtonActionEventInfoKind {
-	None = 0,
-	Pointer
+[ClosedEnum]
+public readonly partial struct ButtonActionEventInfoKind {
+	public enum Case {
+		None,
+		Pointer
+	}
 }
 
 public readonly record struct PointerButtonActionInfo(
@@ -43,9 +47,12 @@ public readonly struct ButtonActionEventInfo {
 	}
 }
 
-public enum ImpulseAxisActionEventInfoKind {
-	None = 0,
-	Pointer
+[ClosedEnum]
+public readonly partial struct ImpulseAxisActionEventInfoKind {
+	public enum Case {
+		None,
+		Pointer
+	}
 }
 
 public readonly record struct PointerImpulseAxisActionInfo(

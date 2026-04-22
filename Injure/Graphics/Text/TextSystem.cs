@@ -16,7 +16,7 @@ public readonly record struct TextStyle(
 	FontOptions FontOptions,
 	Color32 Color,
 	float MaxWidth = float.PositiveInfinity,
-	TextWrapMode WrapMode = TextWrapMode.None,
+	TextWrapMode WrapMode = default,
 	string Locale = "und",
 	string? LanguageBCP47 = null
 );

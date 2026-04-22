@@ -18,7 +18,7 @@ public readonly struct KeyboardState {
 
 	public KeyboardState(ReadOnlySpan<Key> down) {
 		foreach (Key key in down) {
-			int idx = (int)key;
+			int idx = (int)key.Tag;
 			if ((uint)idx > 0xffu)
 				throw new ArgumentOutOfRangeException(nameof(down), $"key '{key}' doesn't fit into the 256-bit bitset");
 			int word = idx >> 6;
@@ -44,7 +44,7 @@ public readonly struct KeyboardState {
 	}
 
 	public bool IsDown(Key key) {
-		int idx = (int)key;
+		int idx = (int)key.Tag;
 		if ((uint)idx > 0xffu)
 			return false;
 		int word = idx >> 6;
@@ -93,7 +93,7 @@ public readonly struct GamepadState {
 		checkTrigger(rightTrigger, nameof(rightTrigger));
 
 		foreach (GamepadButton btn in down) {
-			int idx = (int)btn;
+			int idx = (int)btn.Tag;
 			if ((uint)idx >= 32u)
 				throw new ArgumentOutOfRangeException(nameof(down), $"gamepad button '{btn}' doesn't fit into the 32-bit bitset");
 			buttons |= 1u << idx;
@@ -117,20 +117,20 @@ public readonly struct GamepadState {
 	}
 
 	public bool IsDown(GamepadButton button) {
-		int idx = (int)button;
+		int idx = (int)button.Tag;
 		if ((uint)idx >= 32u)
 			return false;
 		return (buttons & (1u << idx)) != 0;
 	}
 
 	public float GetAxis(GamepadAxis axis) {
-		return axis switch {
-			GamepadAxis.LeftX => LeftX,
-			GamepadAxis.LeftY => LeftY,
-			GamepadAxis.RightX => RightX,
-			GamepadAxis.RightY => RightY,
-			GamepadAxis.LeftTrigger => LeftTrigger,
-			GamepadAxis.RightTrigger => RightTrigger,
+		return axis.Tag switch {
+			GamepadAxis.Case.LeftX => LeftX,
+			GamepadAxis.Case.LeftY => LeftY,
+			GamepadAxis.Case.RightX => RightX,
+			GamepadAxis.Case.RightY => RightY,
+			GamepadAxis.Case.LeftTrigger => LeftTrigger,
+			GamepadAxis.Case.RightTrigger => RightTrigger,
 			_ => 0f
 		};
 	}
@@ -193,7 +193,7 @@ public readonly struct PointerState {
 
 	public PointerState(ReadOnlySpan<PointerButton> down, float x, float y, bool insideWindow, bool captured) {
 		foreach (PointerButton btn in down) {
-			int idx = (int)btn;
+			int idx = (int)btn.Tag;
 			if ((uint)idx >= 8u)
 				throw new ArgumentOutOfRangeException(nameof(down), $"pointer button '{btn}' doesn't fit into the 8-bit bitset");
 			buttons |= (byte)(1u << idx);
@@ -213,7 +213,7 @@ public readonly struct PointerState {
 	}
 
 	public bool IsDown(PointerButton button) {
-		int idx = (int)button;
+		int idx = (int)button.Tag;
 		if ((uint)idx >= 8u)
 			return false;
 		return (buttons & (1u << idx)) != 0;

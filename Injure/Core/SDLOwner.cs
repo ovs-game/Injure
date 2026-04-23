@@ -23,7 +23,7 @@ public static unsafe class SDLOwner {
 		if (OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") is not null)
 			Check(SDL.SetHint(SDL.SDL_HINT_VIDEO_DRIVER, "wayland"));
 
-		Check(!SDL.Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS));
+		Check(SDL.Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS));
 
 		if (OperatingSystem.IsMacOS())
 			Check(SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_METAL_BOOLEAN, true));

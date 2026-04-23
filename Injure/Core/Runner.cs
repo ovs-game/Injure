@@ -14,6 +14,7 @@ using Injure.Audio;
 using Injure.Graphics;
 using Injure.Graphics.Text;
 using Injure.Input;
+using Injure.Layers;
 using Injure.Rendering;
 using Injure.Scheduling;
 using Injure.Timing;
@@ -215,6 +216,10 @@ bootstrapCancelled:
 		// TODO: the builtin source/resolver/creator registry should be moved out somewhere
 		MonoTick budget = (MonoTick)Math.Min((ulong)loopStepTicks, (ulong)MonoTick.PeriodFromHz(tmst.TargetLoopHz));
 		TickerScheduler sched = new(new TickerSchedulerOptions(MaxBatchDuration: budget));
+		InputSystem input = new();
+		ActionRegistry actionRegistry = new();
+		LayerStack layerStack = new(sched, input);
+		LayerTagRegistry layerTags = new();
 		EngineResourceStore eresources = new();
 		eresources.RegisterSource(new EmbeddedEngineResourceSource(
 			typeof(Runner).Assembly,
@@ -241,8 +246,21 @@ bootstrapCancelled:
 			assets?.RegisterResolver(ModUtils.Info.OwnerID, new FontAssetResolver(), "FontSourceAssetResolver");
 			assets?.RegisterCreator(ModUtils.Info.OwnerID, new FontAssetCreator(text), "FontSourceAssetCreator");
 		}
-		services = new GameServices(gpuDevice, winControl, renderControl, timingControl, sched, eresources, assets, assetCtx, audio, text);
-		InputSystem input = new();
+		services = new GameServices(
+			sched,
+			winControl,
+			renderControl,
+			timingControl,
+			gpuDevice,
+			actionRegistry,
+			layerStack,
+			layerTags,
+			eresources,
+			assets,
+			assetCtx,
+			audio,
+			text
+		);
 
 		// game init
 		canvasResources = new CanvasSharedResources(gpuDevice, eresources);

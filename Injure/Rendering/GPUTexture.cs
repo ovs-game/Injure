@@ -152,6 +152,7 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 			(TextureFormat.Case.Depth32FloatStencil8, TextureAspect.Case.DepthOnly) => TextureFormat.Depth32Float,
 			(TextureFormat.Case.Depth32FloatStencil8, TextureAspect.Case.StencilOnly) => TextureFormat.Stencil8,
 			(_, TextureAspect.Case.All) => Format,
+			(_, TextureAspect.Case.Undefined) => throw new ArgumentException("texture aspect must not be Undefined", nameof(@params)),
 			_ => throw new ArgumentException("texture format/aspect combination has no aspect-specific view format", nameof(@params))
 		};
 		TextureViewDimension dim = @params.Dimension ?? DefaultViewDimension;

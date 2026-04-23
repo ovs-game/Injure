@@ -225,4 +225,6 @@ public readonly record struct GPUTextureViewCreateParams(
 	uint? MipLevelCount = null,
 	uint BaseArrayLayer = 0,
 	uint? ArrayLayerCount = null
-);
+) {
+	public GPUTextureViewCreateParams() : this(null, null, TextureAspect.All) {}
+}

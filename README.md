@@ -1,5 +1,3 @@
-## completely broken as of right now while i sort out a bunch of internal stuff
-
 game framework thing that was born because XNA/FNA kind of sucked, currently in early active development and not very usable yet, built on top of SDL2, WebGPU, and miniaudio
 
 ----------
@@ -14,7 +12,6 @@ you only need to do this once, unless you wanna update/rebuild them. yes, only m
 ----------
 miscellaneous TODO (see issues for the big ones):
 
-- add a test game into the source tree so testing is less of a pain in the ass
 - public optimized swizzle/convert api
   - more SIMD kernels, there's barely any right now
   - benchmarks, as well as looking at the codegen to make sure nothing stupid is going on

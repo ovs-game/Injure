@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 
 using Injure.Coroutines;
+using Injure.Input;
 using Injure.Timing;
 
 namespace Injure.Layers;
@@ -14,6 +15,7 @@ internal sealed class LayerRuntime : ILayerTickTracker, IDisposable {
 	public CoroutineScope CoroutineScope { get; }
 
 	private readonly List<ITickTimestampReceiver> toUpdate;
+	private ActionContext? actionCtx;
 
 	public LayerRuntime() {
 		Time = new LayerTimeDomain();
@@ -23,17 +25,34 @@ internal sealed class LayerRuntime : ILayerTickTracker, IDisposable {
 	}
 
 	public T Track<T>(T obj) where T : class, ITickTimestampReceiver {
+		ArgumentNullException.ThrowIfNull(obj);
 		toUpdate.Add(obj);
 		return obj;
 	}
 
-	public void BeforeUpdate(in LayerTickContext ctx) {
-		foreach (ITickTimestampReceiver r in toUpdate)
-			r.Update(ctx.MonoTick);
+	public void InitActions(ActionProfile? profile) {
+		actionCtx = profile is null ? null : new ActionContext(profile);
 	}
 
-	public void AfterUpdate(in LayerTickContext ctx) {
-		Coroutines.Tick(ctx.DeltaTime, ctx.RawDeltaTime, CoroUpdatePhase.Update);
+	public void UpdatePerfTracked(MonoTick tick) {
+		foreach (ITickTimestampReceiver r in toUpdate)
+			r.Update(tick);
+	}
+
+	public ControlView UpdateControls(MonoTick tick, in InputView input) {
+		if (actionCtx is null)
+			return new ControlView(ActionStateView.Empty, ReadOnlySpan<ControlEvent>.Empty, input.State.Pointer);
+		return actionCtx.Update(tick, input);
+	}
+
+	public void SuppressControls(MonoTick tick) {
+		if (actionCtx is null)
+			return;
+		_ = actionCtx.Update(tick, InputView.Empty);
+	}
+
+	public void TickCoroutines(double dt, double rawDt) {
+		Coroutines.Tick(dt, rawDt, CoroUpdatePhase.Update);
 	}
 
 	public void Dispose() {

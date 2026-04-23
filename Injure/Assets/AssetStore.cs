@@ -150,13 +150,13 @@ public sealed class AssetStore {
 	}
 
 	internal sealed class AssetSlot<T>(ulong slotID, AssetStore store, AssetID id) : IAssetSlot where T : class {
-		private readonly Lock @lock = new Lock();
+		private readonly Lock @lock = new();
 
 		private AssetVersion<T>? curr;
 		private PendingPrepared? pending;
 
 		private bool reloadPrepareTaskActive;
-		private TaskCompletionSource<object?> reloadStateChanged = new TaskCompletionSource<object?>(
+		private TaskCompletionSource<object?> reloadStateChanged = new(
 			TaskCreationOptions.RunContinuationsAsynchronously
 		);
 		private Task? materializeTask;
@@ -278,7 +278,7 @@ public sealed class AssetStore {
 				newver = new AssetVersion<T>(newval, pprep.Version, pprep.Dependencies);
 			} catch (Exception caught) {
 				pprep.Dispose();
-				AssetReloadFailure f = new AssetReloadFailure(
+				AssetReloadFailure f = new(
 					new AssetKey(AssetID, typeof(T)),
 					pprep.Version,
 					AssetReloadFailureStage.Finalize,
@@ -364,7 +364,7 @@ public sealed class AssetStore {
 					} catch (Exception caught) when (caught is not InternalStateException) {
 						lock (@lock) {
 							if (targetVersion == newestRequestedVersion) {
-								AssetReloadFailure f = new AssetReloadFailure(
+								AssetReloadFailure f = new(
 									new AssetKey(AssetID, typeof(T)),
 									targetVersion,
 									AssetReloadFailureStage.Prepare,
@@ -410,7 +410,7 @@ public sealed class AssetStore {
 				(pendingValue, ImmutableArray<IAssetDependency> deps) =
 					await Store.tryPrepareValueAsync<T>(AssetID).ConfigureAwait(false);
 				newval = finalizePrepared<T>(AssetID, pendingValue);
-				AssetVersion<T> newver = new AssetVersion<T>(newval, version: 1, deps);
+				AssetVersion<T> newver = new(newval, version: 1, deps);
 
 				lock (@lock) {
 					if (curr is null) {
@@ -505,8 +505,8 @@ public sealed class AssetStore {
 		AssetCreateResultKind Kind,
 		IPendingAssetValue? Value = null
 	) {
-		public static UntypedCreateResult NotHandled() => new UntypedCreateResult(AssetCreateResultKind.NotHandled);
-		public static UntypedCreateResult Success(IPendingAssetValue value) => new UntypedCreateResult(AssetCreateResultKind.Success, value);
+		public static UntypedCreateResult NotHandled() => new(AssetCreateResultKind.NotHandled);
+		public static UntypedCreateResult Success(IPendingAssetValue value) => new(AssetCreateResultKind.Success, value);
 	}
 
 	private interface IUntypedAssetCreator {
@@ -598,39 +598,39 @@ public sealed class AssetStore {
 		public readonly AssetKey Key = key;
 		public readonly AssetLoadStackFrame? Prev = prev;
 	}
-	private static readonly AsyncLocal<AssetLoadStackFrame?> loadStackTop = new AsyncLocal<AssetLoadStackFrame?>();
+	private static readonly AsyncLocal<AssetLoadStackFrame?> loadStackTop = new();
 
 	// ==========================================================================
 	// general bookkeeping
-	private readonly ConcurrentDictionary<AssetKey, IAssetSlot> slots = new ConcurrentDictionary<AssetKey, IAssetSlot>();
+	private readonly ConcurrentDictionary<AssetKey, IAssetSlot> slots = new();
 	private ulong nextSlotID = 0; // first ID will be 1 since this gets incremented upfront
 
 	// ==========================================================================
 	// creation pipeline bookkeeping
-	private readonly Lock registryLock = new Lock();
-	private readonly OwnerOrderedRegistry<IAssetSource> sources = new OwnerOrderedRegistry<IAssetSource>();
-	private readonly OwnerOrderedRegistry<IAssetResolver> resolvers = new OwnerOrderedRegistry<IAssetResolver>();
+	private readonly Lock registryLock = new();
+	private readonly OwnerOrderedRegistry<IAssetSource> sources = new();
+	private readonly OwnerOrderedRegistry<IAssetResolver> resolvers = new();
 	private ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>> creators = ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>>.Empty;
 
 	// ==========================================================================
 	// publication / reclamation / thread context bookkeeping
-	private readonly ConcurrentQueue<PendingRetired> retired = new ConcurrentQueue<PendingRetired>();
+	private readonly ConcurrentQueue<PendingRetired> retired = new();
 	private ulong publishedEpoch = 0;
 	internal ulong GetPublishedEpoch() => Volatile.Read(ref publishedEpoch);
 
 	[ThreadStatic] private static Dictionary<ulong, AssetThreadContext>? tlsContextsByStoreID;
-	private readonly ConcurrentDictionary<ulong, AssetThreadContext> attachedContextsByCtxID = new ConcurrentDictionary<ulong, AssetThreadContext>();
+	private readonly ConcurrentDictionary<ulong, AssetThreadContext> attachedContextsByCtxID = new();
 
 	// ==========================================================================
 	// dependency bookkeeping
-	private readonly Lock dependencyLock = new Lock();
-	private Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>> watchers = new Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>>();
-	private readonly Dictionary<IAssetDependency, HashSet<IAssetSlot>> slotsByDependency = new Dictionary<IAssetDependency, HashSet<IAssetSlot>>();
+	private readonly Lock dependencyLock = new();
+	private Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>> watchers = new();
+	private readonly Dictionary<IAssetDependency, HashSet<IAssetSlot>> slotsByDependency = new();
 
 	// ==========================================================================
 	// log/report/failure bookkeeping
-	private readonly Lock reloadFailureLock = new Lock();
-	private readonly RingBuffer<AssetReloadFailure> reloadFailures = new RingBuffer<AssetReloadFailure>(MaxBufferedReloadFailures);
+	private readonly Lock reloadFailureLock = new();
+	private readonly RingBuffer<AssetReloadFailure> reloadFailures = new(MaxBufferedReloadFailures);
 
 	/// <summary>
 	/// The maximum number of reload failure records retained by this store's reload-failure buffer.
@@ -652,7 +652,7 @@ public sealed class AssetStore {
 	/// <param name="id">Asset ID.</param>
 	/// <returns>An <see cref="AssetRef{T}"/> handle for the specified asset.</returns>
 	public AssetRef<T> GetAsset<T>(AssetID id) where T : class {
-		AssetKey key = new AssetKey(id, typeof(T));
+		AssetKey key = new(id, typeof(T));
 		if (!slots.TryGetValue(key, out IAssetSlot? s)) {
 			IAssetSlot @new = new AssetSlot<T>(Interlocked.Increment(ref nextSlotID), this, id);
 			s = slots.GetOrAdd(key, @new);
@@ -676,7 +676,7 @@ public sealed class AssetStore {
 	/// Thrown if the current thread is already attached to this store.
 	/// </exception>
 	public AssetThreadContext AttachCurrentThread() {
-		AssetThreadContext ctx = new AssetThreadContext(this);
+		AssetThreadContext ctx = new(this);
 		tlsContextsByStoreID ??= new Dictionary<ulong, AssetThreadContext>();
 		if (tlsContextsByStoreID.ContainsKey(storeID))
 			throw new InvalidOperationException("current thread is already attached to this AssetStore");
@@ -857,7 +857,7 @@ public sealed class AssetStore {
 
 	private AssetCreatorHandle registerCreatorLocked(string ownerID, IUntypedAssetCreator creator, Type type, string localID,
 		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
-		OwnerOrderedEntry<IUntypedAssetCreator> ent = new OwnerOrderedEntry<IUntypedAssetCreator>(
+		OwnerOrderedEntry<IUntypedAssetCreator> ent = new(
 			creator,
 			ownerID, localID, localPriority, beforeOwners, afterOwners
 		);
@@ -966,9 +966,9 @@ public sealed class AssetStore {
 		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null)
 		where T : IAssetDependency {
 		ArgumentNullException.ThrowIfNull(watcher);
-		UntypedAssetDependencyWatcher<T> untyped = new UntypedAssetDependencyWatcher<T>(watcher);
+		UntypedAssetDependencyWatcher<T> untyped = new(watcher);
 		lock (dependencyLock) {
-			OwnerOrderedEntry<IUntypedAssetDependencyWatcher> ent = new OwnerOrderedEntry<IUntypedAssetDependencyWatcher>(
+			OwnerOrderedEntry<IUntypedAssetDependencyWatcher> ent = new(
 				untyped,
 				ownerID, localID, localPriority, beforeOwners, afterOwners
 			);
@@ -979,7 +979,7 @@ public sealed class AssetStore {
 			} else {
 				reg = new OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>();
 				id = reg.Register(ent);
-				Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>> @new = new Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>>(old) {
+				Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>> @new = new(old) {
 					[typeof(T)] = reg
 				};
 				Volatile.Write(ref watchers, @new);
@@ -1132,7 +1132,7 @@ public sealed class AssetStore {
 
 	private async ValueTask<(IPendingAssetValue Prepared, ImmutableArray<IAssetDependency> Dependencies)>
 		tryPrepareValueAsync<T>(AssetID id, CancellationToken ct = default) where T : class {
-		AssetKey key = new AssetKey(id, typeof(T));
+		AssetKey key = new(id, typeof(T));
 		AssetLoadStackFrame? prev = loadStackTop.Value;
 		for (AssetLoadStackFrame? f = prev; f is not null; f = f.Prev)
 			if (f.Key == key)
@@ -1140,16 +1140,16 @@ public sealed class AssetStore {
 		loadStackTop.Value = new AssetLoadStackFrame(key, prev);
 
 		try {
-			DependencyCollector rootColl = new DependencyCollector();
+			DependencyCollector rootColl = new();
 			using AssetData data = await tryAllResolversAsync(id, rootColl, typeof(T), ct).ConfigureAwait(false);
 
-			AssetCreateInfo info = new AssetCreateInfo(id, data);
+			AssetCreateInfo info = new(id, data);
 			ImmutableDictionary<Type, OwnerOrderedRegistry<IUntypedAssetCreator>> dictsnap = Volatile.Read(ref creators);
 			if (dictsnap.TryGetValue(typeof(T), out OwnerOrderedRegistry<IUntypedAssetCreator>? reg)) {
 				IReadOnlyList<IUntypedAssetCreator> snapshot = reg.ReadSnapshot();
 
 				foreach (IUntypedAssetCreator creator in snapshot) {
-					DependencyCollector childColl = new DependencyCollector();
+					DependencyCollector childColl = new();
 					UntypedCreateResult res = await creator.TryCreateAsync(info, childColl, ct).ConfigureAwait(false);
 					switch (res.Kind.Tag) {
 					case AssetCreateResultKind.Case.NotHandled:
@@ -1182,7 +1182,7 @@ public sealed class AssetStore {
 	private static async ValueTask<Stream> fixstream(Stream stream, CancellationToken ct) {
 		if (stream.CanSeek)
 			return stream;
-		MemoryStream ms = new MemoryStream();
+		MemoryStream ms = new();
 		try {
 			await stream.CopyToAsync(ms, ct).ConfigureAwait(false);
 			ms.Position = 0;
@@ -1197,9 +1197,9 @@ public sealed class AssetStore {
 
 	private async ValueTask<Stream?> tryAllSourcesAsyncOrNull(AssetID id, DependencyCollector parentColl, Type t, CancellationToken ct) {
 		IReadOnlyList<IAssetSource> snapshot = sources.ReadSnapshot();
-		AssetSourceInfo info = new AssetSourceInfo(id);
+		AssetSourceInfo info = new(id);
 		foreach (IAssetSource source in snapshot) {
-			DependencyCollector childColl = new DependencyCollector();
+			DependencyCollector childColl = new();
 			AssetSourceResult res = await source.TrySourceAsync(info, childColl, ct).ConfigureAwait(false);
 			switch (res.Kind.Tag) {
 			case AssetSourceResultKind.Case.NotHandled:
@@ -1222,8 +1222,8 @@ public sealed class AssetStore {
 	private async ValueTask<AssetData> tryAllResolversAsync(AssetID id, DependencyCollector parentColl, Type t, CancellationToken ct) {
 		IReadOnlyList<IAssetResolver> snapshot = resolvers.ReadSnapshot();
 		foreach (IAssetResolver resolver in snapshot) {
-			DependencyCollector childColl = new DependencyCollector();
-			AssetResolveInfo info = new AssetResolveInfo(id,
+			DependencyCollector childColl = new();
+			AssetResolveInfo info = new(id,
 				(AssetID toFetch, CancellationToken passedCt) => tryAllSourcesAsync(toFetch, childColl, t, passedCt),
 				(AssetID toFetch, CancellationToken passedCt) => tryAllSourcesAsyncOrNull(toFetch, childColl, t, passedCt)
 			);
@@ -1258,7 +1258,7 @@ public sealed class AssetStore {
 
 	private void onSlotPublished(IAssetSlot slot, ImmutableArray<IAssetDependency> oldDeps, ImmutableArray<IAssetDependency> newDeps) {
 		static HashSet<IAssetDependency> makeSet(ImmutableArray<IAssetDependency> deps) {
-			HashSet<IAssetDependency> s = new HashSet<IAssetDependency>();
+			HashSet<IAssetDependency> s = new();
 			for (int i = 0; i < deps.Length; i++)
 				s.Add(deps[i]);
 			return s;
@@ -1307,7 +1307,7 @@ public sealed class AssetStore {
 	// ==========================================================================
 	// exception formatting
 	private static string formatCycle(ImmutableArray<AssetKey> cycle) {
-		StringBuilder sb = new StringBuilder("recursive asset load detected: ");
+		StringBuilder sb = new("recursive asset load detected: ");
 		for (int i = 0; i < cycle.Length; i++) {
 			if (i > 0)
 				sb.Append(" -> ");

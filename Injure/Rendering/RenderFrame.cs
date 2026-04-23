@@ -32,7 +32,7 @@ public sealed unsafe class RenderFrame : IDisposable {
 	private readonly GPUTextureView primaryView;
 	private readonly WGPUCommandEncoder encoder;
 	private readonly Action presentCallback;
-	private readonly List<IDisposable> deferred = new List<IDisposable>();
+	private readonly List<IDisposable> deferred = new();
 	private bool activepass = false;
 	private bool done = false;
 
@@ -76,7 +76,7 @@ public sealed unsafe class RenderFrame : IDisposable {
 			depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
 		};
 
-		WGPURenderPassDescriptor desc = new WGPURenderPassDescriptor {
+		WGPURenderPassDescriptor desc = new() {
 			colorAttachmentCount = 1,
 			colorAttachments = colorAttachments
 		};

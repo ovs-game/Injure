@@ -38,7 +38,7 @@ public readonly record struct TickerOptions(
 	TickerStartMode StartMode,
 	MonoTick StartAt
 ) {
-	public static readonly TickerOptions Default = new TickerOptions(
+	public static readonly TickerOptions Default = new(
 		Priority: 0,
 		MaxBurst: 8,
 		OverrunMode: TickerOverrunMode.Once,

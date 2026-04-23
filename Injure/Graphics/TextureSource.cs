@@ -26,11 +26,11 @@ public readonly struct TextureSource : IEquatable<TextureSource> {
 	}
 
 	public static implicit operator TextureSource(Texture2D tex) =>
-		new TextureSource(tex, TextureSourceKind.Texture2D);
+		new(tex, TextureSourceKind.Texture2D);
 	public static implicit operator TextureSource(RenderTarget2D rt) =>
-		new TextureSource(rt, TextureSourceKind.RenderTarget2D);
+		new(rt, TextureSourceKind.RenderTarget2D);
 	public static implicit operator TextureSource(AssetRef<Texture2D> asset) =>
-		new TextureSource(asset, TextureSourceKind.Texture2DAssetRef);
+		new(asset, TextureSourceKind.Texture2DAssetRef);
 
 	public bool Equals(TextureSource other) => ReferenceEquals(val, other.val) && Kind == other.Kind;
 	public override bool Equals(object? obj) => obj is TextureSource other && Equals(other);

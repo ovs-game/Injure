@@ -39,7 +39,7 @@ public sealed class GPUShaderModule : GPUShaderModuleHandle, IDisposable {
 	/// <summary>
 	/// Creates a non-owning view of this shader module.
 	/// </summary>
-	public GPUShaderModuleRef AsRef() => new GPUShaderModuleRef(this);
+	public GPUShaderModuleRef AsRef() => new(this);
 
 	/// <summary>
 	/// Releases the underlying WebGPU shader module.

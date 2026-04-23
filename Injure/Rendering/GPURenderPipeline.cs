@@ -39,7 +39,7 @@ public sealed class GPURenderPipeline : GPURenderPipelineHandle, IDisposable {
 	/// <summary>
 	/// Creates a non-owning view of this render pipeline.
 	/// </summary>
-	public GPURenderPipelineRef AsRef() => new GPURenderPipelineRef(this);
+	public GPURenderPipelineRef AsRef() => new(this);
 
 	/// <summary>
 	/// Releases the underlying WebGPU render pipeline.

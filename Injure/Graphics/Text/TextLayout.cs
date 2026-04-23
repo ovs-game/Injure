@@ -99,7 +99,7 @@ internal static class TextLayouter {
 		LineBreakOpportunity[] brklist = TextAnalysis.GetLineBreaks(paraText, locale);
 		Dictionary<int, LineBreakKind> breaks = BuildBreaksDict(brklist);
 		LogicalBidiRun[] bidiRuns = TextAnalysis.GetLogicalBidiRuns(paraText);
-		List<ParagraphRun> paraRuns = new List<ParagraphRun>();
+		List<ParagraphRun> paraRuns = new();
 		foreach (LogicalBidiRun bidiRun in bidiRuns) {
 			ReadOnlySpan<char> bidiRunText = paraText.AsSpan(bidiRun.Start, bidiRun.Length);
 			TextItem[] items = itemizer.Itemize(bidiRunText, paraAbsoluteStart + bidiRun.Start, bidiRun.Direction, languageBCP47);
@@ -147,7 +147,7 @@ internal static class TextLayouter {
 	}
 
 	public static ParagraphCluster[] FlattenSourceOrderClusters(ReadOnlySpan<ParagraphRun> paraRuns) {
-		List<ParagraphCluster> flattened = new List<ParagraphCluster>();
+		List<ParagraphCluster> flattened = new();
 		foreach (ParagraphRun paraRun in paraRuns)
 			foreach (ParagraphCluster cluster in paraRun.SourceOrderClusters)
 				flattened.Add(cluster);
@@ -155,7 +155,7 @@ internal static class TextLayouter {
 	}
 
 	public static Dictionary<int, LineBreakKind> BuildBreaksDict(LineBreakOpportunity[] brklist) {
-		Dictionary<int, LineBreakKind> dict = new Dictionary<int, LineBreakKind>(brklist.Length);
+		Dictionary<int, LineBreakKind> dict = new(brklist.Length);
 		for (int i = 0; i < brklist.Length; i++)
 			dict[brklist[i].Position] = brklist[i].Kind;
 		return dict;
@@ -165,7 +165,7 @@ internal static class TextLayouter {
 		float maxWidth, TextWrapMode wrapMode) {
 		if (paraLength == 0)
 			return [new LogicalLine(Start: paraAbsoluteStart, Limit: paraAbsoluteStart)];
-		List<LogicalLine> lines = new List<LogicalLine>();
+		List<LogicalLine> lines = new();
 		bool wrap = wrapMode == TextWrapMode.Greedy && !float.IsPositiveInfinity(maxWidth);
 		int lineStart = paraAbsoluteStart;
 		float lineWidth = 0f;
@@ -337,8 +337,8 @@ public sealed class TextLayout : IDisposable {
 	public void Render(Canvas cv, Vector2 at = default) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		foreach (TextGlyph glyph in Glyphs) {
-			RectF dst = new RectF(glyph.DstPixels.X + at.X, glyph.DstPixels.Y + at.Y, glyph.DstPixels.Width, glyph.DstPixels.Height);
-			RectF src = new RectF(glyph.SrcPixels.X, glyph.SrcPixels.Y, glyph.SrcPixels.Width, glyph.SrcPixels.Height);
+			RectF dst = new(glyph.DstPixels.X + at.X, glyph.DstPixels.Y + at.Y, glyph.DstPixels.Width, glyph.DstPixels.Height);
+			RectF src = new(glyph.SrcPixels.X, glyph.SrcPixels.Y, glyph.SrcPixels.Width, glyph.SrcPixels.Height);
 			using (cv.PushParams(Material: CanvasMaterials.RMask))
 				cv.TexWithSourceRect(glyph.Page.Texture, dst, src, glyph.Color);
 		}

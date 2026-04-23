@@ -8,8 +8,8 @@ namespace Injure.Coroutines;
 public sealed class CoroutineScope {
 	private readonly CoroutineScheduler scheduler;
 	private readonly CoroutineScope? parent;
-	private readonly HashSet<CoroutineHandle> members = new HashSet<CoroutineHandle>();
-	private readonly List<CoroutineScope> children = new List<CoroutineScope>();
+	private readonly HashSet<CoroutineHandle> members = new();
+	private readonly List<CoroutineScope> children = new();
 	private CoroCancellationReason? cancellationReason = null;
 
 	public CoroutineScheduler Scheduler => scheduler;
@@ -32,7 +32,7 @@ public sealed class CoroutineScope {
 		}
 	}
 
-	public static CoroutineScope CreateRoot(CoroutineScheduler scheduler, string name) => new CoroutineScope(scheduler, null, name);
+	public static CoroutineScope CreateRoot(CoroutineScheduler scheduler, string name) => new(scheduler, null, name);
 	public CoroutineScope CreateChild(string name) => !Cancelled ? new CoroutineScope(scheduler, this, name) :
 		throw new InvalidOperationException("cannot create a child from a cancelled scope");
 

@@ -131,7 +131,7 @@ public sealed class GPUTextureView : GPUTextureViewHandle, IDisposable {
 	/// <summary>
 	/// Creates a non-owning view of this texture view.
 	/// </summary>
-	public GPUTextureViewRef AsRef() => new GPUTextureViewRef(this);
+	public GPUTextureViewRef AsRef() => new(this);
 
 	/// <summary>
 	/// Releases the underlying WebGPU texture view.

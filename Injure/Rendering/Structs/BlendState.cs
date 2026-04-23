@@ -16,7 +16,7 @@ public readonly record struct BlendState(
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUBlendState"/>.
 	/// </summary>
-	public WGPUBlendState ToWebGPUType() => new WGPUBlendState {
+	public WGPUBlendState ToWebGPUType() => new() {
 		color = Color.ToWebGPUType(),
 		alpha = Alpha.ToWebGPUType()
 	};

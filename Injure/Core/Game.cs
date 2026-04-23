@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+using System;
+
 using Injure.Analyzers.Attributes;
 using Injure.Graphics;
 
@@ -21,28 +23,31 @@ public readonly struct LoadingContext(LoadingPhase phase, double elapsed = 0.0, 
 }
 
 [ClosedEnum(DefaultIsInvalid = true)]
-public readonly partial struct HostEventKind {
+public readonly partial struct HostEvent {
 	public enum Case {
-		Resized = 1,
+		Shown = 1,
+		Hidden,
+		Moved,
+		Resized,
+		DrawableSizeChanged,
 		Minimized,
 		Maximized,
 		Restored,
+		EnteredFullscreen,
+		LeftFullscreen,
 		FocusGained,
-		FocusLost
+		FocusLost,
+		MouseEnter,
+		MouseLeave,
+		DisplayScaleChanged
 	}
-}
-
-public readonly struct HostEvent(HostEventKind kind, uint width = 0, uint height = 0) {
-	public readonly HostEventKind Kind = kind;
-	public readonly uint Width = width; // only meaningful on Resized
-	public readonly uint Height = height; // only meaningful on Resized
 }
 
 public interface IGame {
 	void Loading(in LoadingContext ctx);
 
 	void Init(GameServices sv);
-	void OnHostEvent(in HostEvent ev);
+	void OnHostEvent(HostEvent ev);
 	void Render(Canvas cv);
 	void Shutdown();
 }

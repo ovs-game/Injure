@@ -20,7 +20,7 @@ public readonly record struct MultisampleState(
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUMultisampleState"/>.
 	/// </summary>
-	public WGPUMultisampleState ToWebGPUType() => new WGPUMultisampleState {
+	public WGPUMultisampleState ToWebGPUType() => new() {
 		count = Count,
 		mask = Mask,
 		alphaToCoverageEnabled = AlphaToCoverageEnabled ? WGPUBool.True : WGPUBool.False

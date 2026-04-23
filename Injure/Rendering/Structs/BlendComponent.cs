@@ -18,7 +18,7 @@ public readonly record struct BlendComponent(
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUBlendComponent"/>.
 	/// </summary>
-	public WGPUBlendComponent ToWebGPUType() => new WGPUBlendComponent {
+	public WGPUBlendComponent ToWebGPUType() => new() {
 		operation = Operation.ToWebGPUType(),
 		srcFactor = SrcFactor.ToWebGPUType(),
 		dstFactor = DstFactor.ToWebGPUType()

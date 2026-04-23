@@ -56,7 +56,7 @@ public readonly struct CanvasTarget : IEquatable<CanvasTarget> {
 	public static bool operator ==(CanvasTarget left, CanvasTarget right) => left.Equals(right);
 	public static bool operator !=(CanvasTarget left, CanvasTarget right) => !left.Equals(right);
 
-	public static implicit operator CanvasTarget(RenderTarget2D target) => new CanvasTarget(target);
+	public static implicit operator CanvasTarget(RenderTarget2D target) => new(target);
 }
 
 /// <summary>
@@ -113,13 +113,13 @@ public readonly struct CanvasScissor : IEquatable<CanvasScissor> {
 	/// <summary>
 	/// Disable clipping (use the full active target as the scissor).
 	/// </summary>
-	public static readonly CanvasScissor None = new CanvasScissor(CanvasScissorKind.None, default);
+	public static readonly CanvasScissor None = new(CanvasScissorKind.None, default);
 
 	/// <summary>
 	/// Creates a scissor to set the current one to <paramref name="rect"/>.
 	/// </summary>
 	/// <param name="rect">Scissor rect, in pixel coordinates.</param>
-	public static CanvasScissor Set(RectI rect) => new CanvasScissor(CanvasScissorKind.Set, rect);
+	public static CanvasScissor Set(RectI rect) => new(CanvasScissorKind.Set, rect);
 
 	/// <summary>
 	/// Creates a scissor to intersect the current one with <paramref name="rect"/>.
@@ -128,7 +128,7 @@ public readonly struct CanvasScissor : IEquatable<CanvasScissor> {
 	/// <remarks>
 	/// This is only valid for use in parameter overrides.
 	/// </remarks>
-	public static CanvasScissor Intersect(RectI rect) => new CanvasScissor(CanvasScissorKind.Intersect, rect);
+	public static CanvasScissor Intersect(RectI rect) => new(CanvasScissorKind.Intersect, rect);
 
 	public bool Equals(CanvasScissor other) => Kind == other.Kind && Rect.Equals(other.Rect);
 	public override bool Equals(object? obj) => obj is CanvasScissor other && Equals(other);
@@ -170,17 +170,17 @@ public readonly struct CanvasOutputState : IEquatable<CanvasOutputState> {
 }
 
 public static class CanvasOutputStates {
-	public static readonly CanvasOutputState Opaque = new CanvasOutputState {
+	public static readonly CanvasOutputState Opaque = new() {
 		Blend = null,
 		WriteMask = ColorWriteMask.All
 	};
 
-	public static readonly CanvasOutputState Alpha = new CanvasOutputState {
+	public static readonly CanvasOutputState Alpha = new() {
 		Blend = BlendStates.Alpha,
 		WriteMask = ColorWriteMask.All
 	};
 
-	public static readonly CanvasOutputState PremultipliedAlpha = new CanvasOutputState {
+	public static readonly CanvasOutputState PremultipliedAlpha = new() {
 		Blend = BlendStates.PremultipliedAlpha,
 		WriteMask = ColorWriteMask.All
 	};
@@ -215,7 +215,7 @@ public static class CanvasMaterials {
 	/// <summary>
 	/// A material that interprets textures as ordinary color data.
 	/// </summary>
-	public static readonly CanvasMaterial Color = new CanvasMaterial {
+	public static readonly CanvasMaterial Color = new() {
 		TextureInterpretation = TextureInterpretation.Color
 	};
 
@@ -223,7 +223,7 @@ public static class CanvasMaterials {
 	/// A material that interprets textures' red channels as coverage masks and
 	/// ignores the other channels.
 	/// </summary>
-	public static readonly CanvasMaterial RMask = new CanvasMaterial {
+	public static readonly CanvasMaterial RMask = new() {
 		TextureInterpretation = TextureInterpretation.RMask
 	};
 
@@ -231,7 +231,7 @@ public static class CanvasMaterials {
 	/// Creates a material that interprets textures as signed distance fields
 	/// using the specified <see cref="SdfParams"/>.
 	/// </summary>
-	public static CanvasMaterial SDF(SdfParams @params) => new CanvasMaterial {
+	public static CanvasMaterial SDF(SdfParams @params) => new() {
 		TextureInterpretation = TextureInterpretation.SDF,
 		SdfParams = @params
 	};
@@ -360,8 +360,8 @@ public sealed class CanvasSharedResources(WebGPUDevice device, EngineResourceSto
 
 	private readonly WebGPUDevice device = device;
 	private readonly EngineResourceStore engineResources = engineResources;
-	private readonly Dictionary<PrimBatchKey, PrimitiveBatchSharedState> primState = new Dictionary<PrimBatchKey, PrimitiveBatchSharedState>();
-	private readonly Dictionary<TexBatchKey, TexturedBatchSharedState> texState = new Dictionary<TexBatchKey, TexturedBatchSharedState>();
+	private readonly Dictionary<PrimBatchKey, PrimitiveBatchSharedState> primState = new();
+	private readonly Dictionary<TexBatchKey, TexturedBatchSharedState> texState = new();
 	private bool disposed = false;
 
 	/// <summary>
@@ -779,7 +779,7 @@ public sealed class Canvas : IDisposable {
 
 	// ==========================================================================
 	// textured drawing
-	private static readonly RectF fullUV = new RectF(0f, 0f, 1f, 1f);
+	private static readonly RectF fullUV = new(0f, 0f, 1f, 1f);
 
 	private static RectF pxToUV(in ResolvedTextureSource tex, RectF srcPixels) {
 		float invW = 1f / (float)tex.Width;
@@ -1156,7 +1156,7 @@ public sealed class Canvas : IDisposable {
 		// XXX: yucky casts back and forth from int/uint
 		int w = (int)(p.Target.IsPrimary ? frame.PrimaryView.Width : p.Target.RenderTarget.Width);
 		int h = (int)(p.Target.IsPrimary ? frame.PrimaryView.Height : p.Target.RenderTarget.Height);
-		RectI full = new RectI(0, 0, w, h);
+		RectI full = new(0, 0, w, h);
 		RectI effective = p.Scissor.Kind.Tag switch {
 			CanvasScissorKind.Case.None => full,
 			CanvasScissorKind.Case.Set => intersect(full, p.Scissor.Rect),

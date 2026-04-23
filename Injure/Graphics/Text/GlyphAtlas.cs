@@ -21,7 +21,7 @@ internal sealed class GlyphAtlasPage : IDisposable {
 	public int RowHeight;
 
 	public ulong LastUseStamp;
-	public readonly HashSet<GlyphAtlasKey> Keys = new HashSet<GlyphAtlasKey>();
+	public readonly HashSet<GlyphAtlasKey> Keys = new();
 
 	private int refcount;
 	public int RefCount => Volatile.Read(ref refcount);
@@ -56,8 +56,8 @@ internal readonly record struct GlyphAtlasEntry(
 internal sealed unsafe class GlyphAtlas(WebGPUDevice gpuDevice, TextSystem text, int pageWidth = 1024, int pageHeight = 1024, int padding = 1, int maxPages = 16) : IDisposable {
 	private readonly WebGPUDevice gpuDevice = gpuDevice;
 	private readonly TextSystem text = text;
-	private readonly Dictionary<GlyphAtlasKey, GlyphAtlasEntry> entries = new Dictionary<GlyphAtlasKey, GlyphAtlasEntry>();
-	private readonly List<GlyphAtlasPage> pages = new List<GlyphAtlasPage>();
+	private readonly Dictionary<GlyphAtlasKey, GlyphAtlasEntry> entries = new();
+	private readonly List<GlyphAtlasPage> pages = new();
 
 	private readonly int pageWidth = pageWidth;
 	private readonly int pageHeight = pageHeight;
@@ -81,7 +81,7 @@ internal sealed unsafe class GlyphAtlas(WebGPUDevice gpuDevice, TextSystem text,
 
 	public bool TryGetOrCreate(IResolvedFont font, uint glyphID, out GlyphAtlasEntry entry) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		GlyphAtlasKey key = new GlyphAtlasKey(
+		GlyphAtlasKey key = new(
 			FontCacheToken: font.GetCacheToken(),
 			GlyphID: glyphID
 		);
@@ -174,7 +174,7 @@ internal sealed unsafe class GlyphAtlas(WebGPUDevice gpuDevice, TextSystem text,
 	}
 
 	private GlyphAtlasPage newpage() {
-		GlyphAtlasPage page = new GlyphAtlasPage {
+		GlyphAtlasPage page = new() {
 			Texture = new Texture2D(gpuDevice, new Texture2DCreateParams(
 				Width: (uint)pageWidth,
 				Height: (uint)pageHeight,

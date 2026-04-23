@@ -55,7 +55,7 @@ public sealed class ClosedEnumAnalyzer : DiagnosticAnalyzer {
 		} else if (sym.TypeParameters.Length != 0) {
 			ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.ClosedEnumInvalidTarget, loc, "Generic structs are not supported."));
 		} else {
-			List<EnumDeclarationSyntax> caseDecls = new List<EnumDeclarationSyntax>();
+			List<EnumDeclarationSyntax> caseDecls = new();
 			foreach (SyntaxReference sr in sym.DeclaringSyntaxReferences) {
 				if (sr.GetSyntax(ctx.CancellationToken) is not StructDeclarationSyntax decl)
 					continue;
@@ -107,8 +107,8 @@ public sealed class ClosedEnumAnalyzer : DiagnosticAnalyzer {
 	}
 
 	private static void analyzeCaseEnum(SymbolAnalysisContext ctx, INamedTypeSymbol caseSymbol, bool defaultIsInvalid, bool checkZeroNames) {
-		Dictionary<ulong, IFieldSymbol> seenValues = new Dictionary<ulong, IFieldSymbol>();
-		List<IFieldSymbol> zeroFields = new List<IFieldSymbol>();
+		Dictionary<ulong, IFieldSymbol> seenValues = new();
+		List<IFieldSymbol> zeroFields = new();
 		foreach (IFieldSymbol field in caseSymbol.GetMembers().OfType<IFieldSymbol>()) {
 			if (field.IsImplicitlyDeclared || !field.HasConstantValue)
 				continue;
@@ -156,14 +156,14 @@ public sealed class ClosedEnumAnalyzer : DiagnosticAnalyzer {
 		if (attrs.Length == 0)
 			return;
 
-		HashSet<ulong> closedVals = new HashSet<ulong>();
+		HashSet<ulong> closedVals = new();
 		foreach (IFieldSymbol field in caseSymbol.GetMembers().OfType<IFieldSymbol>()) {
 			if (field.IsImplicitlyDeclared || !field.HasConstantValue || !Util.TryGetEnumMemberUInt64(field, out ulong v))
 				continue;
 			closedVals.Add(v);
 		}
 
-		HashSet<INamedTypeSymbol> seenMirrors = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+		HashSet<INamedTypeSymbol> seenMirrors = new(SymbolEqualityComparer.Default);
 		foreach (AttributeData attr in attrs) {
 			bool subset = Util.GetBoolNamedArgument(attr, AttributeSources.ClosedEnumMirrorAttributeSubsetName, false);
 			Location loc = attr.ApplicationSyntaxReference?.GetSyntax(ctx.CancellationToken).GetLocation() ?? Util.GetLocation(structSymbol, structSymbol);
@@ -185,7 +185,7 @@ public sealed class ClosedEnumAnalyzer : DiagnosticAnalyzer {
 				continue;
 			}
 
-			HashSet<ulong> externalVals = new HashSet<ulong>();
+			HashSet<ulong> externalVals = new();
 			foreach (IFieldSymbol field in external.GetMembers().OfType<IFieldSymbol>()) {
 				if (field.IsImplicitlyDeclared || !field.HasConstantValue || !Util.TryGetEnumMemberUInt64(field, out ulong v))
 					continue;

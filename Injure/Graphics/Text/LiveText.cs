@@ -40,7 +40,7 @@ public sealed class LiveText : IDisposable {
 
 	public void SetText(ReadOnlySpan<char> text) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		string s = new string(text);
+		string s = new(text);
 		if (req.Text == s)
 			return;
 		req = req with { Text = s };

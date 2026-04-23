@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 using System;
+
 using Injure.DataStructures;
 
 namespace Injure.Layers;
@@ -18,53 +19,72 @@ public readonly struct LayerTag : IEquatable<LayerTag> {
 	public static bool operator !=(LayerTag left, LayerTag right) => !left.Equals(right);
 }
 
-internal readonly record struct LayerTagNamespaceID(ulong ID);
-internal readonly record struct TagKey(LayerTagNamespaceID NamespaceID, string Name);
+internal readonly record struct TagKey(ulong NamespaceID, string Name);
 
-public struct LayerTagSet {
-	private LayerTag[]? items;
-	private int count;
-	private const int startingCount = 4;
+public readonly struct LayerTagSet {
+	private readonly LayerTag[]? items;
+
+	public static readonly LayerTagSet Empty = default;
 
 	public LayerTagSet(ReadOnlySpan<LayerTag> tags) {
-		for (int i = 0; i < tags.Length; i++)
-			Add(tags[i]);
+		if (tags.IsEmpty) {
+			items = null;
+			return;
+		}
+
+		LayerTag[] arr = tags.ToArray();
+		int count = 0;
+		for (int i = 0; i < arr.Length; i++) {
+			LayerTag tag = arr[i];
+			bool seen = false;
+			for (int j = 0; j < count; j++) {
+				if (arr[j] == tag) {
+					seen = true;
+					break;
+				}
+			}
+			if (!seen)
+				arr[count++] = tag;
+		}
+
+		if (count == 0) {
+			items = null;
+		} else if (count == arr.Length) {
+			items = arr;
+		} else {
+			items = arr[..count];
+		}
 	}
 
-	public readonly int Count => count;
+	public int Count => items?.Length ?? 0;
 
-	public readonly bool Contains(LayerTag tag) {
+	public bool Contains(LayerTag tag) {
 		LayerTag[]? arr = items;
 		if (arr is null)
 			return false;
-		for (int i = 0; i < count; i++)
-			if (arr[i].ID == tag.ID)
+		for (int i = 0; i < arr.Length; i++)
+			if (arr[i] == tag)
 				return true;
 		return false;
 	}
 
-	public void Add(LayerTag tag) {
-		if (Contains(tag))
-			return;
-		if (items is null)
-			items = new LayerTag[startingCount];
-		else if (items.Length < count)
-			Array.Resize(ref items, items.Length * 2);
-		items[count++] = tag;
-	}
-
-	public readonly bool Intersects(in LayerTagSet other) {
-		for (int i = 0; i < count; i++)
-			if (other.Contains(items![i]))
+	public bool Intersects(ReadOnlySpan<LayerTag> other) {
+		LayerTag[]? arr = items;
+		if (arr is null || other.IsEmpty)
+			return false;
+		for (int i = 0; i < other.Length; i++)
+			if (Contains(other[i]))
 				return true;
 		return false;
 	}
 
-	public readonly ReadOnlySpan<LayerTag> AsSpan() => items is null ? ReadOnlySpan<LayerTag>.Empty : items.AsSpan(0, count);
+	public bool Intersects(in LayerTagSet other) => Intersects(other.AsSpan());
+
+	public ReadOnlySpan<LayerTag> AsSpan() => items is null ? ReadOnlySpan<LayerTag>.Empty : items;
 }
 
 public sealed class LayerTagRegistry {
-	private readonly TwoWayMap<string, LayerTagNamespaceID> namespaces;
+	private readonly TwoWayMap<string, ulong> namespaces;
 	private readonly TwoWayMap<TagKey, LayerTag> tags;
 
 	// first will be 1 since these get incremented upfront
@@ -72,14 +92,14 @@ public sealed class LayerTagRegistry {
 	private ulong nextTagID = 0;
 
 	internal LayerTagRegistry() {
-		namespaces = new TwoWayMap<string, LayerTagNamespaceID>(cmpLeft: StringComparer.Ordinal);
+		namespaces = new TwoWayMap<string, ulong>(cmpLeft: StringComparer.Ordinal);
 		tags = new TwoWayMap<TagKey, LayerTag>();
 	}
 
 	public LayerTag GetOrCreate(string ns, string name) {
 		validate(ns, nameof(ns), "layer tag namespace");
 		validate(name, nameof(name), "layer tag name");
-		LayerTagNamespaceID nsID = getOrCreateNs(ns);
+		ulong nsID = getOrCreateNs(ns);
 		TagKey key = new(nsID, name);
 		if (tags.TryGetByLeft(key, out LayerTag tag))
 			return tag;
@@ -96,10 +116,10 @@ public sealed class LayerTagRegistry {
 		return ns + "::" + key.Name;
 	}
 
-	private LayerTagNamespaceID getOrCreateNs(string ns) {
-		if (namespaces.TryGetByLeft(ns, out LayerTagNamespaceID id))
+	private ulong getOrCreateNs(string ns) {
+		if (namespaces.TryGetByLeft(ns, out ulong id))
 			return id;
-		id = new LayerTagNamespaceID(++nextNamespaceID);
+		id = ++nextNamespaceID;
 		namespaces.Add(ns, id);
 		return id;
 	}
@@ -109,12 +129,8 @@ public sealed class LayerTagRegistry {
 			throw new ArgumentException(kind + " must not be empty", paramName);
 		if (!char.IsAsciiLetterOrDigit(s[0]))
 			throw new ArgumentException(kind + " must start with an ASCII letter or ASCII digit", paramName);
-		for (int i = 0; i < s.Length; i++) {
-			char c = s[i];
-			if (char.IsControl(c))
-				throw new ArgumentException(kind + " must not contain control characters", paramName);
+		foreach (char c in s)
 			if (!(char.IsAsciiLetterOrDigit(c) || c == '_' || c == '-' || c == '.'))
-				throw new ArgumentException($"{kind} contains invalid character '{c} (valid: ASCII letters, ASCII digits, '_', '-', '.')", paramName);
-		}
+				throw new ArgumentException($"{kind} contains invalid UTF-16 code unit U+{(ushort)c:X4} '{c}' (valid: ASCII letters, ASCII digits, '_', '-', '.')", paramName);
 	}
 }

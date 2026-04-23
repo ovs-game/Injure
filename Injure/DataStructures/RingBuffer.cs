@@ -519,7 +519,7 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 	/// <summary>
 	/// Returns an enumerator that iterates through the buffer from oldest to newest.
 	/// </summary>
-	public Enumerator GetEnumerator() => new Enumerator(this);
+	public Enumerator GetEnumerator() => new(this);
 	/// <inheritdoc cref="GetEnumerator()"/>
 	IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
 	/// <inheritdoc cref="GetEnumerator()"/>
@@ -528,7 +528,7 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 	/// <summary>
 	/// Returns an enumerable that enumerates the contents of the buffer from newest to oldest.
 	/// </summary>
-	public ReverseEnumerable EnumerateReverse() => new ReverseEnumerable(this);
+	public ReverseEnumerable EnumerateReverse() => new(this);
 
 	// ==========================================================================
 	// enumerators
@@ -595,7 +595,7 @@ public sealed class RingBuffer<T> : IReadOnlyList<T> {
 			this.ringbuf = ringbuf;
 		}
 
-		public ReverseEnumerator GetEnumerator() => new ReverseEnumerator(ringbuf);
+		public ReverseEnumerator GetEnumerator() => new(ringbuf);
 		IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
 		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 	}

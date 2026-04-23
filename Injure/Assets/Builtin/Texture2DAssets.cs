@@ -82,7 +82,7 @@ public sealed class Texture2DImageAssetResolver : IAssetResolver {
 	public async ValueTask<AssetResolveResult> TryResolveAsync(AssetResolveInfo info, IAssetDependencyCollector coll, CancellationToken ct = default) {
 		ct.ThrowIfCancellationRequested();
 		Stream imgStream = await info.FetchAsync(info.AssetID, ct).ConfigureAwait(false);
-		Texture2DAssetMetadata meta = new Texture2DAssetMetadata { Source = info.AssetID };
+		Texture2DAssetMetadata meta = new() { Source = info.AssetID };
 		ImageInfo? imageInfo = ImageInfo.FromStream(imgStream);
 		if (imageInfo is null) {
 			await imgStream.DisposeAsync();
@@ -146,7 +146,7 @@ public sealed class Texture2DAssetCreator(WebGPUDevice gpuDevice) : IAssetStaged
 			src = p.RGBA;
 		}
 
-		Texture2D tex = new Texture2D(gpuDevice, w, h, fmt);
+		Texture2D tex = new(gpuDevice, w, h, fmt);
 		tex.Upload(src, checked((int)srcStride), PixelFormat.RGBA32_UNorm);
 		return tex;
 	}

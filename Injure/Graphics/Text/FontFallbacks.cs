@@ -32,7 +32,7 @@ public sealed class FontFallbackChain {
 	}
 
 	internal ulong Hash() {
-		XxHash3 h = new XxHash3();
+		XxHash3 h = new();
 		const int estimated = 4 + 4 + 8 + 8; // worst-case
 		Span<byte> buf = stackalloc byte[estimated];
 		foreach (FontSpec fnt in allFonts) {
@@ -79,7 +79,7 @@ internal sealed class ResolvedFontFallbackChain {
 	}
 
 	public ulong Hash() {
-		XxHash3 h = new XxHash3();
+		XxHash3 h = new();
 		const int estimated = 4 + 8 + 4 + 4 + 4 + 4 + 1 + 8;
 		Span<byte> buf = stackalloc byte[estimated];
 		foreach (IResolvedFont fnt in allFonts) {
@@ -118,7 +118,7 @@ internal sealed class FallbackProbeCache(TextSystem text, int maxEntries, int ma
 	private readonly TextSystem text = text;
 	private readonly int maxEntries = maxEntries;
 	private readonly int maxEstimatedCost = maxEstimatedCost;
-	private readonly Dictionary<FallbackProbeKey, Entry> cache = new Dictionary<FallbackProbeKey, Entry>();
+	private readonly Dictionary<FallbackProbeKey, Entry> cache = new();
 	private ulong nextUseStamp = 0; // first will be 1 since this gets incremented upfront
 	private int totalEstimatedCost = 0;
 
@@ -188,7 +188,7 @@ internal sealed class FallbackResolver(ShapeCache shapeCache, FallbackProbeCache
 		GraphemeSpan[] graphemes = TextAnalysis.GetGraphemeSpans(item.Text);
 		if (graphemes.Length == 0)
 			return Array.Empty<ResolvedItem>();
-		List<(int Start, int Limit, int FontIndex)> spans = new List<(int Start, int Limit, int FontIndex)>();
+		List<(int Start, int Limit, int FontIndex)> spans = new();
 		GraphemeSpan first = graphemes[0];
 		int currStart = first.Start;
 		int currLimit = first.Start + first.Length;
@@ -225,7 +225,7 @@ internal sealed class FallbackResolver(ShapeCache shapeCache, FallbackProbeCache
 	}
 
 	private int resolveFontIndex(ResolvedFontFallbackChain fonts, TextItem parentItem, GraphemeSpan grapheme) {
-		FallbackProbeKey key = new FallbackProbeKey(
+		FallbackProbeKey key = new(
 			FallbackChainID: fonts.ID,
 			FallbackChainHash: fonts.Hash(),
 			Text: parentItem.Text.Substring(grapheme.Start, grapheme.Length),

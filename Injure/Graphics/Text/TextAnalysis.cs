@@ -234,7 +234,7 @@ internal static unsafe class TextAnalysis {
 		if (text.Length == 0)
 			return Array.Empty<LogicalBidiRun>();
 		using ParagraphAnalysis para = ParagraphAnalysis.Create(text);
-		List<LogicalBidiRun> l = new List<LogicalBidiRun>();
+		List<LogicalBidiRun> l = new();
 		para.GetLogicalRuns(l);
 		return l.ToArray();
 	}
@@ -243,7 +243,7 @@ internal static unsafe class TextAnalysis {
 		if (lineStart >= lineLimit)
 			return Array.Empty<VisualBidiRun>();
 		using ParagraphAnalysis para = ParagraphAnalysis.Create(text);
-		List<VisualBidiRun> l = new List<VisualBidiRun>();
+		List<VisualBidiRun> l = new();
 		para.GetVisualRunsForLine(l, lineStart, lineLimit);
 		return l.ToArray();
 	}
@@ -263,7 +263,7 @@ internal static unsafe class TextAnalysis {
 
 		if (text.IsEmpty)
 			return Array.Empty<TextItem>();
-		List<TextItem> items = new List<TextItem>();
+		List<TextItem> items = new();
 		int currentRunStart = -1;
 		Script? currentScript = null;
 		int pendingPrefixStart = -1;

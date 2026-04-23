@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using Hexa.NET.SDL3;
 
 using Injure.Timing;
+using static Injure.Core.SDLException;
 
 namespace Injure.Core;
 
@@ -20,18 +21,17 @@ public static unsafe class SDLOwner {
 	[MemberNotNull(nameof(Window), nameof(SurfaceHost))]
 	public static void InitSDL(uint props) {
 		if (OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") is not null)
-			SDL.SetHint(SDL.SDL_HINT_VIDEO_DRIVER, "wayland");
+			Check(SDL.SetHint(SDL.SDL_HINT_VIDEO_DRIVER, "wayland"));
 
-		if (!SDL.Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS))
-			throw new InvalidOperationException($"SDL_Init: {SDL.GetErrorS()}");
+		Check(!SDL.Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS));
 
 		if (OperatingSystem.IsMacOS())
-			SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_METAL_BOOLEAN, true);
+			Check(SDL.SetBooleanProperty(props, SDL.SDL_PROP_WINDOW_CREATE_METAL_BOOLEAN, true));
 
 		Window = SDL.CreateWindowWithProperties(props);
 		if (Window is null) {
 			SDL.Quit();
-			throw new InvalidOperationException($"SDL_CreateWindow: {SDL.GetErrorS()}");
+			throw new SDLException("SDL_CreateWindow", SDL.GetErrorS());
 		}
 
 		if (OperatingSystem.IsMacOS()) {
@@ -39,7 +39,7 @@ public static unsafe class SDLOwner {
 			if (AppleMetalView is null) {
 				SDL.DestroyWindow(Window);
 				SDL.Quit();
-				throw new InvalidOperationException("SDL_Metal_CreateView returned null");
+				throw new SDLException("SDL_Metal_CreateView", "SDL call returned null");
 			}
 
 			AppleMetalLayer = SDL.MetalGetLayer(AppleMetalView);
@@ -47,7 +47,7 @@ public static unsafe class SDLOwner {
 				SDL.MetalDestroyView(AppleMetalView);
 				SDL.DestroyWindow(Window);
 				SDL.Quit();
-				throw new InvalidOperationException("SDL_Metal_GetLayer returned null");
+				throw new SDLException("SDL_Metal_GetLayer", "SDL call returned null");
 			}
 		}
 

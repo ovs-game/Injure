@@ -226,7 +226,7 @@ public static class AssetRefExtensions {
 	/// </remarks>
 	public static async Task WarmAllAsync(this IEnumerable<IUntypedAssetRef> assetRefs, int maxConcurrency = 8, CancellationToken ct = default) {
 		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxConcurrency);
-		using SemaphoreSlim sem = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+		using SemaphoreSlim sem = new(maxConcurrency, maxConcurrency);
 		await Task.WhenAll(assetRefs.Select(async (IUntypedAssetRef assetRef) => {
 			await sem.WaitAsync(ct).ConfigureAwait(false);
 			try {
@@ -250,7 +250,7 @@ public static class AssetRefExtensions {
 	/// </remarks>
 	public static async Task QueueReloadAllAsync(this IEnumerable<IUntypedAssetRef> assetRefs, int maxConcurrency = 8, CancellationToken ct = default) {
 		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxConcurrency);
-		using SemaphoreSlim sem = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+		using SemaphoreSlim sem = new(maxConcurrency, maxConcurrency);
 		await Task.WhenAll(assetRefs.Select(async (IUntypedAssetRef assetRef) => {
 			await sem.WaitAsync(ct).ConfigureAwait(false);
 			try {

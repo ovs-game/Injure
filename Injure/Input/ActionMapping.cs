@@ -42,7 +42,7 @@ public sealed class ActionMapSnapshot {
 
 	private static ImmutableArray<TBinding> validate<TBinding, TSource>(ReadOnlySpan<TBinding> bindings,
 		Func<TBinding, (ActionID, TSource)> getData, string kind) {
-		HashSet<(ActionID, TSource)> seen = new HashSet<(ActionID, TSource)>();
+		HashSet<(ActionID, TSource)> seen = new();
 		foreach (TBinding b in bindings)
 			if (!seen.Add(getData(b)))
 				throw new ArgumentException($"{kind} bindings must not contain duplicate action/source pairs");
@@ -51,10 +51,10 @@ public sealed class ActionMapSnapshot {
 }
 
 public sealed class ActionMapBuilder {
-	private readonly List<ButtonBinding> buttonBindings = new List<ButtonBinding>();
-	private readonly List<StateAxisBinding> stateAxisBindings = new List<StateAxisBinding>();
-	private readonly List<StateAxis2DBinding> stateAxis2DBindings = new List<StateAxis2DBinding>();
-	private readonly List<ImpulseAxisBinding> impulseAxisBindings = new List<ImpulseAxisBinding>();
+	private readonly List<ButtonBinding> buttonBindings = new();
+	private readonly List<StateAxisBinding> stateAxisBindings = new();
+	private readonly List<StateAxis2DBinding> stateAxis2DBindings = new();
+	private readonly List<ImpulseAxisBinding> impulseAxisBindings = new();
 
 	public IReadOnlyList<ButtonBinding> ButtonBindings => buttonBindings;
 	public IReadOnlyList<StateAxisBinding> StateAxisBindings => stateAxisBindings;
@@ -66,7 +66,7 @@ public sealed class ActionMapBuilder {
 
 	public static ActionMapBuilder FromSnapshot(ActionMapSnapshot snapshot) {
 		ArgumentNullException.ThrowIfNull(snapshot);
-		ActionMapBuilder b = new ActionMapBuilder() {
+		ActionMapBuilder b = new() {
 			StateAxisMergePolicy = snapshot.StateAxisMergePolicy,
 			StateAxis2DMergePolicy = snapshot.StateAxis2DMergePolicy
 		};

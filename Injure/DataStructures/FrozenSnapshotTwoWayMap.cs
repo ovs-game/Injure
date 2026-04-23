@@ -48,7 +48,7 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 		public readonly FrozenDictionary<TLeft, TRight> LTR = ltr;
 		public readonly FrozenDictionary<TRight, TLeft> RTL = rtl;
 
-		public static readonly Snapshot Empty = new Snapshot(FrozenDictionary<TLeft, TRight>.Empty, FrozenDictionary<TRight, TLeft>.Empty);
+		public static readonly Snapshot Empty = new(FrozenDictionary<TLeft, TRight>.Empty, FrozenDictionary<TRight, TLeft>.Empty);
 	}
 
 	private readonly IEqualityComparer<TLeft>? cmpLeft;
@@ -113,16 +113,16 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 	}
 
 	private static Snapshot mksnap(IEnumerable<(TLeft, TRight)> pairs, IEqualityComparer<TLeft>? cmpLeft, IEqualityComparer<TRight>? cmpRight) {
-		Dictionary<TLeft, TRight> ltr = new Dictionary<TLeft, TRight>(cmpLeft);
-		Dictionary<TRight, TLeft> rtl = new Dictionary<TRight, TLeft>(cmpRight);
+		Dictionary<TLeft, TRight> ltr = new(cmpLeft);
+		Dictionary<TRight, TLeft> rtl = new(cmpRight);
 		foreach ((TLeft left, TRight right) in pairs)
 			add(ltr, rtl, left, right);
 		return freeze(ltr, rtl, cmpLeft, cmpRight);
 	}
 
 	private static Snapshot mksnap(PairSource pairs, IEqualityComparer<TLeft>? cmpLeft, IEqualityComparer<TRight>? cmpRight) {
-		Dictionary<TLeft, TRight> ltr = new Dictionary<TLeft, TRight>(cmpLeft);
-		Dictionary<TRight, TLeft> rtl = new Dictionary<TRight, TLeft>(cmpRight);
+		Dictionary<TLeft, TRight> ltr = new(cmpLeft);
+		Dictionary<TRight, TLeft> rtl = new(cmpRight);
 		for (int i = 0; i < pairs.Length; i++) {
 			(TLeft left, TRight right) = pairs.Get(i);
 			add(ltr, rtl, left, right);
@@ -187,8 +187,8 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 			throw new InvalidOperationException("this left key is already in the map");
 		if (s.RTL.ContainsKey(right))
 			throw new InvalidOperationException("this right key is already in the map");
-		Dictionary<TLeft, TRight> ltr = new Dictionary<TLeft, TRight>(s.LTR, cmpLeft);
-		Dictionary<TRight, TLeft> rtl = new Dictionary<TRight, TLeft>(s.RTL, cmpRight);
+		Dictionary<TLeft, TRight> ltr = new(s.LTR, cmpLeft);
+		Dictionary<TRight, TLeft> rtl = new(s.RTL, cmpRight);
 		setBijection(ltr, rtl, left, right);
 		Snapshot @new = freeze(ltr, rtl, cmpLeft, cmpRight);
 		Volatile.Write(ref snapshot, @new);
@@ -198,8 +198,8 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 		Snapshot s = Volatile.Read(ref snapshot);
 		if (s.LTR.ContainsKey(left) || s.RTL.ContainsKey(right))
 			return false;
-		Dictionary<TLeft, TRight> ltr = new Dictionary<TLeft, TRight>(s.LTR, cmpLeft);
-		Dictionary<TRight, TLeft> rtl = new Dictionary<TRight, TLeft>(s.RTL, cmpRight);
+		Dictionary<TLeft, TRight> ltr = new(s.LTR, cmpLeft);
+		Dictionary<TRight, TLeft> rtl = new(s.RTL, cmpRight);
 		setBijection(ltr, rtl, left, right);
 		Snapshot @new = freeze(ltr, rtl, cmpLeft, cmpRight);
 		Volatile.Write(ref snapshot, @new);
@@ -208,8 +208,8 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 
 	public void Set(TLeft left, TRight right) {
 		Snapshot s = Volatile.Read(ref snapshot);
-		Dictionary<TLeft, TRight> ltr = new Dictionary<TLeft, TRight>(s.LTR, cmpLeft);
-		Dictionary<TRight, TLeft> rtl = new Dictionary<TRight, TLeft>(s.RTL, cmpRight);
+		Dictionary<TLeft, TRight> ltr = new(s.LTR, cmpLeft);
+		Dictionary<TRight, TLeft> rtl = new(s.RTL, cmpRight);
 		setBijection(ltr, rtl, left, right);
 		Snapshot @new = freeze(ltr, rtl, cmpLeft, cmpRight);
 		Volatile.Write(ref snapshot, @new);
@@ -220,8 +220,8 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 		Snapshot s = Volatile.Read(ref snapshot);
 		if (!s.LTR.TryGetValue(left, out right))
 			return false;
-		Dictionary<TLeft, TRight> ltr = new Dictionary<TLeft, TRight>(s.LTR);
-		Dictionary<TRight, TLeft> rtl = new Dictionary<TRight, TLeft>(s.RTL);
+		Dictionary<TLeft, TRight> ltr = new(s.LTR);
+		Dictionary<TRight, TLeft> rtl = new(s.RTL);
 		ltr.Remove(left);
 		rtl.Remove(right);
 		Snapshot @new = freeze(ltr, rtl, cmpLeft, cmpRight);
@@ -234,8 +234,8 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 		Snapshot s = Volatile.Read(ref snapshot);
 		if (!s.RTL.TryGetValue(right, out left))
 			return false;
-		Dictionary<TLeft, TRight> ltr = new Dictionary<TLeft, TRight>(s.LTR);
-		Dictionary<TRight, TLeft> rtl = new Dictionary<TRight, TLeft>(s.RTL);
+		Dictionary<TLeft, TRight> ltr = new(s.LTR);
+		Dictionary<TRight, TLeft> rtl = new(s.RTL);
 		ltr.Remove(left);
 		rtl.Remove(right);
 		Snapshot @new = freeze(ltr, rtl, cmpLeft, cmpRight);
@@ -262,8 +262,8 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 
 	private void add(PairSource pairs) {
 		Snapshot s = Volatile.Read(ref snapshot);
-		HashSet<TLeft> seenLeft = new HashSet<TLeft>(cmpLeft);
-		HashSet<TRight> seenRight = new HashSet<TRight>(cmpRight);
+		HashSet<TLeft> seenLeft = new(cmpLeft);
+		HashSet<TRight> seenRight = new(cmpRight);
 		for (int i = 0; i < pairs.Length; i++) {
 			(TLeft left, TRight right) = pairs.Get(i);
 			if (s.LTR.ContainsKey(left))
@@ -276,8 +276,8 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 				throw new InvalidOperationException($"duplicate right key in the given list (index {i})");
 		}
 
-		Dictionary<TLeft, TRight> ltr = new Dictionary<TLeft, TRight>(s.LTR, cmpLeft);
-		Dictionary<TRight, TLeft> rtl = new Dictionary<TRight, TLeft>(s.RTL, cmpRight);
+		Dictionary<TLeft, TRight> ltr = new(s.LTR, cmpLeft);
+		Dictionary<TRight, TLeft> rtl = new(s.RTL, cmpRight);
 		for (int i = 0; i < pairs.Length; i++) {
 			(TLeft left, TRight right) = pairs.Get(i);
 			ltr.Add(left, right);
@@ -291,8 +291,8 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 
 	private void set(PairSource pairs) {
 		Snapshot s = Volatile.Read(ref snapshot);
-		Dictionary<TLeft, TRight> ltr = new Dictionary<TLeft, TRight>(s.LTR, cmpLeft);
-		Dictionary<TRight, TLeft> rtl = new Dictionary<TRight, TLeft>(s.RTL, cmpRight);
+		Dictionary<TLeft, TRight> ltr = new(s.LTR, cmpLeft);
+		Dictionary<TRight, TLeft> rtl = new(s.RTL, cmpRight);
 		for (int i = 0; i < pairs.Length; i++) {
 			(TLeft left, TRight right) = pairs.Get(i);
 			setBijection(ltr, rtl, left, right);

@@ -25,7 +25,6 @@ miscellaneous TODO (see issues for the big ones):
 - windows builds
 - streaming textures and readback
 - proper depth/stencil support incl. drawing to them and sampling them through Canvas
-- replace `InvalidOperationException`s in `Core/` and `SDL/` with a proper `SDLException` and the ones in `Timing/` with uhh idk something
 - `.tex.json` should be the primary way to load textures, add more stuff there
 - figure out how we're gonna handle `AssetRef`s for sounds since unlike `Texture2D` they carry MA state
 - a good asset replace/hotpatch/hook system, you can do it right now but it's a bit clunky

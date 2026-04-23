@@ -40,8 +40,8 @@ public sealed unsafe class TextSystem : IDisposable {
 	private readonly record struct LoadedFaceKey(FontSourceKind SourceKind, ulong SourceID, ulong Version, int FaceIndex);
 
 	private readonly FT_LibraryRec_ *ftLibrary;
-	private readonly Dictionary<ResolvedFontKey, IResolvedFont> fonts = new Dictionary<ResolvedFontKey, IResolvedFont>();
-	private readonly Dictionary<LoadedFaceKey, LoadedFontFace> loadedFaces = new Dictionary<LoadedFaceKey, LoadedFontFace>();
+	private readonly Dictionary<ResolvedFontKey, IResolvedFont> fonts = new();
+	private readonly Dictionary<LoadedFaceKey, LoadedFontFace> loadedFaces = new();
 
 	private readonly ITextItemizer itemizer;
 	private readonly TextCacheOptions cacheOptions;
@@ -76,7 +76,7 @@ public sealed unsafe class TextSystem : IDisposable {
 		ArgumentOutOfRangeException.ThrowIfNegative(faceIndex);
 		if (opts.PixelSize <= 0)
 			throw new ArgumentOutOfRangeException(nameof(opts), "PixelSize must be > 0");
-		ResolvedFontKey key = new ResolvedFontKey(FontSourceKind.Direct, font.ID, faceIndex, opts);
+		ResolvedFontKey key = new(FontSourceKind.Direct, font.ID, faceIndex, opts);
 		if (!fonts.TryGetValue(key, out IResolvedFont? fnt)) {
 			fnt = new ResolvedDirectFont(this, font, faceIndex, opts);
 			fonts.Add(key, fnt);
@@ -88,7 +88,7 @@ public sealed unsafe class TextSystem : IDisposable {
 		ArgumentOutOfRangeException.ThrowIfNegative(faceIndex);
 		if (opts.PixelSize <= 0)
 			throw new ArgumentOutOfRangeException(nameof(opts), "PixelSize must be > 0");
-		ResolvedFontKey key = new ResolvedFontKey(FontSourceKind.Asset, font.SlotID, faceIndex, opts);
+		ResolvedFontKey key = new(FontSourceKind.Asset, font.SlotID, faceIndex, opts);
 		if (!fonts.TryGetValue(key, out IResolvedFont? fnt)) {
 			fnt = new ResolvedAssetSourcedFont(this, font, faceIndex, opts);
 			fonts.Add(key, fnt);
@@ -116,7 +116,7 @@ public sealed unsafe class TextSystem : IDisposable {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		ArgumentOutOfRangeException.ThrowIfNegative(faceIndex);
 		ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(faceIndex, font.FaceCount);
-		LoadedFaceKey key = new LoadedFaceKey(FontSourceKind.Direct, font.ID, ResolvedDirectFont.Version, faceIndex);
+		LoadedFaceKey key = new(FontSourceKind.Direct, font.ID, ResolvedDirectFont.Version, faceIndex);
 		if (!loadedFaces.TryGetValue(key, out LoadedFontFace? face)) {
 			face = new LoadedFontFace(font, faceIndex);
 			loadedFaces.Add(key, face);
@@ -128,7 +128,7 @@ public sealed unsafe class TextSystem : IDisposable {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		ArgumentOutOfRangeException.ThrowIfNegative(faceIndex);
 		ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(faceIndex, lease.Value.FaceCount);
-		LoadedFaceKey key = new LoadedFaceKey(FontSourceKind.Asset, font.SlotID, lease.Version, faceIndex);
+		LoadedFaceKey key = new(FontSourceKind.Asset, font.SlotID, lease.Version, faceIndex);
 		if (!loadedFaces.TryGetValue(key, out LoadedFontFace? face)) {
 			face = new LoadedFontFace(lease.Value, faceIndex);
 			loadedFaces.Add(key, face);
@@ -138,9 +138,9 @@ public sealed unsafe class TextSystem : IDisposable {
 
 	internal TextLayout Layout(ResolvedFontFallbackChain fonts, ReadOnlySpan<char> text, in TextStyle style) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		List<PlannedGlyph> scratch = new List<PlannedGlyph>();
-		List<TextGlyph> glyphs = new List<TextGlyph>();
-		List<TextLine> lines = new List<TextLine>();
+		List<PlannedGlyph> scratch = new();
+		List<TextGlyph> glyphs = new();
+		List<TextLine> lines = new();
 		float lineTopY = 0f;
 		float maxLineWidth = 0f;
 		int paraStart = 0;
@@ -148,7 +148,7 @@ public sealed unsafe class TextSystem : IDisposable {
 			bool isParaBreak = i == text.Length || text[i] == '\n';
 			if (!isParaBreak)
 				continue;
-			string paraText = new string(text[paraStart..i]);
+			string paraText = new(text[paraStart..i]);
 			ParagraphRun[] paraRuns = TextLayouter.BuildParaRuns(itemizer, fallbackResolver, fonts, paraText, paraStart, style.Locale, style.LanguageBCP47);
 			ParagraphCluster[] logiClusters = TextLayouter.FlattenSourceOrderClusters(paraRuns);
 			LogicalLine[] logiLines = TextLayouter.WrapParaLogicalLines(logiClusters, paraStart, paraText.Length, style.MaxWidth, style.WrapMode);
@@ -208,10 +208,10 @@ public sealed unsafe class TextSystem : IDisposable {
 	}
 
 	public LiveText Make(FontSpec font, ReadOnlySpan<char> text, TextStyle style) =>
-		new LiveText(this, new FontFallbackChain(font), text, style);
+		new(this, new FontFallbackChain(font), text, style);
 
 	public LiveText Make(FontFallbackChain fonts, ReadOnlySpan<char> text, TextStyle style) =>
-		new LiveText(this, fonts, text, style);
+		new(this, fonts, text, style);
 
 	public TextLayout Layout(FontSpec font, ReadOnlySpan<char> text, in TextStyle style) =>
 		Layout(ResolveFallbackChain(new FontFallbackChain(font), style.FontOptions), text, in style);

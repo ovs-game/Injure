@@ -1,16 +1,26 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using System.Diagnostics.CodeAnalysis;
 
 using Injure.Analyzers.Attributes;
 using Injure.Coroutines;
 using Injure.Graphics;
+using Injure.Input;
 
 namespace Injure.Layers;
 
 [ClosedFlags]
-public readonly partial struct LayerPassMask {
+public readonly partial struct LayerFeatures {
+	[Flags]
+	public enum Bits {
+		None   = 0,
+		Render = 1 << 0,
+		Input  = 1 << 1
+	}
+}
+
+[ClosedFlags]
+public readonly partial struct LayerBlockMask {
 	[Flags]
 	public enum Bits {
 		None   = 0,
@@ -20,10 +30,7 @@ public readonly partial struct LayerPassMask {
 	}
 }
 
-public readonly record struct LayerBlockRule(
-	LayerPassMask Passes,
-	LayerTagSet MatchTags
-);
+public readonly record struct LayerBlockRule(LayerBlockMask Blocked, LayerTagSet MatchTags);
 
 public abstract class Layer {
 	internal LayerStack? Owner { get; set; }
@@ -35,37 +42,21 @@ public abstract class Layer {
 	protected CoroutineScope CoroutineScope => Runtime?.CoroutineScope ?? throw new InvalidOperationException(eMsg);
 	protected ILayerTickTracker TickTracker => Runtime ?? throw new InvalidOperationException(eMsg);
 
-	[MemberNotNull(nameof(Runtime))]
-	internal void OnEnterCore() {
-		Runtime = new LayerRuntime();
-		OnEnter();
-	}
-	internal void UpdateCore(in LayerTickContext ctx) {
-		if (Runtime is null)
-			throw new InternalStateException("expected layer runtime instance to be nonnull by this point");
-		Runtime.BeforeUpdate(in ctx);
-		Update(in ctx);
-		Runtime.AfterUpdate(in ctx);
-	}
-	internal void RenderCore(Canvas cv) {
-		if (Runtime is null)
-			throw new InternalStateException("expected layer runtime instance to be nonnull by this point");
-		Render(cv);
-	}
-	internal void OnLeaveCore() {
-		if (Runtime is null)
-			throw new InternalStateException("expected layer runtime instance to be nonnull by this point");
-		try {
-			OnLeave();
-		} finally {
-			Runtime.Dispose();
-			Runtime = null;
-		}
+	internal void AttachRuntime(LayerRuntime runtime) {
+		Runtime = runtime ?? throw new InternalStateException("AttachRuntime got passed null");
 	}
 
-	public virtual LayerPassMask ParticipatingPasses => LayerPassMask.Update | LayerPassMask.Render;
-	public virtual ReadOnlySpan<LayerTag> Tags => ReadOnlySpan<LayerTag>.Empty;
+	internal void DetachRuntime() {
+		if (Runtime is null)
+			throw new InternalStateException("no layer runtime is attached");
+		Runtime.Dispose();
+		Runtime = null;
+	}
+
+	public virtual LayerFeatures Features => LayerFeatures.Render;
+	public virtual LayerTagSet Tags => LayerTagSet.Empty;
 	public virtual ReadOnlySpan<LayerBlockRule> BlockRules => ReadOnlySpan<LayerBlockRule>.Empty;
+	public virtual ActionProfile? ActionProfile => null;
 
 	public abstract void OnEnter();
 	public abstract void Update(in LayerTickContext ctx);

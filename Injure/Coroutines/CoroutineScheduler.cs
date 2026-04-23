@@ -55,7 +55,7 @@ public sealed class CoroutineScheduler {
 		// not a Stack<CoroutineStackFrame> because there was kind of no reason
 		// to and this makes dumping the entire stack / accessing a frame N deep / etc
 		// easier
-		private readonly List<CoroutineStackFrame> stack = new List<CoroutineStackFrame>();
+		private readonly List<CoroutineStackFrame> stack = new();
 		public int StackDepth => stack.Count;
 
 		// not named Stack because it's a list not a stack
@@ -157,12 +157,12 @@ public sealed class CoroutineScheduler {
 
 	// ==========================================================================
 	// internal objects / properties
-	private readonly List<CoroutineSlot> slots = new List<CoroutineSlot>();
-	private readonly Queue<int> freeSlots = new Queue<int>();
-	private readonly List<int> activeSlots = new List<int>();
-	private readonly List<int> pendingActivation = new List<int>();
-	private readonly HashSet<int> pendingReap = new HashSet<int>();
-	private readonly List<CoroutineUnhandledFaultInfo> pendingUnhandledFaults = new List<CoroutineUnhandledFaultInfo>();
+	private readonly List<CoroutineSlot> slots = new();
+	private readonly Queue<int> freeSlots = new();
+	private readonly List<int> activeSlots = new();
+	private readonly List<int> pendingActivation = new();
+	private readonly HashSet<int> pendingReap = new();
+	private readonly List<CoroutineUnhandledFaultInfo> pendingUnhandledFaults = new();
 	private bool ticking;
 	private CoroutineTick tick;
 
@@ -212,7 +212,7 @@ public sealed class CoroutineScheduler {
 			throw new InvalidOperationException("scope is already cancelled");
 
 		CoroutineHandle handle = makeHandle();
-		CoroutineInstance inst = new CoroutineInstance {
+		CoroutineInstance inst = new() {
 			Handle = handle,
 			Scope = scope,
 			Options = options,
@@ -468,7 +468,7 @@ public sealed class CoroutineScheduler {
 	/// to get information for a specific completed/cancelled/faulted coroutine by handle.
 	/// </remarks>
 	public CoroutineInfo[] SnapshotActive() {
-		List<CoroutineInfo> ret = new List<CoroutineInfo>(activeSlots.Count);
+		List<CoroutineInfo> ret = new(activeSlots.Count);
 		for (int i = 0; i < activeSlots.Count; i++) {
 			CoroutineInstance? inst = slots[activeSlots[i]].Instance;
 			if (inst is not null)
@@ -735,7 +735,7 @@ public sealed class CoroutineScheduler {
 			if (inst.Scope is null)
 				throw new InternalStateException("expected coro instance scope to be nonnull");
 			inst.LastPhase = phase;
-			CoroutineContext ctx = new CoroutineContext(this, inst.Handle, inst.Scope, dt, rawDt, phase, tick);
+			CoroutineContext ctx = new(this, inst.Handle, inst.Scope, dt, rawDt, phase, tick);
 			if (inst.Wait is not null) {
 				bool shouldWait;
 				try {

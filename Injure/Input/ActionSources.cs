@@ -36,11 +36,11 @@ public readonly struct InputButtonSource : IEquatable<InputButtonSource> {
 	}
 
 	public static InputButtonSource Key(Key key) =>
-		new InputButtonSource(InputButtonSourceKind.Key, key, default, default);
+		new(InputButtonSourceKind.Key, key, default, default);
 	public static InputButtonSource PointerButton(PointerButton button) =>
-		new InputButtonSource(InputButtonSourceKind.PointerButton, default, button, default);
+		new(InputButtonSourceKind.PointerButton, default, button, default);
 	public static InputButtonSource GamepadButton(GamepadButton button) =>
-		new InputButtonSource(InputButtonSourceKind.GamepadButton, default, default, button);
+		new(InputButtonSourceKind.GamepadButton, default, default, button);
 
 	public bool TryGetKey(out Key value) {
 		if (Kind == InputButtonSourceKind.Key) {
@@ -124,11 +124,11 @@ public readonly struct InputStateAxisSource : IEquatable<InputStateAxisSource> {
 	}
 
 	public static InputStateAxisSource GamepadAxis(GamepadAxis axis) =>
-		new InputStateAxisSource(InputStateAxisSourceKind.GamepadAxis, axis, default);
+		new(InputStateAxisSourceKind.GamepadAxis, axis, default);
 	public static InputStateAxisSource DigitalPair(InputButtonSource negative, InputButtonSource positive) =>
 		DigitalPair(negative, positive, SOCDPolicy.Last);
 	public static InputStateAxisSource DigitalPair(InputButtonSource negative, InputButtonSource positive, SOCDPolicy socd) =>
-		new InputStateAxisSource(InputStateAxisSourceKind.DigitalPair, default, new DigitalAxisSource(negative, positive, socd));
+		new(InputStateAxisSourceKind.DigitalPair, default, new DigitalAxisSource(negative, positive, socd));
 
 	public bool Equals(InputStateAxisSource other) => Kind == other.Kind && gamepadAxis == other.gamepadAxis && digital.Equals(other.digital);
 	public override bool Equals(object? obj) => obj is InputStateAxisSource other && Equals(other);
@@ -222,16 +222,16 @@ public readonly struct InputStateAxis2DSource : IEquatable<InputStateAxis2DSourc
 	}
 
 	public static InputStateAxis2DSource GamepadStick(GamepadStick stick) =>
-		new InputStateAxis2DSource(InputStateAxis2DSourceKind.GamepadStick, stick, default, default);
+		new(InputStateAxis2DSourceKind.GamepadStick, stick, default, default);
 	public static InputStateAxis2DSource DigitalButtons(
 		InputButtonSource left, InputButtonSource right, InputButtonSource up, InputButtonSource down
 	) => DigitalButtons(left, right, up, down, SOCDPolicy.Last, SOCDPolicy.Last);
 	public static InputStateAxis2DSource DigitalButtons(
 		InputButtonSource left, InputButtonSource right, InputButtonSource up, InputButtonSource down,
 		SOCDPolicy xSOCD, SOCDPolicy ySOCD
-	) => new InputStateAxis2DSource(InputStateAxis2DSourceKind.DigitalButtons, default, new DigitalAxis2DSource(left, right, up, down, xSOCD, ySOCD), default);
+	) => new(InputStateAxis2DSourceKind.DigitalButtons, default, new DigitalAxis2DSource(left, right, up, down, xSOCD, ySOCD), default);
 	public static InputStateAxis2DSource Pair(InputStateAxisSource x, InputStateAxisSource y) =>
-		new InputStateAxis2DSource(InputStateAxis2DSourceKind.Pair, default, default, new StateAxis2DPairSource(x, y));
+		new(InputStateAxis2DSourceKind.Pair, default, default, new StateAxis2DPairSource(x, y));
 
 	public bool Equals(InputStateAxis2DSource other) => Kind == other.Kind && stick == other.stick && digital.Equals(other.digital) && pair.Equals(other.pair);
 	public override bool Equals(object? obj) => obj is InputStateAxis2DSource other && Equals(other);
@@ -268,7 +268,7 @@ public readonly struct InputImpulseAxisSource : IEquatable<InputImpulseAxisSourc
 	}
 
 	public static InputImpulseAxisSource PointerWheel(PointerWheelAxis axis) =>
-		new InputImpulseAxisSource(InputImpulseAxisSourceKind.PointerWheel, axis);
+		new(InputImpulseAxisSourceKind.PointerWheel, axis);
 
 	public bool Equals(InputImpulseAxisSource other) => Kind == other.Kind && wheelAxis == other.wheelAxis;
 	public override bool Equals(object? obj) => obj is InputImpulseAxisSource other && Equals(other);

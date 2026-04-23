@@ -128,7 +128,7 @@ public sealed class PrimitiveBatch : IDisposable {
 		this.shared = shared;
 
 		localsUniformBuffer = device.CreateBuffer((ulong)PrimitiveBatchLocalsUniform.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
-		PrimitiveBatchLocalsUniform l = new PrimitiveBatchLocalsUniform {
+		PrimitiveBatchLocalsUniform l = new() {
 			Transform = MatrixUtil.To4x4(@params.Transform)
 		};
 		device.WriteToBuffer(localsUniformBuffer, 0, in l);

@@ -209,7 +209,7 @@ public sealed class TexturedBatch : IDisposable {
 		this.shared = shared;
 
 		if (shared.TextureInterpretation != TextureInterpretation.SDF) {
-			TexturedBatchLocalsUniformPlain l = new TexturedBatchLocalsUniformPlain {
+			TexturedBatchLocalsUniformPlain l = new() {
 				Transform = MatrixUtil.To4x4(@params.Transform)
 			};
 			localsUniformBuffer = device.CreateBuffer((ulong)TexturedBatchLocalsUniformPlain.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
@@ -217,7 +217,7 @@ public sealed class TexturedBatch : IDisposable {
 		} else {
 			if (@params.SdfParams is not SdfParams p)
 				throw new ArgumentNullException(nameof(@params), "TexturedBatchSharedState has SDF texture interpretation but SdfParams is null");
-			TexturedBatchLocalsUniformSDF l = new TexturedBatchLocalsUniformSDF {
+			TexturedBatchLocalsUniformSDF l = new() {
 				Transform = MatrixUtil.To4x4(@params.Transform),
 				DistanceRangeTexels = p.DistanceRangeTexels,
 				EdgeValue = p.EdgeValue,

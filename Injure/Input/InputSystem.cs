@@ -41,7 +41,7 @@ internal sealed class InputSystem {
 		public float RightTrigger;
 	}
 
-	private readonly List<InputEvent> events = new List<InputEvent>();
+	private readonly List<InputEvent> events = new();
 	private ulong headSeq = 0;
 	private ulong nextSeq = 0;
 
@@ -56,19 +56,20 @@ internal sealed class InputSystem {
 	private bool pointerInsideWindow;
 	private bool pointerCaptured;
 
-	private readonly List<MutableGamepadState> gamepads = new List<MutableGamepadState>();
-	private readonly Dictionary<uint, int> gamepadIdxBySdlInstanceID = new Dictionary<uint, int>();
+	private readonly List<MutableGamepadState> gamepads = new();
+	private readonly Dictionary<uint, int> gamepadIdxBySdlInstanceID = new();
 	private uint nextGamepadID = 0; // first will be 1 since this gets incremented upfront
 
-	public InputSnapshot CurrentState => new InputSnapshot(
+	public InputSnapshot CurrentState => new(
 		new KeyboardState(keys0, keys1, keys2, keys3),
 		new PointerState(pointerButtons, pointerX, pointerY, pointerInsideWindow, pointerCaptured),
 		snapshotGamepads()
 	);
 
-	public InputCursor CreateCursor() => new InputCursor(nextSeq);
+	public InputCursor CreateCursor() => new(nextSeq);
 
-	public InputView CreateViewSince(InputCursor cursor, out InputCursor next) => new InputView(ReadSince(cursor, out next), CurrentState);
+	public InputView CreateViewSince(InputCursor cursor, out InputCursor next) => new(ReadSince(cursor, out next), CurrentState);
+	public InputView CreateViewSince(ref InputCursor cursor) => new(ReadSince(cursor, out cursor), CurrentState);
 
 	public ReadOnlySpan<InputEvent> ReadSince(InputCursor cursor, out InputCursor next) {
 		if (cursor.Seq < headSeq || cursor.Seq > nextSeq)
@@ -76,6 +77,10 @@ internal sealed class InputSystem {
 		int start = checked((int)(cursor.Seq - headSeq));
 		next = new InputCursor(nextSeq);
 		return CollectionsMarshal.AsSpan(events)[start..]; // TODO: Dont
+	}
+
+	public void AdvanceToCurrent(ref InputCursor cursor) {
+		cursor = new InputCursor(nextSeq);
 	}
 
 	public void Push(InputEvent ev) {
@@ -96,6 +101,11 @@ internal sealed class InputSystem {
 			return;
 		events.RemoveRange(0, toRemove);
 		headSeq = cursor.Seq;
+	}
+
+	public void DiscardAll() {
+		headSeq = nextSeq;
+		events.Clear();
 	}
 
 	public void ClearKeyboardAndPointer(MonoTick tick) {
@@ -287,7 +297,7 @@ internal sealed class InputSystem {
 			uint inst = checked((uint)ev.Gdevice.Which);
 			if (gamepadIdxBySdlInstanceID.ContainsKey(inst))
 				return true;
-			GamepadID id = new GamepadID(++nextGamepadID);
+			GamepadID id = new(++nextGamepadID);
 			gamepadIdxBySdlInstanceID.Add(inst, gamepads.Count);
 			Push(new GamepadAddedEvent((MonoTick)ev.Gdevice.Timestamp, id));
 			return true;

@@ -7,7 +7,7 @@ namespace Injure.Tests.Graphics.Text;
 
 [Collection("needsnative")]
 public sealed class TextAnalysisTests {
-	public static readonly TheoryData<string, (int Start, int Length)[]> GraphemeCases = new TheoryData<string, (int Start, int Length)[]>{
+	public static readonly TheoryData<string, (int Start, int Length)[]> GraphemeCases = new() {
 		{ "a", new[] { (0, 1) } },
 		{ "ab", new[] { (0, 1), (1, 1) } },
 		{ "e\u0301", new[] { (0, 2) } },

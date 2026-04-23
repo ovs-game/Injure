@@ -60,7 +60,7 @@ public sealed class FontAssetCreator(TextSystem text) : IAssetCreator<Font> {
 	}
 
 	private static async Task<byte[]> readAllBytesAsync(Stream stream, CancellationToken ct) {
-		using MemoryStream ms = new MemoryStream();
+		using MemoryStream ms = new();
 		await stream.CopyToAsync(ms, ct).ConfigureAwait(false);
 		return ms.ToArray();
 	}

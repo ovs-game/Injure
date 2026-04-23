@@ -24,7 +24,7 @@ public readonly record struct ColorTargetState(
 	/// kept alive together with the returned value.
 	/// </remarks>
 	public unsafe WGPUColorTargetState ToWebGPUType(WGPUBlendState *blendStorage) {
-		WGPUColorTargetState ret = new WGPUColorTargetState {
+		WGPUColorTargetState ret = new() {
 			format = Format.ToWebGPUType(),
 			writeMask = WriteMask.ToWebGPUType()
 		};

@@ -169,9 +169,9 @@ public sealed class TickerScheduler(in TickerSchedulerOptions options) : ITicker
 	);
 
 	private readonly TickerSchedulerOptions options = options;
-	private readonly List<TickerSlot> slots = new List<TickerSlot>();
-	private readonly List<int> activeSlots = new List<int>();
-	private readonly List<TickerCommand> pending = new List<TickerCommand>();
+	private readonly List<TickerSlot> slots = new();
+	private readonly List<int> activeSlots = new();
+	private readonly List<TickerCommand> pending = new();
 	private ulong nextInsertionOrder;
 	private uint nextBatchID;
 
@@ -307,7 +307,7 @@ public sealed class TickerScheduler(in TickerSchedulerOptions options) : ITicker
 		for (int i = 0; i < slots.Count; i++)
 			if (slots[i].State == TickerSlotState.Active && slots[i].Scheduled is not null)
 				activeSlots.Add(i);
-		activeSlots.Sort((int a, int b) => {
+		activeSlots.Sort((a, b) => {
 			ScheduledTicker left = slots[a].Scheduled;
 			ScheduledTicker right = slots[b].Scheduled;
 			int cmp = left.NextAt.CompareTo(right.NextAt);

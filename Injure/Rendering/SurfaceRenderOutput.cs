@@ -56,12 +56,13 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 
 	private readonly WebGPUDevice device;
 	private readonly ISurfaceHost surfaceHost;
-	private readonly SurfacePresentModePolicy presentPolicy;
+	private SurfacePresentModePolicy presentPolicy;
 
 	private WGPUSurface surface;
 	private WGPUTextureFormat format;
 	private WGPUPresentMode presentMode;
 	private WGPUSurfaceConfiguration config;
+	private bool needReconfigure = false;
 	private bool disposed = false;
 
 	public uint Width { get { ObjectDisposedException.ThrowIf(disposed, this); return field; } private set; }
@@ -78,7 +79,14 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 		surface = wgpuInstanceCreateSurface(device.Instance, &sdc.Desc);
 		format = getSurfaceFormat();
 		presentMode = getSurfacePresentMode();
-		queryAndResize();
+		reconfigure();
+	}
+
+	public void SetPresentModePolicy(SurfacePresentModePolicy policy) {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		presentPolicy = policy;
+		presentMode = getSurfacePresentMode();
+		needReconfigure = true;
 	}
 
 	private WGPUTextureFormat getSurfaceFormat() {
@@ -100,7 +108,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 		try {
 			if (caps.presentModeCount == 0)
 				throw new WebGPUException("SurfaceGetCapabilities", "surface doesn't report any supported present modes");
-			ReadOnlySpan<WGPUPresentMode> modes = new ReadOnlySpan<WGPUPresentMode>(caps.presentModes, (int)caps.presentModeCount);
+			ReadOnlySpan<WGPUPresentMode> modes = new(caps.presentModes, (int)caps.presentModeCount);
 			bool haverelaxed = modes.Contains(WGPUPresentMode.FifoRelaxed);
 			bool havemailbox = modes.Contains(WGPUPresentMode.Mailbox);
 			bool haveimmediate = modes.Contains(WGPUPresentMode.Immediate);
@@ -137,7 +145,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 		};
 	}
 
-	private void queryAndResize() {
+	private void reconfigure() {
 		(uint w, uint h) = surfaceHost.GetDrawableSize();
 		config = getSurfaceConfig(w, h, presentMode);
 		fixed (WGPUSurfaceConfiguration *cfg = &config)
@@ -173,7 +181,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 			outTex = default;
 			return AcquireStatus.SkipFrame;
 		case WGPUSurfaceGetCurrentTextureStatus.Outdated:
-			queryAndResize();
+			reconfigure();
 			wgpuSurfaceGetCurrentTexture(surface, &tex);
 			outTex = tex;
 			return from(tex.status);
@@ -184,7 +192,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 			surface = wgpuInstanceCreateSurface(device.Instance, &sdc.Desc);
 			format = getSurfaceFormat();
 			presentMode = getSurfacePresentMode();
-			queryAndResize();
+			reconfigure();
 			wgpuSurfaceGetCurrentTexture(surface, &tex);
 			outTex = tex;
 			return from(tex.status);
@@ -200,12 +208,16 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 
 	public void Resized() {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		queryAndResize();
+		reconfigure();
 	}
 
 	public bool TryBeginFrame([NotNullWhen(true)] out RenderFrame? frame) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		frame = null;
+
+		if (needReconfigure)
+			reconfigure();
+
 		AcquireStatus st = acquire(out WGPUSurfaceTexture currTex);
 		if (!(st is AcquireStatus.Acquired or AcquireStatus.AcquiredNeedsReconfigure)) {
 			if (st == AcquireStatus.DeviceLost) {
@@ -215,8 +227,10 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 			}
 			return false;
 		}
+		if (st == AcquireStatus.AcquiredNeedsReconfigure)
+			needReconfigure = true;
 
-		WGPUTextureViewDescriptor tvdesc = new WGPUTextureViewDescriptor {
+		WGPUTextureViewDescriptor tvdesc = new() {
 			format = format,
 			dimension = WGPUTextureViewDimension._2D,
 			aspect = WGPUTextureAspect.All,
@@ -237,7 +251,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 			wgpuTextureRelease(currTex.texture);
 			throw new WebGPUException("wgpuDeviceCreateCommandEncoder", "WebGPU call returned null");
 		}
-		GPUTextureView v = new GPUTextureView(backbufferView, tvdesc.format.FromWebGPUType(), tvdesc.dimension.FromWebGPUType(),
+		GPUTextureView v = new(backbufferView, tvdesc.format.FromWebGPUType(), tvdesc.dimension.FromWebGPUType(),
 			tvdesc.aspect.FromWebGPUType(), config.usage.FromWebGPUType(), tvdesc.baseMipLevel, tvdesc.mipLevelCount,
 			tvdesc.baseArrayLayer, tvdesc.arrayLayerCount, config.width, config.height, 1, 1);
 		frame = new RenderFrame(device, currTex, v, enc, Present);
@@ -250,6 +264,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 		if (disposed)
 			return;
 		disposed = true;
-		if (surface.IsNotNull) wgpuSurfaceRelease(surface);
+		if (surface.IsNotNull)
+			wgpuSurfaceRelease(surface);
 	}
 }

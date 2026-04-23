@@ -31,7 +31,7 @@ public sealed class FullConversionTests {
 		int Height
 	);
 
-	public static readonly TheoryData<ConversionCase> Cases = new TheoryData<ConversionCase> {
+	public static readonly TheoryData<ConversionCase> Cases = new() {
 		new ConversionCase("Copy32SetAlpha_RGBA", ReferenceFamily.Copy32SetAlpha, PixelFormat.RGBA32_UNorm, PixelFormat.RGBA32_UNorm, new PixelConvertOptions { Alpha16UNorm = 0x1234, OverrideAlpha = true }, 257, 7),
 		new ConversionCase("Copy32SetAlpha_ABGR", ReferenceFamily.Copy32SetAlpha, PixelFormat.ABGR32_UNorm, PixelFormat.ABGR32_UNorm, new PixelConvertOptions { Alpha16UNorm = 0xbeef, OverrideAlpha = true }, 255, 7),
 		new ConversionCase("Copy64SetAlpha_RGBA64_LE", ReferenceFamily.Copy64SetAlpha, PixelFormat.RGBA64_UNorm_LE, PixelFormat.RGBA64_UNorm_LE, new PixelConvertOptions { Alpha16UNorm = 0x2468, OverrideAlpha = true }, 129, 5),

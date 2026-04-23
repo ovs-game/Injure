@@ -39,7 +39,7 @@ public sealed class GPUPipelineLayout : GPUPipelineLayoutHandle, IDisposable {
 	/// <summary>
 	/// Creates a non-owning view of this pipeline layout.
 	/// </summary>
-	public GPUPipelineLayoutRef AsRef() => new GPUPipelineLayoutRef(this);
+	public GPUPipelineLayoutRef AsRef() => new(this);
 
 	/// <summary>
 	/// Releases the underlying WebGPU pipeline layout.

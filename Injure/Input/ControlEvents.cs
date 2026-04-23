@@ -36,7 +36,7 @@ public readonly struct ButtonActionEventInfo {
 
 	public static readonly ButtonActionEventInfo None = default;
 	public static ButtonActionEventInfo FromPointer(float x, float y, int clicks) =>
-		new ButtonActionEventInfo(ButtonActionEventInfoKind.Pointer, new PointerButtonActionInfo(x, y, clicks));
+		new(ButtonActionEventInfoKind.Pointer, new PointerButtonActionInfo(x, y, clicks));
 	public bool TryGetPointer(out PointerButtonActionInfo info) {
 		if (Kind == ButtonActionEventInfoKind.Pointer) {
 			info = pointer;
@@ -75,7 +75,7 @@ public readonly struct ImpulseAxisActionEventInfo {
 
 	public static readonly ImpulseAxisActionEventInfo None = default;
 	public static ImpulseAxisActionEventInfo FromPointer(float x, float y, int clicks) =>
-		new ImpulseAxisActionEventInfo(ImpulseAxisActionEventInfoKind.Pointer, new PointerImpulseAxisActionInfo(x, y, clicks));
+		new(ImpulseAxisActionEventInfoKind.Pointer, new PointerImpulseAxisActionInfo(x, y, clicks));
 	public bool TryGetPointer(out PointerImpulseAxisActionInfo info) {
 		if (Kind == ImpulseAxisActionEventInfoKind.Pointer) {
 			info = pointer;

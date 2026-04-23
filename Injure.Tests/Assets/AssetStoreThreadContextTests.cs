@@ -12,9 +12,9 @@ public sealed class AssetStoreThreadContextTests {
 
 	[Fact]
 	public void SameThreadCanAttachToMultipleStores() {
-		AssetStore a = new AssetStore();
-		AssetStore b = new AssetStore();
-		AssetStore c = new AssetStore();
+		AssetStore a = new();
+		AssetStore b = new();
+		AssetStore c = new();
 		using AssetThreadContext ctxA = a.AttachCurrentThread();
 		using AssetThreadContext ctxB = b.AttachCurrentThread();
 		using AssetThreadContext ctxC = c.AttachCurrentThread();
@@ -25,7 +25,7 @@ public sealed class AssetStoreThreadContextTests {
 
 	[Fact]
 	public void RetiredVerIsReclaimedOnlyAfterSafeBoundary() {
-		AssetStore store = new AssetStore();
+		AssetStore store = new();
 		using AssetThreadContext mainCtx = store.AttachCurrentThread();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
@@ -34,10 +34,10 @@ public sealed class AssetStoreThreadContextTests {
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		TestAsset v = asset.Borrow().Value;
 
-		ThreadCheckpoint first = new ThreadCheckpoint();
-		ThreadCheckpoint second = new ThreadCheckpoint();
+		ThreadCheckpoint first = new();
+		ThreadCheckpoint second = new();
 		Exception? ex = null;
-		Thread thread = new Thread(() => {
+		Thread thread = new(() => {
 			try {
 				using AssetThreadContext ctx = store.AttachCurrentThread();
 				first.Wait();
@@ -76,7 +76,7 @@ public sealed class AssetStoreThreadContextTests {
 
 	[Fact]
 	public void DisposingContextAllowsReclamation() {
-		AssetStore store = new AssetStore();
+		AssetStore store = new();
 		using AssetThreadContext mainCtx = store.AttachCurrentThread();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
@@ -85,9 +85,9 @@ public sealed class AssetStoreThreadContextTests {
 		AssetRef<TestAsset> asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset"));
 		TestAsset v = asset.Borrow().Value;
 
-		ThreadCheckpoint ckp = new ThreadCheckpoint();
+		ThreadCheckpoint ckp = new();
 		Exception? ex = null;
-		Thread thread = new Thread(() => {
+		Thread thread = new(() => {
 			try {
 				using AssetThreadContext ctx = store.AttachCurrentThread();
 				ckp.Wait();

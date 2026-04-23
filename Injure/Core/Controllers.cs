@@ -27,7 +27,7 @@ public struct WindowState {
 
 public interface IWindowController {
 	WindowSettings Settings { get; }
-	WindowMode State { get; }
+	WindowState State { get; }
 	bool TrySet(in WindowSettings settings, [NotNullWhen(false)] out string? err);
 }
 

@@ -28,7 +28,7 @@ public sealed class DirectoryAssetSource(string matchNamespace, string root, Fil
 	/// Default <see cref="FileStreamOptions"/> used for opened files if an
 	/// override isn't provided.
 	/// </summary>
-	public static readonly FileStreamOptions DefaultFileOpenOptions = new FileStreamOptions {
+	public static readonly FileStreamOptions DefaultFileOpenOptions = new() {
 		Mode = FileMode.Open,
 		Access = FileAccess.Read,
 		Share = FileShare.ReadWrite | FileShare.Delete,

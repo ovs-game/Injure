@@ -9,52 +9,72 @@ using Injure.Scheduling;
 
 namespace Injure.Layers;
 
-public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
+public sealed class LayerStack : IDisposable {
 	// ==========================================================================
 	// internal types
 	private sealed class LayerEntry {
 		public required Layer Layer { get; init; }
 		public required TickerHandle Ticker { get; set; }
-		//public InputViewScratch Scratch { get; } = new InputViewScratch();
-		//public InputEventSeq NextInputSeq { get; set; }
+		public required LayerRuntime Runtime { get; init; }
+		public InputCursor InputCursor;
 		public LayerTagSet Tags;
 	}
 
-	private readonly struct ResolvedPassState(LayerPassMask activePasses) {
-		public readonly LayerPassMask ActivePasses = activePasses;
+	private readonly struct ResolvedPassState(bool updateAllowed, LayerFeatures activeFeatures) {
+		public readonly bool UpdateAllowed = updateAllowed;
+		public readonly LayerFeatures ActiveFeatures = activeFeatures;
 	}
 
-	private struct BlockAccumulator {
-		private LayerTagSet updateTags;
-		private LayerTagSet renderTags;
-		private LayerTagSet inputTags;
+	private sealed class BlockAccumulator {
+		private readonly List<LayerTag> updateTags = new();
+		private readonly List<LayerTag> renderTags = new();
+		private readonly List<LayerTag> inputTags = new();
 
-		public readonly bool IsBlocked(LayerPassMask pass, in LayerTagSet tags) {
-			if (pass == LayerPassMask.Update)
-				return updateTags.Intersects(in tags);
-			if (pass == LayerPassMask.Render)
-				return renderTags.Intersects(in tags);
-			if (pass == LayerPassMask.Input)
-				return inputTags.Intersects(in tags);
+		public LayerBlockMask GetBlocked(ReadOnlySpan<LayerTag> tags) {
+			LayerBlockMask blocked = LayerBlockMask.None;
+			if (intersects(updateTags, tags))
+				blocked |= LayerBlockMask.Update;
+			if (intersects(renderTags, tags))
+				blocked |= LayerBlockMask.Render;
+			if (intersects(inputTags, tags))
+				blocked |= LayerBlockMask.Input;
+			return blocked;
+		}
+
+		public bool IsBlocked(LayerBlockMask pass, ReadOnlySpan<LayerTag> tags) {
+			if (pass == LayerBlockMask.Update)
+				return intersects(updateTags, tags);
+			if (pass == LayerBlockMask.Render)
+				return intersects(renderTags, tags);
+			if (pass == LayerBlockMask.Input)
+				return intersects(inputTags, tags);
 			return false;
 		}
 
-		public void AddRules(ReadOnlySpan<LayerBlockRule> rules, LayerPassMask activePasses) {
+		public void AddRules(ReadOnlySpan<LayerBlockRule> rules) {
 			for (int i = 0; i < rules.Length; i++) {
 				ref readonly LayerBlockRule rule = ref rules[i];
-				LayerPassMask passes = rule.Passes & activePasses;
-				if (passes.HasAny(LayerPassMask.Update))
-					merge(ref updateTags, rule.MatchTags);
-				if (passes.HasAny(LayerPassMask.Render))
-					merge(ref renderTags, rule.MatchTags);
-				if (passes.HasAny(LayerPassMask.Input))
-					merge(ref inputTags, rule.MatchTags);
+				if (rule.Blocked.HasAny(LayerBlockMask.Update))
+					merge(updateTags, rule.MatchTags);
+				if (rule.Blocked.HasAny(LayerBlockMask.Render))
+					merge(renderTags, rule.MatchTags);
+				if (rule.Blocked.HasAny(LayerBlockMask.Input))
+					merge(inputTags, rule.MatchTags);
 			}
 		}
 
-		private static void merge(ref LayerTagSet dst, in LayerTagSet src) {
+		private static void merge(List<LayerTag> dst, in LayerTagSet src) {
 			foreach (LayerTag tag in src.AsSpan())
 				dst.Add(tag);
+		}
+
+		private static bool intersects(List<LayerTag> set, ReadOnlySpan<LayerTag> tags) {
+			if (tags.IsEmpty)
+				return false;
+			for (int i = 0; i < tags.Length; i++)
+				if (set.Contains(tags[i]))
+					return true;
+			return false;
 		}
 	}
 
@@ -66,7 +86,12 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		Clear
 	}
 
-	private readonly record struct PendingOp(PendingOpKind Kind, Layer? Layer, Layer? NewLayer, TickerHandle Ticker);
+	private readonly record struct PendingOp(
+		PendingOpKind Kind,
+		Layer? Layer,
+		Layer? NewLayer,
+		TickerHandle Ticker
+	);
 
 	private sealed class TickerSubscription {
 		private readonly LayerStack owner;
@@ -81,18 +106,25 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	}
 
 	// ==========================================================================
-	// internal objects / properties
-	private readonly ITickerRegistry tickers = tickers ?? throw new ArgumentNullException(nameof(tickers));
-	private readonly List<LayerEntry> entries = new List<LayerEntry>(); // bottom to top
-	private readonly List<PendingOp> pending = new List<PendingOp>();
+	// fields
+	private readonly ITickerRegistry tickers;
+	private readonly InputSystem input;
 
-	private readonly Dictionary<TickerHandle, int> refcounts = new Dictionary<TickerHandle, int>();
-	private readonly Dictionary<TickerHandle, TickerSubscription> subs = new Dictionary<TickerHandle, TickerSubscription>();
+	private readonly List<LayerEntry> entries = new(); // bottom -> top
+	private readonly List<PendingOp> pending = new();
 
-	private bool disposed = false;
-	private bool applying = false;
-	private int callbackDepth = 0;
-	private int renderDepth = 0;
+	private readonly Dictionary<TickerHandle, int> refcounts = new();
+	private readonly Dictionary<TickerHandle, TickerSubscription> subs = new();
+
+	private bool disposed;
+	private bool applying;
+	private int callbackDepth;
+	private int renderDepth;
+
+	internal LayerStack(ITickerRegistry tickers, InputSystem input) {
+		this.tickers = tickers ?? throw new ArgumentNullException(nameof(tickers));
+		this.input = input ?? throw new ArgumentNullException(nameof(input));
+	}
 
 	// ==========================================================================
 	// public api (layer management)
@@ -101,6 +133,7 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		ArgumentNullException.ThrowIfNull(layer);
 		if (layer.Owner is not null)
 			throw new InvalidOperationException("layer already belongs to a stack");
+
 		layer.Owner = this;
 		pending.Add(new PendingOp(kind, layer, NewLayer: null, ticker));
 		maybeApplyPending();
@@ -113,8 +146,9 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		ArgumentNullException.ThrowIfNull(layer);
 		if (!ReferenceEquals(layer.Owner, this))
 			return false;
-		if (mentions(layer))
+		if (!mentions(layer))
 			return false;
+
 		pending.Add(new PendingOp(PendingOpKind.Remove, layer, NewLayer: null, Ticker: default));
 		maybeApplyPending();
 		return true;
@@ -126,10 +160,11 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 		ArgumentNullException.ThrowIfNull(newLayer);
 		if (!ReferenceEquals(oldLayer.Owner, this))
 			return false;
-		if (mentions(oldLayer))
+		if (!mentions(oldLayer))
 			return false;
 		if (newLayer.Owner is not null)
 			throw new InvalidOperationException("new layer already belongs to a stack");
+
 		newLayer.Owner = this;
 		pending.Add(new PendingOp(PendingOpKind.Replace, oldLayer, newLayer, ticker));
 		maybeApplyPending();
@@ -143,14 +178,26 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	}
 
 	// ==========================================================================
-	// public api (render, IDisposable)
+	// render / dispose
 	public void Render(Canvas cv) {
 		ObjectDisposedException.ThrowIf(disposed, this);
 		maybeApplyPending();
 		renderDepth++;
 		try {
-			foreach (LayerEntry ent in entries)
-				ent.Layer.RenderCore(cv);
+			if (entries.Count == 0)
+				return;
+			Span<ResolvedPassState> states = entries.Count <= 64 ? stackalloc ResolvedPassState[entries.Count] : new ResolvedPassState[entries.Count];
+			resolvePassStates(states);
+
+			for (int i = 0; i < entries.Count; i++) {
+				LayerEntry ent = entries[i];
+				if (ent.Layer.Features.HasNone(LayerFeatures.Render))
+					continue;
+				if (states[i].ActiveFeatures.HasNone(LayerFeatures.Render))
+					continue;
+
+				ent.Layer.Render(cv);
+			}
 		} finally {
 			renderDepth--;
 		}
@@ -183,96 +230,106 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	private void tickerCallback(TickerHandle ticker, in TickCallbackInfo info) {
 		if (disposed)
 			return;
+
 		applyPending();
 		callbackDepth++;
 		try {
+			if (entries.Count == 0)
+				return;
 			Span<ResolvedPassState> states = entries.Count <= 64 ? stackalloc ResolvedPassState[entries.Count] : new ResolvedPassState[entries.Count];
 			resolvePassStates(states);
-
-			/*
-			InputEventSeq nowSeq = InputCollector.NextSeq;
-			for (int i = 0; i < entries.Count; i++) {
-				LayerEntry ent = entries[i];
-				if ((ent.Layer.ParticipatingPasses & LayerPassMask.Input) == 0)
-					continue;
-				if (!states[i].Has(LayerPassMask.Input))
-					ent.NextInputSeq = nowSeq;
-			}
-			*/
 
 			double rawDt = info.Elapsed.ToSeconds();
 			for (int i = entries.Count - 1; i >= 0; i--) {
 				LayerEntry ent = entries[i];
 				ref readonly ResolvedPassState st = ref states[i];
-				LayerTimeDomain tm = ent.Layer.Runtime!.Time;
-				if (st.ActivePasses.HasNone(LayerPassMask.Update))
-					continue;
 				if (ent.Ticker != ticker)
 					continue;
-				bool consumeInput = st.ActivePasses.HasAny(LayerPassMask.Input);
-				/*
-				ReadOnlySpan<InputActionEvent> events = consumeInput ?
-					InputCollector.ReadSince(ent.NextInputSeq) :
-					ReadOnlySpan<InputActionEvent>.Empty;
-				InputView input = new InputView(events, ent.Scratch);
-				*/
+
+				if (!st.UpdateAllowed) {
+					input.AdvanceToCurrent(ref ent.InputCursor);
+					ent.Runtime.SuppressControls(info.ActualAt);
+					continue;
+				}
+
+				bool allowInput = st.ActiveFeatures.HasAny(LayerFeatures.Input);
+				InputView inputView;
+				if (allowInput) {
+					inputView = input.CreateViewSince(ref ent.InputCursor);
+				} else {
+					input.AdvanceToCurrent(ref ent.InputCursor);
+					inputView = InputView.Empty;
+				}
+
+				LayerRuntime rt = ent.Runtime;
+				LayerTimeDomain tm = rt.Time;
 
 				double dt = tm.Transform(rawDt);
 				tm.Advance(dt, rawDt);
-				LayerTickContext ctx = new LayerTickContext(info.ActualAt, dt, rawDt, tm.Time, tm.RawTime, tm.TickNum, InputView.Rest);
-				ent.Layer.UpdateCore(in ctx);
-				/*
-				if (consumeInput)
-					ent.NextInputSeq = InputCollector.NextSeq;
-				*/
+				rt.UpdatePerfTracked(info.ActualAt);
+
+				ControlView controls = rt.UpdateControls(info.ActualAt, inputView);
+				LayerTickContext ctx = new(
+					tickInfo: info,
+					dt: dt,
+					rawDt: rawDt,
+					time: tm.Time,
+					rawTime: tm.RawTime,
+					tickNum: tm.TickNum,
+					input: inputView,
+					controls: controls
+				);
+				ent.Layer.Update(in ctx);
+				rt.TickCoroutines(dt, rawDt);
 			}
 		} finally {
 			callbackDepth--;
 		}
 		applyPending();
-		/*
-		if (tryGetOldestLiveInputSeq(out InputEventSeq oldest))
-			InputCollector.DiscardBefore(oldest);
+		if (tryGetOldestLiveInputCursor(out InputCursor oldest))
+			input.DiscardBefore(oldest);
 		else
-			InputCollector.DiscardAll();
-		*/
+			input.DiscardAll();
 	}
 
 	private void resolvePassStates(Span<ResolvedPassState> dst) {
 		if (dst.Length < entries.Count)
 			throw new ArgumentException("destination span too small", nameof(dst));
-		BlockAccumulator blocked = default;
+
+		BlockAccumulator blocked = new();
 		for (int i = entries.Count - 1; i >= 0; i--) {
 			LayerEntry ent = entries[i];
-			LayerPassMask ptcp = ent.Layer.ParticipatingPasses;
-			LayerPassMask active = LayerPassMask.None;
-			if (ptcp.HasAny(LayerPassMask.Update) && !blocked.IsBlocked(LayerPassMask.Update, in ent.Tags))
-				active |= LayerPassMask.Update;
-			if (ptcp.HasAny(LayerPassMask.Render) && !blocked.IsBlocked(LayerPassMask.Render, in ent.Tags))
-				active |= LayerPassMask.Render;
-			if (ptcp.HasAny(LayerPassMask.Input) && !blocked.IsBlocked(LayerPassMask.Input, in ent.Tags))
-				active |= LayerPassMask.Input;
-			dst[i] = new ResolvedPassState(active);
-			if (active != LayerPassMask.None)
-				blocked.AddRules(ent.Layer.BlockRules, active);
+			ReadOnlySpan<LayerTag> tags = ent.Tags.AsSpan();
+			LayerBlockMask blockedMask = blocked.GetBlocked(tags);
+
+			bool updateAllowed = blockedMask.HasNone(LayerBlockMask.Update);
+			LayerFeatures active = LayerFeatures.None;
+			LayerFeatures features = ent.Layer.Features;
+			if (features.HasAny(LayerFeatures.Render) && blockedMask.HasNone(LayerBlockMask.Render))
+				active |= LayerFeatures.Render;
+			if (features.HasAny(LayerFeatures.Input) && blockedMask.HasNone(LayerBlockMask.Input))
+				active |= LayerFeatures.Input;
+
+			dst[i] = new ResolvedPassState(updateAllowed, active);
+			blocked.AddRules(ent.Layer.BlockRules);
 		}
 	}
 
-	/*
-	private bool tryGetOldestLiveInputSeq(out InputEventSeq oldest) {
+	private bool tryGetOldestLiveInputCursor(out InputCursor oldest) {
 		bool found = false;
-		oldest = InputEventSeq.Zero;
+		oldest = default;
+
 		foreach (LayerEntry ent in entries) {
-			if ((ent.Layer.ParticipatingPasses & LayerPassMask.Input) == 0)
+			if (ent.Layer.Features.HasNone(LayerFeatures.Input))
 				continue;
-			if (!found || ent.NextInputSeq < oldest) {
-				oldest = ent.NextInputSeq;
+
+			if (!found || ent.InputCursor < oldest) {
+				oldest = ent.InputCursor;
 				found = true;
 			}
 		}
 		return found;
 	}
-	*/
 
 	// ==========================================================================
 	// pending ops
@@ -284,18 +341,30 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	private void applyPending() {
 		if (disposed || applying || pending.Count == 0)
 			return;
+
 		applying = true;
 		try {
 			while (pending.Count > 0) {
 				PendingOp[] batch = pending.ToArray();
 				pending.Clear();
+
 				foreach (PendingOp op in batch) {
 					switch (op.Kind) {
-					case PendingOpKind.PushTop:    enter(op.Layer!, op.Ticker, true); break;
-					case PendingOpKind.PushBottom: enter(op.Layer!, op.Ticker, false); break;
-					case PendingOpKind.Remove:     leave(op.Layer!); break;
-					case PendingOpKind.Replace:    replace(op.Layer!, op.NewLayer!, op.Ticker); break;
-					case PendingOpKind.Clear:      clear(); break;
+					case PendingOpKind.PushTop:
+						enter(op.Layer!, op.Ticker, pushToTop: true);
+						break;
+					case PendingOpKind.PushBottom:
+						enter(op.Layer!, op.Ticker, pushToTop: false);
+						break;
+					case PendingOpKind.Remove:
+						leave(op.Layer!);
+						break;
+					case PendingOpKind.Replace:
+						replace(op.Layer!, op.NewLayer!, op.Ticker);
+						break;
+					case PendingOpKind.Clear:
+						clear();
+						break;
 					}
 				}
 			}
@@ -307,18 +376,26 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	private void enter(Layer layer, TickerHandle ticker, bool pushToTop) {
 		if (!ReferenceEquals(layer.Owner, this) || findEntryIdx(layer) >= 0)
 			return;
-		LayerEntry ent = new LayerEntry {
+
+		LayerRuntime runtime = new();
+		runtime.InitActions(layer.ActionProfile);
+
+		LayerEntry ent = new() {
 			Layer = layer,
 			Ticker = ticker,
-			//NextInputSeq = 0,//InputCollector.NextSeq,
-			Tags = new LayerTagSet(layer.Tags)
+			Runtime = runtime,
+			InputCursor = input.CreateCursor(),
+			Tags = layer.Tags
 		};
+
 		if (pushToTop)
 			entries.Add(ent);
 		else
 			entries.Insert(0, ent);
+
 		grabTicker(ticker);
-		layer.OnEnterCore();
+		layer.AttachRuntime(runtime);
+		layer.OnEnter();
 	}
 
 	private void leave(Layer layer) {
@@ -328,48 +405,65 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 				layer.Owner = null;
 			return;
 		}
+
 		LayerEntry entry = entries[idx];
 		entries.RemoveAt(idx);
-		entry.Layer.OnLeaveCore();
+
+		entry.Layer.OnLeave();
+		entry.Layer.DetachRuntime();
 		entry.Layer.Owner = null;
+		entry.Runtime.Dispose();
 		releaseTicker(entry.Ticker);
 	}
 
 	private void replace(Layer oldLayer, Layer newLayer, TickerHandle newTicker) {
 		int idx = findEntryIdx(oldLayer);
 		if (idx < 0) {
-			// old layer disappeared before the replace got applied
 			if (ReferenceEquals(newLayer.Owner, this))
 				newLayer.Owner = null;
 			return;
 		}
-		TickerHandle oldTicker = entries[idx].Ticker;
-		oldLayer.OnLeaveCore();
+
+		LayerEntry oldEntry = entries[idx];
+		TickerHandle oldTicker = oldEntry.Ticker;
+
+		oldLayer.OnLeave();
+		oldLayer.DetachRuntime();
 		oldLayer.Owner = null;
+		oldEntry.Runtime.Dispose();
 		if (oldTicker != newTicker)
 			releaseTicker(oldTicker);
+
+		LayerRuntime newRuntime = new();
+		newRuntime.InitActions(newLayer.ActionProfile);
+
 		entries[idx] = new LayerEntry {
 			Layer = newLayer,
 			Ticker = newTicker,
-			//NextInputSeq = 0,//InputCollector.NextSeq,
-			Tags = new LayerTagSet(newLayer.Tags)
+			Runtime = newRuntime,
+			InputCursor = input.CreateCursor(),
+			Tags = newLayer.Tags
 		};
+
 		if (oldTicker != newTicker)
 			grabTicker(newTicker);
-		newLayer.OnEnterCore();
+		newLayer.AttachRuntime(newRuntime);
+		newLayer.OnEnter();
 	}
 
 	private void clear() {
 		foreach (LayerEntry ent in entries) {
-			ent.Layer.OnLeaveCore();
+			ent.Layer.OnLeave();
+			ent.Layer.DetachRuntime();
 			ent.Layer.Owner = null;
+			ent.Runtime.Dispose();
 		}
 		entries.Clear();
 		foreach (TickerSubscription sub in subs.Values)
 			tickers.Unsubscribe(sub.Ticker, sub.Callback);
 		refcounts.Clear();
 		subs.Clear();
-		//InputCollector.DiscardAll();
+		input.DiscardAll();
 	}
 
 	// ==========================================================================
@@ -416,9 +510,10 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 			return;
 		}
 
-		TickerSubscription sub = new TickerSubscription(this, ticker);
+		TickerSubscription sub = new(this, ticker);
 		if (!tickers.Subscribe(ticker, sub.Callback))
 			throw new InternalStateException("failed to subscribe callback for ticker");
+
 		refcounts.Add(ticker, 1);
 		subs.Add(ticker, sub);
 	}
@@ -426,12 +521,14 @@ public sealed class LayerStack(ITickerRegistry tickers) : IDisposable {
 	private void releaseTicker(TickerHandle ticker) {
 		if (!refcounts.TryGetValue(ticker, out int n))
 			return;
+
 		if (n > 1) {
 			refcounts[ticker] = n - 1;
-		} else {
-			refcounts.Remove(ticker);
-			if (subs.Remove(ticker, out TickerSubscription? sub))
-				tickers.Unsubscribe(sub.Ticker, sub.Callback);
+			return;
 		}
+
+		refcounts.Remove(ticker);
+		if (subs.Remove(ticker, out TickerSubscription? sub))
+			tickers.Unsubscribe(sub.Ticker, sub.Callback);
 	}
 }

@@ -12,8 +12,8 @@ public sealed class AssetStoreCycleTests {
 
 	[Fact]
 	public void AcyclicChainSucceeds() {
-		AssetStore store = new AssetStore();
-		AssetLoadingResolver resolver = new AssetLoadingResolver(store, new Dictionary<AssetID, AssetID> {
+		AssetStore store = new();
+		AssetLoadingResolver resolver = new(store, new Dictionary<AssetID, AssetID> {
 			[new AssetID(ownerID, "assetA")] = new AssetID(ownerID, "assetB"),
 			[new AssetID(ownerID, "assetB")] = new AssetID(ownerID, "assetC")
 		});
@@ -27,7 +27,7 @@ public sealed class AssetStoreCycleTests {
 
 	[Fact]
 	public void SelfCycleThrows() {
-		AssetStore store = new AssetStore();
+		AssetStore store = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new AssetLoadingResolver(store, new Dictionary<AssetID, AssetID> {
 			[new AssetID(ownerID, "assetA")] = new AssetID(ownerID, "assetA")
@@ -41,8 +41,8 @@ public sealed class AssetStoreCycleTests {
 
 	[Fact]
 	public void LongerCyclesThrow() {
-		AssetStore store = new AssetStore();
-		AssetLoadingResolver resolver = new AssetLoadingResolver(store, new Dictionary<AssetID, AssetID> {
+		AssetStore store = new();
+		AssetLoadingResolver resolver = new(store, new Dictionary<AssetID, AssetID> {
 			[new AssetID(ownerID, "assetA")] = new AssetID(ownerID, "assetB"),
 			[new AssetID(ownerID, "assetB")] = new AssetID(ownerID, "assetA")
 		});

@@ -20,7 +20,7 @@ public readonly record struct StencilFaceState(
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUStencilFaceState"/>.
 	/// </summary>
-	public WGPUStencilFaceState ToWebGPUType() => new WGPUStencilFaceState {
+	public WGPUStencilFaceState ToWebGPUType() => new() {
 		compare = Compare.ToWebGPUType(),
 		failOp = FailOp.ToWebGPUType(),
 		depthFailOp = DepthFailOp.ToWebGPUType(),

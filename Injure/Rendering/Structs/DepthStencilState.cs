@@ -32,7 +32,7 @@ public readonly record struct DepthStencilState(
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUDepthStencilState"/>.
 	/// </summary>
-	public WGPUDepthStencilState ToWebGPUType() => new WGPUDepthStencilState {
+	public WGPUDepthStencilState ToWebGPUType() => new() {
 		format = Format.ToWebGPUType(),
 		depthWriteEnabled = DepthWriteEnabled ? WGPUOptionalBool.True : WGPUOptionalBool.False,
 		depthCompare = DepthCompare.ToWebGPUType(),

@@ -53,7 +53,7 @@ public sealed class GPUBuffer : GPUBufferHandle, IDisposable {
 	/// <summary>
 	/// Creates a non-owning view of this GPU buffer.
 	/// </summary>
-	public GPUBufferRef AsRef() => new GPUBufferRef(this);
+	public GPUBufferRef AsRef() => new(this);
 
 	/// <summary>
 	/// Releases the underlying WebGPU buffer.

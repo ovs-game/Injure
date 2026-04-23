@@ -21,8 +21,8 @@ public readonly struct RectF(float x, float y, float width, float height) : IEqu
 	public float Right => X + Width;
 	public float Bottom => Y + Height;
 
-	public Vector2 Position => new Vector2(X, Y);
-	public Vector2 Size => new Vector2(Width, Height);
+	public Vector2 Position => new(X, Y);
+	public Vector2 Size => new(Width, Height);
 	public bool Contains(Vector2 p) => p.X >= Left && p.X < Right && p.Y >= Top && p.Y < Bottom;
 
 	public bool Equals(RectF other) => X == other.X && Y == other.Y && Width == other.Width && Height == other.Height;

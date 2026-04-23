@@ -56,7 +56,7 @@ public sealed class ClosedFlagsAnalyzer : DiagnosticAnalyzer {
 		} else if (sym.TypeParameters.Length != 0) {
 			ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.ClosedFlagsInvalidTarget, loc, "Generic structs are not supported."));
 		} else {
-			List<EnumDeclarationSyntax> bitsDecls = new List<EnumDeclarationSyntax>();
+			List<EnumDeclarationSyntax> bitsDecls = new();
 			foreach (SyntaxReference sr in sym.DeclaringSyntaxReferences) {
 				if (sr.GetSyntax(ctx.CancellationToken) is not StructDeclarationSyntax decl)
 					continue;
@@ -108,8 +108,8 @@ public sealed class ClosedFlagsAnalyzer : DiagnosticAnalyzer {
 	}
 
 	private static ulong analyzeBitsEnum(SymbolAnalysisContext ctx, INamedTypeSymbol bitsSymbol, bool defaultIsInvalid, bool checkZeroNames) {
-		Dictionary<ulong, IFieldSymbol> seenValues = new Dictionary<ulong, IFieldSymbol>();
-		List<IFieldSymbol> zeroFields = new List<IFieldSymbol>();
+		Dictionary<ulong, IFieldSymbol> seenValues = new();
+		List<IFieldSymbol> zeroFields = new();
 		ulong atomicMask = 0;
 		IFieldSymbol[] fields = bitsSymbol.GetMembers().OfType<IFieldSymbol>().Where(static f => f.HasConstantValue).ToArray();
 		foreach (IFieldSymbol field in fields) {
@@ -169,7 +169,7 @@ public sealed class ClosedFlagsAnalyzer : DiagnosticAnalyzer {
 		if (attrs.Length == 0)
 			return;
 
-		HashSet<INamedTypeSymbol> seenMirrors = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+		HashSet<INamedTypeSymbol> seenMirrors = new(SymbolEqualityComparer.Default);
 		foreach (AttributeData attr in attrs) {
 			bool subset = Util.GetBoolNamedArgument(attr, AttributeSources.ClosedFlagsMirrorAttributeSubsetName, false);
 			Location loc = attr.ApplicationSyntaxReference?.GetSyntax(ctx.CancellationToken).GetLocation() ?? Util.GetLocation(structSymbol, structSymbol);

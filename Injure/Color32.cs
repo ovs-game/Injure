@@ -20,8 +20,8 @@ public readonly struct Color32(byte r, byte g, byte b, byte a = 255) : IEquatabl
 	public static bool operator ==(Color32 left, Color32 right) => left.Equals(right);
 	public static bool operator !=(Color32 left, Color32 right) => !left.Equals(right);
 
-	public Vector4 ToVector4() => new Vector4(R / 255f, G / 255f, B / 255f, A / 255f);
-	internal WebGPU.WGPUColor ToWebGPUColor() => new WebGPU.WGPUColor(R / 255.0, G / 255.0, B / 255.0, A / 255.0);
+	public Vector4 ToVector4() => new(R / 255f, G / 255f, B / 255f, A / 255f);
+	internal WebGPU.WGPUColor ToWebGPUColor() => new(R / 255.0, G / 255.0, B / 255.0, A / 255.0);
 	public static Color32 FromHex(string hex) {
 		static byte conv(char c) {
 			c = char.ToLower(c);
@@ -48,22 +48,22 @@ public readonly struct Color32(byte r, byte g, byte b, byte a = 255) : IEquatabl
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public Color32 WithR(byte r) => new Color32(r, G, B, A);
+	public Color32 WithR(byte r) => new(r, G, B, A);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public Color32 WithG(byte g) => new Color32(R, g, B, A);
+	public Color32 WithG(byte g) => new(R, g, B, A);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public Color32 WithB(byte b) => new Color32(R, G, b, A);
+	public Color32 WithB(byte b) => new(R, G, b, A);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public Color32 WithA(byte a) => new Color32(R, G, B, a);
+	public Color32 WithA(byte a) => new(R, G, B, a);
 
-	public static readonly Color32 White    = new Color32(0xff, 0xff, 0xff, 0xff);
-	public static readonly Color32 Black    = new Color32(0x00, 0x00, 0x00, 0xff);
-	public static readonly Color32 Red      = new Color32(0xff, 0x00, 0x00, 0xff);
-	public static readonly Color32 Green    = new Color32(0x00, 0xff, 0x00, 0xff);
-	public static readonly Color32 Blue     = new Color32(0x00, 0x00, 0xff, 0xff);
-	public static readonly Color32 Yellow   = new Color32(0xff, 0xff, 0x00, 0xff);
-	public static readonly Color32 Cyan     = new Color32(0x00, 0xff, 0xff, 0xff);
-	public static readonly Color32 Magenta  = new Color32(0xff, 0x00, 0xff, 0xff);
+	public static readonly Color32 White    = new(0xff, 0xff, 0xff, 0xff);
+	public static readonly Color32 Black    = new(0x00, 0x00, 0x00, 0xff);
+	public static readonly Color32 Red      = new(0xff, 0x00, 0x00, 0xff);
+	public static readonly Color32 Green    = new(0x00, 0xff, 0x00, 0xff);
+	public static readonly Color32 Blue     = new(0x00, 0x00, 0xff, 0xff);
+	public static readonly Color32 Yellow   = new(0xff, 0xff, 0x00, 0xff);
+	public static readonly Color32 Cyan     = new(0x00, 0xff, 0xff, 0xff);
+	public static readonly Color32 Magenta  = new(0xff, 0x00, 0xff, 0xff);
 
-	public static readonly Color32 DarkBlue = new Color32(0x00, 0x00, 0x8b, 0xff);
+	public static readonly Color32 DarkBlue = new(0x00, 0x00, 0x8b, 0xff);
 }

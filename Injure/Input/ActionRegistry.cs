@@ -13,9 +13,9 @@ public sealed class ActionRegistry {
 	// FrozenSnapshotTwoWayMap isn't safe for concurrent writes without external mutexing,
 	// it won't corrupt state but if writes race only the winner's snapshot update makes
 	// it in and the other changes get lost
-	private readonly Lock writeLock = new Lock();
+	private readonly Lock writeLock = new();
 
-	private readonly FrozenSnapshotTwoWayMap<string, ActionID> actions = new FrozenSnapshotTwoWayMap<string, ActionID>(cmpLeft: StringComparer.Ordinal);
+	private readonly FrozenSnapshotTwoWayMap<string, ActionID> actions = new(cmpLeft: StringComparer.Ordinal);
 	private uint nextID = 0; // first will be 1 since this gets incremented upfront
 
 	public ActionID Register(string sid) {
@@ -23,7 +23,7 @@ public sealed class ActionRegistry {
 		lock (writeLock) {
 			if (actions.ContainsLeft(sid))
 				throw new InvalidOperationException($"action SID {sid} is already registered");
-			ActionID id = new ActionID(nextID + 1);
+			ActionID id = new(nextID + 1);
 			actions.Set(sid, id);
 			nextID++;
 			return id;
@@ -35,7 +35,7 @@ public sealed class ActionRegistry {
 		if (sids.Length == 0) // probably a bug on the caller side, throw
 			throw new ArgumentException("SID list is empty, did you mean to pass in something else?", nameof(sids));
 
-		HashSet<string> tmp = new HashSet<string>(StringComparer.Ordinal);
+		HashSet<string> tmp = new(StringComparer.Ordinal);
 		foreach (string sid in sids) {
 			ValidateSIDOrThrow(sid);
 			if (!tmp.Add(sid))

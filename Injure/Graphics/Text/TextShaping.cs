@@ -78,15 +78,15 @@ internal sealed class ShapeCache(TextSystem text, int maxEntries, int maxEstimat
 	private readonly TextSystem text = text;
 	private readonly int maxEntries = maxEntries;
 	private readonly int maxEstimatedCost = maxEstimatedCost;
-	private readonly Dictionary<Key, Entry> cache = new Dictionary<Key, Entry>();
-	private readonly Dictionary<string, Language> langs = new Dictionary<string, Language>(StringComparer.OrdinalIgnoreCase);
+	private readonly Dictionary<Key, Entry> cache = new();
+	private readonly Dictionary<string, Language> langs = new(StringComparer.OrdinalIgnoreCase);
 	private ulong nextUseStamp = 0; // first will be 1 since this gets incremented upfront
 	private int totalEstimatedCost = 0;
 
 	public void Clear() => cache.Clear();
 
 	public ShapedRun GetOrCreate(IResolvedFont font, in TextItem item) {
-		Key key = new Key(
+		Key key = new(
 			FontCacheToken: font.GetCacheToken(),
 			Text: item.Text,
 			Properties: item.Properties,
@@ -111,7 +111,7 @@ internal sealed class ShapeCache(TextSystem text, int maxEntries, int maxEstimat
 
 	private ShapedRun shape(IResolvedFont font, in TextItem item) {
 		ResolvedFontState st = font.GetState();
-		using HarfBuzzSharp.Buffer buf = new HarfBuzzSharp.Buffer();
+		using HarfBuzzSharp.Buffer buf = new();
 		buf.AddUtf16(item.Text.AsSpan());
 		if (item.GuessSegmentProperties) {
 			buf.GuessSegmentProperties();
@@ -160,15 +160,15 @@ internal sealed class ShapeCache(TextSystem text, int maxEntries, int maxEstimat
 	private static (TextSegmentProperties Properties, ShapedCluster[] SourceOrderClusters, ShapedCluster[] GlyphOrderClusters) buildClusters(
 		in TextItem item, HarfBuzzSharp.Buffer buf, ShapedGlyph[] glyphs
 	) {
-		List<ShapedCluster> glyphOrderClusters = new List<ShapedCluster>();
+		List<ShapedCluster> glyphOrderClusters = new();
 		if (glyphs.Length != 0) {
-			HashSet<uint> uniqueClusters = new HashSet<uint>();
+			HashSet<uint> uniqueClusters = new();
 			for (int i = 0; i < glyphs.Length; i++)
 				uniqueClusters.Add(glyphs[i].Cluster);
 			uint[] clusterStarts = uniqueClusters.ToArray();
 			Array.Sort(clusterStarts);
 
-			Dictionary<uint, int> nextClusterMap = new Dictionary<uint, int>(clusterStarts.Length);
+			Dictionary<uint, int> nextClusterMap = new(clusterStarts.Length);
 			for (int i = 0; i < clusterStarts.Length; i++) {
 				int next = i + 1 < clusterStarts.Length ? checked((int)clusterStarts[i + 1]) : item.Text.Length;
 				nextClusterMap.Add(clusterStarts[i], next);

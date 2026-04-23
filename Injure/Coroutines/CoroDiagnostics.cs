@@ -7,7 +7,7 @@ namespace Injure.Coroutines;
 
 internal static class CoroDiagnostics {
 	public static string FormatFault(CoroutineUnhandledFaultInfo fault) {
-		StringBuilder sb = new StringBuilder();
+		StringBuilder sb = new();
 
 		const string indent = "   ";
 		sb.AppendLine("unhandled coroutine fault:");

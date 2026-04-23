@@ -39,7 +39,7 @@ public sealed class GPUBindGroup : GPUBindGroupHandle, IDisposable {
 	/// <summary>
 	/// Creates a non-owning view of this bind group.
 	/// </summary>
-	public GPUBindGroupRef AsRef() => new GPUBindGroupRef(this);
+	public GPUBindGroupRef AsRef() => new(this);
 
 	/// <summary>
 	/// Releases the underlying WebGPU bind group.

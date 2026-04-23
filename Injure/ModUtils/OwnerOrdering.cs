@@ -45,8 +45,8 @@ public sealed class OwnerOrderedEntry<T> {
 	private static string[] fold(IEnumerable<string>? owners, string paramName) {
 		if (owners is null)
 			return Array.Empty<string>();
-		HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
-		List<string> list = new List<string>();
+		HashSet<string> seen = new(StringComparer.Ordinal);
+		List<string> list = new();
 		foreach (string owner in owners) {
 			if (string.IsNullOrWhiteSpace(owner))
 				throw new ArgumentException("owner list cannot contain null/empty/whitespace strings", paramName);
@@ -61,9 +61,9 @@ public sealed class OwnerOrderedEntry<T> {
 public static class OwnerOrderedSorter {
 	private sealed class Node<T>(string ownerID) {
 		public readonly string OwnerID = ownerID;
-		public readonly HashSet<string> LocalIDs = new HashSet<string>(StringComparer.Ordinal);
-		public readonly HashSet<string> Outgoing = new HashSet<string>(StringComparer.Ordinal);
-		public readonly List<OwnerOrderedEntry<T>> Items = new List<OwnerOrderedEntry<T>>();
+		public readonly HashSet<string> LocalIDs = new(StringComparer.Ordinal);
+		public readonly HashSet<string> Outgoing = new(StringComparer.Ordinal);
+		public readonly List<OwnerOrderedEntry<T>> Items = new();
 		public int InDegree;
 	}
 
@@ -73,7 +73,7 @@ public static class OwnerOrderedSorter {
 	}
 
 	public static T[] Sort<T>(IReadOnlyList<OwnerOrderedEntry<T>> entries) {
-		Dictionary<string, Node<T>> nodes = new Dictionary<string, Node<T>>(StringComparer.Ordinal);
+		Dictionary<string, Node<T>> nodes = new(StringComparer.Ordinal);
 		foreach (OwnerOrderedEntry<T> entry in entries) {
 			if (!nodes.TryGetValue(entry.OwnerID, out Node<T>? node)) {
 				node = new Node<T>(entry.OwnerID);
@@ -97,12 +97,12 @@ public static class OwnerOrderedSorter {
 			}
 		}
 
-		SortedSet<string> ready = new SortedSet<string>(StringComparer.Ordinal);
+		SortedSet<string> ready = new(StringComparer.Ordinal);
 		foreach (Node<T> node in nodes.Values)
 			if (node.InDegree == 0)
 				ready.Add(node.OwnerID);
 
-		List<Node<T>> ordered = new List<Node<T>>(nodes.Count);
+		List<Node<T>> ordered = new(nodes.Count);
 		while (ready.Count > 0) {
 			string ownerID = ready.Min!;
 			ready.Remove(ownerID);
@@ -153,14 +153,14 @@ public static class OwnerOrderedSorter {
 	}
 
 	private static List<string>? findCycle<T>(Dictionary<string, Node<T>> nodes) {
-		HashSet<string> remaining = new HashSet<string>(
+		HashSet<string> remaining = new(
 			nodes.Where(static (kvp) => kvp.Value.InDegree > 0).Select(static (kvp) => kvp.Key),
 			StringComparer.Ordinal
 		);
-		Dictionary<string, VisitState> state = new Dictionary<string, VisitState>(StringComparer.Ordinal);
+		Dictionary<string, VisitState> state = new(StringComparer.Ordinal);
 		// not a Stack<string> so we can find a node already on the stack easily
-		List<string> stack = new List<string>();
-		Dictionary<string, int> stackIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+		List<string> stack = new();
+		Dictionary<string, int> stackIndex = new(StringComparer.Ordinal);
 		List<string>? cycle = null;
 
 		// iterate by Ordinal order instead of the nondeterministic hashset iter order
@@ -198,9 +198,9 @@ public static class OwnerOrderedSorter {
 // TODO: document better that the model is single-writer multiple-reader and that
 // registry/unregistry needs to be externally mutexed
 public sealed class OwnerOrderedRegistry<T> {
-	private readonly Dictionary<ulong, OwnerOrderedEntry<T>> entries = new Dictionary<ulong, OwnerOrderedEntry<T>>();
+	private readonly Dictionary<ulong, OwnerOrderedEntry<T>> entries = new();
 	private readonly Dictionary<string, HashSet<string>> localIDsByOwner =
-		new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+		new(StringComparer.Ordinal);
 	private ulong nextID = 0; // first ID will be 1 since this gets incremented upfront
 	private T[] snapshot = Array.Empty<T>();
 

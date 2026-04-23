@@ -13,6 +13,9 @@ namespace Injure.Core;
 
 public sealed class GameServices {
 	private readonly WebGPUDevice gpuDevice;
+	private readonly IWindowController windowController;
+	private readonly IRenderController renderController;
+	private readonly ITimingController timingController;
 	private readonly ITickerRegistry tickers;
 	private readonly EngineResourceStore engineResources;
 	private readonly AssetStore? assets;
@@ -23,6 +26,9 @@ public sealed class GameServices {
 
 	// required:
 	public WebGPUDevice GPUDevice { get => alive(gpuDevice); }
+	public IWindowController WindowController { get => alive(windowController); }
+	public IRenderController RenderController { get => alive(renderController); }
+	public ITimingController TimingController { get => alive(timingController); }
 	public ITickerRegistry Tickers { get => alive(tickers); }
 	public EngineResourceStore EngineResources { get => alive(engineResources); }
 
@@ -34,11 +40,23 @@ public sealed class GameServices {
 	public bool HaveAudio => audio is not null;
 	public bool HaveText => text is not null;
 
-	internal GameServices(WebGPUDevice gpuDevice, ITickerRegistry tickers, EngineResourceStore engineResources,
-			AssetStore? assets, AssetThreadContext? assetCtx, AudioEngine? audio, TextSystem? text) {
+	internal GameServices(
+		WebGPUDevice gpuDevice,
+		IWindowController windowController,
+		IRenderController renderController,
+		ITimingController timingController,
+		ITickerRegistry tickers,
+		EngineResourceStore engineResources,
+		AssetStore? assets, AssetThreadContext? assetCtx,
+		AudioEngine? audio,
+		TextSystem? text
+	) {
 		if ((assets is null) ^ (assetCtx is null))
 			throw new InternalStateException("was expecting either none of or both the asset store and asset thread context to be null");
 		this.gpuDevice = gpuDevice;
+		this.windowController = windowController;
+		this.renderController = renderController;
+		this.timingController = timingController;
 		this.tickers = tickers;
 		this.engineResources = engineResources;
 		this.assets = assets;

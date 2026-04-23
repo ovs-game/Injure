@@ -7,6 +7,6 @@ public readonly record struct ColorAttachmentOps(
 	StoreOp StoreOp,
 	Color32 ClearValue
 ) {
-	public static readonly ColorAttachmentOps Load = new ColorAttachmentOps(LoadOp.Load, StoreOp.Store, default);
-	public static ColorAttachmentOps Clear(Color32 color) => new ColorAttachmentOps(LoadOp.Clear, StoreOp.Store, color);
+	public static readonly ColorAttachmentOps Load = new(LoadOp.Load, StoreOp.Store, default);
+	public static ColorAttachmentOps Clear(Color32 color) => new(LoadOp.Clear, StoreOp.Store, color);
 }

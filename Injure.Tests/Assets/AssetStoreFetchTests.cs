@@ -9,11 +9,11 @@ public sealed class AssetStoreFetchTests {
 
 	[Fact]
 	public void OptionalTryFetchReturnsNullForUnhandledAsset() {
-		AssetStore store = new AssetStore();
-		DictionarySource source = new DictionarySource();
-		AssetID mainID = new AssetID(ownerID, "main");
-		AssetID optionalID = new AssetID(ownerID, "missing");
-		OptionalExtraFetchResolver resolver = new OptionalExtraFetchResolver(optionalID);
+		AssetStore store = new();
+		DictionarySource source = new();
+		AssetID mainID = new(ownerID, "main");
+		AssetID optionalID = new(ownerID, "missing");
+		OptionalExtraFetchResolver resolver = new(optionalID);
 		source.Set(mainID, "main-value");
 		store.RegisterSource(ownerID, source, "source");
 		store.RegisterResolver(ownerID, resolver, "resolver");
@@ -27,10 +27,10 @@ public sealed class AssetStoreFetchTests {
 
 	[Fact]
 	public void RequiredFetchThrowsForUnhandledAsset() {
-		AssetStore store = new AssetStore();
-		DictionarySource source = new DictionarySource();
-		AssetID mainID = new AssetID(ownerID, "main");
-		AssetID extraID = new AssetID(ownerID, "missing");
+		AssetStore store = new();
+		DictionarySource source = new();
+		AssetID mainID = new(ownerID, "main");
+		AssetID extraID = new(ownerID, "missing");
 		source.Set(mainID, "main-value");
 		store.RegisterSource(ownerID, source, "source");
 		store.RegisterResolver(ownerID, new RequiredExtraFetchResolver(extraID), "resolver");
@@ -42,8 +42,8 @@ public sealed class AssetStoreFetchTests {
 
 	[Fact]
 	public void NonSeekableSourceStreamIsReplacedAndOriginalIsDisposed() {
-		AssetStore store = new AssetStore();
-		NonSeekableSource source = new NonSeekableSource();
+		AssetStore store = new();
+		NonSeekableSource source = new();
 		store.RegisterSource(ownerID, source, "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");

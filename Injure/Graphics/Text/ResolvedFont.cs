@@ -102,7 +102,7 @@ internal sealed class ResolvedAssetSourcedFont(TextSystem owner, AssetRef<Font> 
 		if (state is not null && loadedVersion == lease.Version)
 			return;
 		LoadedFontFace loadedFace = owner.GetOrCreateLoadedFace(source, lease, faceIndex);
-		ResolvedFontState @new = new ResolvedFontState(owner, loadedFace, opts);
+		ResolvedFontState @new = new(owner, loadedFace, opts);
 		ResolvedFontState? old = state;
 		state = @new;
 		loadedVersion = lease.Version;

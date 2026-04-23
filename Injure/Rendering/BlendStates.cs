@@ -3,7 +3,7 @@
 namespace Injure.Rendering;
 
 public static class BlendStates {
-	public static readonly BlendState Alpha = new BlendState {
+	public static readonly BlendState Alpha = new() {
 		Color = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.SrcAlpha,
@@ -16,7 +16,7 @@ public static class BlendStates {
 		}
 	};
 
-	public static readonly BlendState PremultipliedAlpha = new BlendState {
+	public static readonly BlendState PremultipliedAlpha = new() {
 		Color = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.One,
@@ -29,7 +29,7 @@ public static class BlendStates {
 		}
 	};
 
-	public static readonly BlendState Additive = new BlendState {
+	public static readonly BlendState Additive = new() {
 		Color = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.SrcAlpha,
@@ -42,7 +42,7 @@ public static class BlendStates {
 		}
 	};
 
-	public static readonly BlendState PremultipliedAdditive = new BlendState {
+	public static readonly BlendState PremultipliedAdditive = new() {
 		Color = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.One,

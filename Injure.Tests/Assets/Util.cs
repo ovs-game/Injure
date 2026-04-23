@@ -14,7 +14,7 @@ namespace Injure.Tests.Assets;
 
 public static class Extensions {
 	public static byte[] ReadAll(this Stream stream) {
-		using MemoryStream ms = new MemoryStream();
+		using MemoryStream ms = new();
 		stream.CopyTo(ms);
 		return ms.ToArray();
 	}
@@ -76,7 +76,7 @@ public sealed class TestSource(TestDependency? dep = null) : IAssetSource {
 }
 
 public sealed class DictionarySource : IAssetSource {
-	private readonly ConcurrentDictionary<AssetID, string> dict = new ConcurrentDictionary<AssetID, string>();
+	private readonly ConcurrentDictionary<AssetID, string> dict = new();
 
 	public void Set(AssetID id, string s) => dict[id] = s;
 	public void Remove(AssetID id) => dict.TryRemove(id, out _);
@@ -90,7 +90,7 @@ public sealed class DictionarySource : IAssetSource {
 }
 
 public sealed class NonSeekableMemoryStream(byte[] data) : Stream {
-	private readonly MemoryStream inner = new MemoryStream(data, writable: false);
+	private readonly MemoryStream inner = new(data, writable: false);
 	public bool Disposed { get; private set; }
 	public override bool CanRead => inner.CanRead;
 	public override bool CanSeek => false;
@@ -233,8 +233,8 @@ public sealed class SteppingCreator(params Step[] steps) : IAssetCreator<TestAss
 }
 
 public sealed class TaskCheckpoint {
-	private readonly TaskCompletionSource<bool> _entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-	private readonly TaskCompletionSource<bool> _continue = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+	private readonly TaskCompletionSource<bool> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+	private readonly TaskCompletionSource<bool> _continue = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
 	public Task Entered => _entered.Task;
 	public void Proceed() => _continue.TrySetResult(true);
@@ -248,8 +248,8 @@ public sealed class CountingTaskCheckpoint(int target) {
 	private readonly int target = target;
 	private int count;
 
-	private readonly TaskCompletionSource<bool> _targetReached = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-	private readonly TaskCompletionSource<bool> _continue = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+	private readonly TaskCompletionSource<bool> _targetReached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+	private readonly TaskCompletionSource<bool> _continue = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
 	public int EnteredCount => count;
 	public Task TargetReached => _targetReached.Task;
@@ -276,8 +276,8 @@ public sealed class BlockingOnNthPrepare(int n) {
 }
 
 public sealed class ThreadCheckpoint {
-	private readonly ManualResetEventSlim _entered = new ManualResetEventSlim(false);
-	private readonly ManualResetEventSlim _continue = new ManualResetEventSlim(false);
+	private readonly ManualResetEventSlim _entered = new(false);
+	private readonly ManualResetEventSlim _continue = new(false);
 
 	public ManualResetEventSlim Entered => _entered;
 	public void Proceed() => _continue.Set();

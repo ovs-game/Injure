@@ -24,7 +24,7 @@ public sealed class EngineResourceStore {
 
 	// ==========================================================================
 	// internal objects / properties
-	private readonly Lock registryLock = new Lock();
+	private readonly Lock registryLock = new();
 	private SourceEntry[] sources = Array.Empty<SourceEntry>();
 
 	// ==========================================================================
@@ -127,7 +127,7 @@ public sealed class EngineResourceStore {
 			return false;
 		}
 		using Stream stream = resource.OpenRead();
-		using MemoryStream ms = new MemoryStream();
+		using MemoryStream ms = new();
 		stream.CopyTo(ms);
 		data = ms.ToArray();
 		return true;
@@ -158,7 +158,7 @@ public sealed class EngineResourceStore {
 		}
 
 		using Stream stream = resource.OpenRead();
-		using StreamReader reader = new StreamReader(stream, encoding ?? Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+		using StreamReader reader = new(stream, encoding ?? Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
 		text = reader.ReadToEnd();
 		return true;
 	}

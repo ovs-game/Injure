@@ -25,11 +25,11 @@ public static unsafe class PixelConverter {
 		PlanKind kind = Classify(srcFmt, dstFmt, in srcDesc, in dstDesc, in opts);
 		PayloadUnion payload = MakePayload(kind, in srcDesc, in dstDesc, in opts);
 		if (kind == PlanKind.Memcpy) {
-			PlanInfo info = new PlanInfo(PlanExecutionPath.Memcpy, PlanBackend.None);
+			PlanInfo info = new(PlanExecutionPath.Memcpy, PlanBackend.None);
 			return new PixelConversionPlan(srcFmt, dstFmt, opts, kind, info, null, srcDesc, dstDesc, payload);
 		} else {
 			Kernel kernel = KernelRegistry.Kernels[(int)kind].Pick(out PlanBackend backend);
-			PlanInfo info = new PlanInfo(kind != PlanKind.Generic ? PlanExecutionPath.DedicatedKernel : PlanExecutionPath.GenericKernel, backend);
+			PlanInfo info = new(kind != PlanKind.Generic ? PlanExecutionPath.DedicatedKernel : PlanExecutionPath.GenericKernel, backend);
 			return new PixelConversionPlan(srcFmt, dstFmt, opts, kind, info, kernel, srcDesc, dstDesc, payload);
 		}
 	}
@@ -70,12 +70,12 @@ public static unsafe class PixelConverter {
 		if (kind == PlanKind.Memcpy) {
 			if (selected != PlanBackend.None)
 				return false;
-			PlanInfo info = new PlanInfo(PlanExecutionPath.Memcpy, PlanBackend.None);
+			PlanInfo info = new(PlanExecutionPath.Memcpy, PlanBackend.None);
 			plan = new PixelConversionPlan(srcFmt, dstFmt, opts, kind, info, null, srcDesc, dstDesc, payload);
 		} else {
 			if (!KernelRegistry.Kernels[(int)kind].TryPickSpecific(selected, out Kernel kernel))
 				return false;
-			PlanInfo info = new PlanInfo(kind != PlanKind.Generic ? PlanExecutionPath.DedicatedKernel : PlanExecutionPath.GenericKernel, selected);
+			PlanInfo info = new(kind != PlanKind.Generic ? PlanExecutionPath.DedicatedKernel : PlanExecutionPath.GenericKernel, selected);
 			plan = new PixelConversionPlan(srcFmt, dstFmt, opts, kind, info, kernel, srcDesc, dstDesc, payload);
 		}
 		return true;

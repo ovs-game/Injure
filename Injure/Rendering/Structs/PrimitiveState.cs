@@ -28,7 +28,7 @@ public readonly record struct PrimitiveState(
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUPrimitiveState"/>.
 	/// </summary>
-	public WGPUPrimitiveState ToWebGPUType() => new WGPUPrimitiveState {
+	public WGPUPrimitiveState ToWebGPUType() => new() {
 		topology = Topology.ToWebGPUType(),
 		stripIndexFormat = StripIndexFormat.ToWebGPUType(),
 		frontFace = FrontFace.ToWebGPUType(),

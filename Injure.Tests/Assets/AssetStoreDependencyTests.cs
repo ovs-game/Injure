@@ -9,7 +9,7 @@ public sealed class AssetStoreDependencyTests {
 
 	[Fact]
 	public void ResolverNotHandledDoesntLeakDeps() {
-		AssetStore store = new AssetStore();
+		AssetStore store = new();
 		store.RegisterSource(ownerID, new TestSource(new TestDependency("dep-a")), "source");
 		store.RegisterResolver(ownerID, new FetchThenNotHandledResolver(new TestDependency("dep-b")), "resolver-a", localPriority: 1);
 		store.RegisterResolver(ownerID, new TestResolver(new TestDependency("dep-c")), "resolver-b", localPriority: 0);
@@ -22,7 +22,7 @@ public sealed class AssetStoreDependencyTests {
 
 	[Fact]
 	public void CreatorNotHandledDoesntLeakDeps() {
-		AssetStore store = new AssetStore();
+		AssetStore store = new();
 		store.RegisterSource(ownerID, new TestSource(new TestDependency("dep-a")), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterCreator(ownerID, new SteppingCreator(new Step("step1", Handled: false, new TestDependency("dep-b"))), "creator-a", localPriority: 1);

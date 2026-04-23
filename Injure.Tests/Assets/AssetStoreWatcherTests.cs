@@ -11,10 +11,10 @@ public sealed class AssetStoreWatcherTests {
 
 	[Fact]
 	public void WatchersRegisteredBeforeDependencyPublicationAllWatchIt() {
-		AssetStore store = new AssetStore();
-		TestDependency dep = new TestDependency("dep");
-		TestDependencyWatcher watcherA = new TestDependencyWatcher();
-		TestDependencyWatcher watcherB = new TestDependencyWatcher();
+		AssetStore store = new();
+		TestDependency dep = new("dep");
+		TestDependencyWatcher watcherA = new();
+		TestDependencyWatcher watcherB = new();
 		store.RegisterSource(ownerID, new TestSource(dep), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
@@ -32,10 +32,10 @@ public sealed class AssetStoreWatcherTests {
 
 	[Fact]
 	public void WatcherRegisteredAfterDependencyPublicationWatchesExistingDependency() {
-		AssetStore store = new AssetStore();
-		TestDependency dep = new TestDependency("dep");
-		TestDependencyWatcher watcherA = new TestDependencyWatcher();
-		TestDependencyWatcher watcherB = new TestDependencyWatcher();
+		AssetStore store = new();
+		TestDependency dep = new("dep");
+		TestDependencyWatcher watcherA = new();
+		TestDependencyWatcher watcherB = new();
 		store.RegisterSource(ownerID, new TestSource(dep), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
@@ -52,10 +52,10 @@ public sealed class AssetStoreWatcherTests {
 
 	[Fact]
 	public async Task SecondWatcherOfSameTypeCanTriggerReload() {
-		AssetStore store = new AssetStore();
-		TestDependency dep = new TestDependency("dep");
-		TestDependencyWatcher watcherA = new TestDependencyWatcher();
-		TestDependencyWatcher watcherB = new TestDependencyWatcher();
+		AssetStore store = new();
+		TestDependency dep = new("dep");
+		TestDependencyWatcher watcherA = new();
+		TestDependencyWatcher watcherB = new();
 		store.RegisterSource(ownerID, new TestSource(dep), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
@@ -73,10 +73,10 @@ public sealed class AssetStoreWatcherTests {
 
 	[Fact]
 	public void DependencyReplacementUnwatchesOldDependencyAndWatchesNewDependency() {
-		AssetStore store = new AssetStore();
-		TestDependency depA = new TestDependency("dep-a");
-		TestDependency depB = new TestDependency("dep-b");
-		TestDependencyWatcher watcher = new TestDependencyWatcher();
+		AssetStore store = new();
+		TestDependency depA = new("dep-a");
+		TestDependency depB = new("dep-b");
+		TestDependencyWatcher watcher = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterCreator(ownerID, new SteppingCreator(
@@ -97,9 +97,9 @@ public sealed class AssetStoreWatcherTests {
 
 	[Fact]
 	public void UnregisteredWatcherNoLongerTriggersReloads() {
-		AssetStore store = new AssetStore();
-		TestDependency dep = new TestDependency("dep");
-		TestDependencyWatcher watcher = new TestDependencyWatcher();
+		AssetStore store = new();
+		TestDependency dep = new("dep");
+		TestDependencyWatcher watcher = new();
 		store.RegisterSource(ownerID, new TestSource(dep), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");

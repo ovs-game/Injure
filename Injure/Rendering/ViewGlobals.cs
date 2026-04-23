@@ -8,6 +8,11 @@ public sealed class ViewGlobals : IDisposable {
 	private readonly WebGPUDevice device;
 	private readonly GPUBuffer buffer;
 	private readonly GPUBindGroup bindGroup;
+
+	private uint width;
+	private uint height;
+	private bool inited = false;
+
 	private bool disposed = false;
 
 	public GPUBindGroupRef BindGroup {
@@ -26,10 +31,15 @@ public sealed class ViewGlobals : IDisposable {
 
 	public void Update(uint w, uint h) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		GlobalsUniform @params = new GlobalsUniform {
+		if (inited && width == w && height == h)
+			return;
+		width = w;
+		height = h;
+		inited = true;
+		GlobalsUniform uniform = new() {
 			Projection = MatrixUtil.OrthoTopLeft(w, h)
 		};
-		device.WriteToBuffer(buffer, 0, @params);
+		device.WriteToBuffer(buffer, 0, uniform);
 	}
 
 	public void Dispose() {

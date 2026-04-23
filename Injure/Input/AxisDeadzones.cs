@@ -23,8 +23,8 @@ public readonly record struct AxisDeadzone(
 	float Outer = 1f
 ) {
 	public static readonly AxisDeadzone None = default;
-	public static AxisDeadzone Threshold(float inner) => new AxisDeadzone(AxisDeadzoneKind.Threshold, inner, 1f);
-	public static AxisDeadzone Scaled(float inner, float outer = 1f) => new AxisDeadzone(AxisDeadzoneKind.Scaled, inner, outer);
+	public static AxisDeadzone Threshold(float inner) => new(AxisDeadzoneKind.Threshold, inner, 1f);
+	public static AxisDeadzone Scaled(float inner, float outer = 1f) => new(AxisDeadzoneKind.Scaled, inner, outer);
 
 	public float Apply(float v) {
 		if (Kind == AxisDeadzoneKind.None)
@@ -61,10 +61,10 @@ public readonly record struct Axis2DDeadzone(
 	float Outer = 1f
 ) {
 	public static readonly Axis2DDeadzone None = default;
-	public static Axis2DDeadzone Radial(float inner, float outer = 1f) => new Axis2DDeadzone(Axis2DDeadzoneKind.Radial, inner, outer);
-	public static Axis2DDeadzone ScaledRadial(float inner, float outer = 1f) => new Axis2DDeadzone(Axis2DDeadzoneKind.ScaledRadial, inner, outer);
-	public static Axis2DDeadzone Axial(float inner, float outer = 1f) => new Axis2DDeadzone(Axis2DDeadzoneKind.Axial, inner, outer);
-	public static Axis2DDeadzone ScaledAxial(float inner, float outer = 1f) => new Axis2DDeadzone(Axis2DDeadzoneKind.ScaledAxial, inner, outer);
+	public static Axis2DDeadzone Radial(float inner, float outer = 1f) => new(Axis2DDeadzoneKind.Radial, inner, outer);
+	public static Axis2DDeadzone ScaledRadial(float inner, float outer = 1f) => new(Axis2DDeadzoneKind.ScaledRadial, inner, outer);
+	public static Axis2DDeadzone Axial(float inner, float outer = 1f) => new(Axis2DDeadzoneKind.Axial, inner, outer);
+	public static Axis2DDeadzone ScaledAxial(float inner, float outer = 1f) => new(Axis2DDeadzoneKind.ScaledAxial, inner, outer);
 
 	public Vector2 Apply(Vector2 v) {
 		if (Kind == Axis2DDeadzoneKind.None)

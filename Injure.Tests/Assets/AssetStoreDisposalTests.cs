@@ -12,8 +12,8 @@ public sealed class AssetStoreDisposalTests {
 
 	[Fact]
 	public async Task PreparedDataIsDisposedAfterInitialMaterialize() {
-		AssetStore store = new AssetStore();
-		ControllableCreator creator = new ControllableCreator();
+		AssetStore store = new();
+		ControllableCreator creator = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, creator, "creator");
@@ -26,8 +26,8 @@ public sealed class AssetStoreDisposalTests {
 
 	[Fact]
 	public async Task PreparedDataIsDisposedAfterSuccessfulReload() {
-		AssetStore store = new AssetStore();
-		ControllableCreator creator = new ControllableCreator();
+		AssetStore store = new();
+		ControllableCreator creator = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, creator, "creator");
@@ -42,8 +42,8 @@ public sealed class AssetStoreDisposalTests {
 
 	[Fact]
 	public async Task PreparedDataIsDisposedWhenFinalizeFails() {
-		AssetStore store = new AssetStore();
-		ControllableCreator creator = new ControllableCreator();
+		AssetStore store = new();
+		ControllableCreator creator = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, creator, "creator");
@@ -59,8 +59,8 @@ public sealed class AssetStoreDisposalTests {
 
 	[Fact]
 	public async Task SupersededPendingReloadDisposesPreparedData() {
-		AssetStore store = new AssetStore();
-		ControllableCreator creator = new ControllableCreator();
+		AssetStore store = new();
+		ControllableCreator creator = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, creator, "creator");

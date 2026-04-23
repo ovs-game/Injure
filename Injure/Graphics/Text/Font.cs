@@ -65,11 +65,11 @@ public readonly struct FontSpec {
 		FaceIndex = faceIndex;
 	}
 
-	public static implicit operator FontSpec(Font font) => new FontSpec(font);
-	public static implicit operator FontSpec(AssetRef<Font> font) => new FontSpec(font);
+	public static implicit operator FontSpec(Font font) => new(font);
+	public static implicit operator FontSpec(AssetRef<Font> font) => new(font);
 }
 
 public static class FontSpecExtensions {
-	public static FontSpec Face(this Font font, int faceIndex) => new FontSpec(font, faceIndex);
-	public static FontSpec Face(this AssetRef<Font> font, int faceIndex) => new FontSpec(font, faceIndex);
+	public static FontSpec Face(this Font font, int faceIndex) => new(font, faceIndex);
+	public static FontSpec Face(this AssetRef<Font> font, int faceIndex) => new(font, faceIndex);
 }

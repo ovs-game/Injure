@@ -162,7 +162,7 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 			TextureViewDimension.Case.Dimension2DArray or TextureViewDimension.Case.DimensionCubeArray => DepthOrArrayLayers - @params.BaseArrayLayer,
 			_ => throw new UnreachableException()
 		};
-		WGPUTextureViewDescriptor desc = new WGPUTextureViewDescriptor {
+		WGPUTextureViewDescriptor desc = new() {
 			format = fmt.ToWebGPUType(),
 			dimension = dim.ToWebGPUType(),
 			aspect = @params.Aspect.ToWebGPUType(),
@@ -190,7 +190,7 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 	/// <summary>
 	/// Creates a non-owning view of this texture.
 	/// </summary>
-	public GPUTextureRef AsRef() => new GPUTextureRef(this);
+	public GPUTextureRef AsRef() => new(this);
 
 	/// <summary>
 	/// Disposes the default view and releases the underlying WebGPU texture.

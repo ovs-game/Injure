@@ -30,6 +30,13 @@ public sealed class ActionStateSnapshot {
 	public ImmutableDictionary<ActionID, StateAxis2DActionState> StateAxes2D { get; }
 	public ImmutableDictionary<ActionID, ImpulseAxisActionState> ImpulseAxes { get; }
 
+	public static readonly ActionStateSnapshot Empty = new(
+		ImmutableDictionary<ActionID, ButtonActionState>.Empty,
+		ImmutableDictionary<ActionID, StateAxisActionState>.Empty,
+		ImmutableDictionary<ActionID, StateAxis2DActionState>.Empty,
+		ImmutableDictionary<ActionID, ImpulseAxisActionState>.Empty
+	);
+
 	public ActionStateSnapshot(
 		ReadOnlySpan<ButtonActionStateEntry> buttons,
 		ReadOnlySpan<StateAxisActionStateEntry> stateAxes,
@@ -70,7 +77,7 @@ public sealed class ActionStateSnapshot {
 	public StateAxis2DActionState GetStateAxis2D(ActionID action) => StateAxes2D.TryGetValue(action, out StateAxis2DActionState state) ? state : default;
 	public ImpulseAxisActionState GetImpulseAxis(ActionID action) => ImpulseAxes.TryGetValue(action, out ImpulseAxisActionState state) ? state : default;
 
-	public ActionStateView AsView() => new ActionStateView(
+	public ActionStateView AsView() => new(
 		new ButtonActionStateView(Buttons),
 		new StateAxisActionStateView(StateAxes),
 		new StateAxis2DActionStateView(StateAxes2D),
@@ -113,6 +120,8 @@ public readonly ref struct ActionStateView {
 	public StateAxis2DActionStateView StateAxes2D { get; }
 	public ImpulseAxisActionStateView ImpulseAxes { get; }
 
+	public static ActionStateView Empty => ActionStateSnapshot.Empty.AsView();
+
 	internal ActionStateView(ButtonActionStateView buttons, StateAxisActionStateView stateAxes, StateAxis2DActionStateView stateAxes2D, ImpulseAxisActionStateView impulseAxes) {
 		Buttons = buttons;
 		StateAxes = stateAxes;
@@ -120,7 +129,7 @@ public readonly ref struct ActionStateView {
 		ImpulseAxes = impulseAxes;
 	}
 
-	public ActionStateSnapshot ToSnapshot() => new ActionStateSnapshot(
+	public ActionStateSnapshot ToSnapshot() => new(
 		Buttons.States.ToImmutableDictionary(),
 		StateAxes.States.ToImmutableDictionary(),
 		StateAxes2D.States.ToImmutableDictionary(),

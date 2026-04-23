@@ -18,7 +18,7 @@ public readonly record struct VertexAttribute(
 	/// <summary>
 	/// Converts this value to a native WebGPU <see cref="WGPUVertexAttribute"/>.
 	/// </summary>
-	public WGPUVertexAttribute ToWebGPUType() => new WGPUVertexAttribute(
+	public WGPUVertexAttribute ToWebGPUType() => new(
 		format: Format.ToWebGPUType(),
 		offset: Offset,
 		shaderLocation: ShaderLocation

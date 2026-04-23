@@ -41,10 +41,10 @@ public readonly record struct AssetSourceResult(
 	Stream? Stream = null
 ) {
 	/// <summary>Factory for a <see cref="AssetSourceResultKind.NotHandled"/> result.</summary>
-	public static AssetSourceResult NotHandled() => new AssetSourceResult(AssetSourceResultKind.NotHandled);
+	public static AssetSourceResult NotHandled() => new(AssetSourceResultKind.NotHandled);
 
 	/// <summary>Factory for a <see cref="AssetSourceResultKind.Success"/> result.</summary>
-	public static AssetSourceResult Success(Stream stream) => new AssetSourceResult(AssetSourceResultKind.Success, stream);
+	public static AssetSourceResult Success(Stream stream) => new(AssetSourceResultKind.Success, stream);
 }
 
 /// <summary>
@@ -105,10 +105,10 @@ public readonly record struct AssetResolveResult(
 	AssetData? Data = null
 ) {
 	/// <summary>Factory for a <see cref="AssetResolveResultKind.NotHandled"/> result.</summary>
-	public static AssetResolveResult NotHandled() => new AssetResolveResult(AssetResolveResultKind.NotHandled);
+	public static AssetResolveResult NotHandled() => new(AssetResolveResultKind.NotHandled);
 
 	/// <summary>Factory for a <see cref="AssetResolveResultKind.Success"/> result.</summary>
-	public static AssetResolveResult Success(AssetData data) => new AssetResolveResult(AssetResolveResultKind.Success, data);
+	public static AssetResolveResult Success(AssetData data) => new(AssetResolveResultKind.Success, data);
 }
 
 /// <summary>
@@ -174,10 +174,10 @@ public readonly record struct AssetCreateResult<T>(
 	T? Value = null
 ) where T : class {
 	/// <summary>Factory for a <see cref="AssetCreateResultKind.NotHandled"/> result.</summary>
-	public static AssetCreateResult<T> NotHandled() => new AssetCreateResult<T>(AssetCreateResultKind.NotHandled);
+	public static AssetCreateResult<T> NotHandled() => new(AssetCreateResultKind.NotHandled);
 
 	/// <summary>Factory for a <see cref="AssetCreateResultKind.Success"/> result.</summary>
-	public static AssetCreateResult<T> Success(T value) => new AssetCreateResult<T>(AssetCreateResultKind.Success, value);
+	public static AssetCreateResult<T> Success(T value) => new(AssetCreateResultKind.Success, value);
 }
 
 /// <summary>
@@ -232,10 +232,10 @@ public readonly record struct AssetPrepareResult<TPrepared>(
 	TPrepared? Prepared = null
 ) where TPrepared : AssetPreparedData {
 	/// <summary>Factory for a <see cref="AssetCreateResultKind.NotHandled"/> result.</summary>
-	public static AssetPrepareResult<TPrepared> NotHandled() => new AssetPrepareResult<TPrepared>(AssetCreateResultKind.NotHandled);
+	public static AssetPrepareResult<TPrepared> NotHandled() => new(AssetCreateResultKind.NotHandled);
 
 	/// <summary>Factory for a <see cref="AssetCreateResultKind.Success"/> result.</summary>
-	public static AssetPrepareResult<TPrepared> Success(TPrepared prepared) => new AssetPrepareResult<TPrepared>(AssetCreateResultKind.Success, prepared);
+	public static AssetPrepareResult<TPrepared> Success(TPrepared prepared) => new(AssetCreateResultKind.Success, prepared);
 }
 
 /// <summary>

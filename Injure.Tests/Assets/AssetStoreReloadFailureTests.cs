@@ -12,9 +12,9 @@ public sealed class AssetStoreReloadFailureTests {
 
 	[Fact]
 	public async Task ExplicitPrepareFailureThrowsAndRecordsFailure() {
-		AssetStore store = new AssetStore();
-		ControllableCreator creator = new ControllableCreator();
-		InvalidOperationException ex = new InvalidOperationException("prepare failed");
+		AssetStore store = new();
+		ControllableCreator creator = new();
+		InvalidOperationException ex = new("prepare failed");
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, creator, "creator");
@@ -42,11 +42,11 @@ public sealed class AssetStoreReloadFailureTests {
 
 	[Fact]
 	public async Task WatcherPrepareFailureIsRecordedButDoesntThrowIntoRaise() {
-		AssetStore store = new AssetStore();
-		ControllableCreator creator = new ControllableCreator();
-		TestDependency dep = new TestDependency("dep");
-		TestDependencyWatcher watcher = new TestDependencyWatcher();
-		InvalidOperationException ex = new InvalidOperationException("dependency reload failed");
+		AssetStore store = new();
+		ControllableCreator creator = new();
+		TestDependency dep = new("dep");
+		TestDependencyWatcher watcher = new();
+		InvalidOperationException ex = new("dependency reload failed");
 		store.RegisterSource(ownerID, new TestSource(dep), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, creator, "creator");
@@ -75,9 +75,9 @@ public sealed class AssetStoreReloadFailureTests {
 
 	[Fact]
 	public async Task FinalizeFailureIsReportedAndKeepsOldVersionLive() {
-		AssetStore store = new AssetStore();
-		ControllableCreator creator = new ControllableCreator();
-		InvalidOperationException ex = new InvalidOperationException("finalize failed");
+		AssetStore store = new();
+		ControllableCreator creator = new();
+		InvalidOperationException ex = new("finalize failed");
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, creator, "creator");
@@ -108,9 +108,9 @@ public sealed class AssetStoreReloadFailureTests {
 
 	[Fact]
 	public async Task ApplyQueuedReloadsOrThrowThrowsOnFinalizeFailure() {
-		AssetStore store = new AssetStore();
-		ControllableCreator creator = new ControllableCreator();
-		InvalidOperationException ex = new InvalidOperationException("finalize failed");
+		AssetStore store = new();
+		ControllableCreator creator = new();
+		InvalidOperationException ex = new("finalize failed");
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, creator, "creator");
@@ -126,8 +126,8 @@ public sealed class AssetStoreReloadFailureTests {
 
 	[Fact]
 	public async Task SuccessfulReloadAfterFailureClearsLastReloadFailure() {
-		AssetStore store = new AssetStore();
-		ControllableCreator creator = new ControllableCreator();
+		AssetStore store = new();
+		ControllableCreator creator = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, creator, "creator");

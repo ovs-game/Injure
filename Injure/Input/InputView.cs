@@ -13,7 +13,8 @@ public readonly struct InputSnapshot(KeyboardState keyboard, PointerState pointe
 }
 
 public readonly ref struct InputView(ReadOnlySpan<InputEvent> events, InputSnapshot state) {
-	public static InputView Rest => new InputView(ReadOnlySpan<InputEvent>.Empty, InputSnapshot.Rest);
+	public static InputView Empty => new(ReadOnlySpan<InputEvent>.Empty, InputSnapshot.Rest);
+	public static InputView EmptyWith(InputSnapshot state) => new(ReadOnlySpan<InputEvent>.Empty, state);
 
 	public ReadOnlySpan<InputEvent> Events { get; } = events;
 	public InputSnapshot State { get; } = state;

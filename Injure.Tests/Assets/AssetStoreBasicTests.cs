@@ -11,8 +11,8 @@ public sealed class AssetStoreBasicTests {
 
 	[Fact]
 	public async Task BasicFunctionality() {
-		AssetStore store = new AssetStore();
-		TestDependencyWatcher watcher = new TestDependencyWatcher();
+		AssetStore store = new();
+		TestDependencyWatcher watcher = new();
 		store.RegisterSource(ownerID, new TestSource(new TestDependency("dep")), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		AssetCreatorHandle ch = store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
@@ -43,7 +43,7 @@ public sealed class AssetStoreBasicTests {
 
 	[Fact]
 	public void ReloadingWorks() {
-		AssetStore store = new AssetStore();
+		AssetStore store = new();
 		store.RegisterSource(ownerID, new TestSource(new TestDependency("dep-source")), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterCreator(ownerID, new SteppingCreator(
@@ -70,7 +70,7 @@ public sealed class AssetStoreBasicTests {
 
 	[Fact]
 	public void RevocationWorks() {
-		AssetStore store = new AssetStore();
+		AssetStore store = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
@@ -88,7 +88,7 @@ public sealed class AssetStoreBasicTests {
 
 	[Fact]
 	public void DepsAreDeduplicated() {
-		AssetStore store = new AssetStore();
+		AssetStore store = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new TestResolver(), "resolver");
 		store.RegisterCreator(ownerID, new SteppingCreator(

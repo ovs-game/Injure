@@ -7,6 +7,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -138,6 +139,7 @@ public sealed class AssetStore {
 		Task WarmAsync(CancellationToken ct);
 		Task QueueReloadAsync(CancellationToken ct);
 		void QueueReloadFromDependency(IAssetDependency dep);
+		bool Evict();
 
 		// returns true if something actually got published
 		bool ApplyQueuedReload(ulong epoch, ImmutableArray<AssetReloadFailure>.Builder failures);
@@ -259,6 +261,34 @@ public sealed class AssetStore {
 				startTask = requestReloadLocked(AssetReloadRequestOrigin.Dependency, dep, out _);
 			if (startTask)
 				_ = runReloadPrepareLoopAsync();
+		}
+
+		public bool Evict() {
+			AssetVersion<T>? oldver;
+			PendingPrepared? oldPending;
+			lock (@lock) {
+				if (reloadPrepareTaskEx is not null)
+					throw reloadPrepareTaskEx;
+				if (materializeTask is not null || reloadPrepareTaskActive)
+					throw new InvalidOperationException("cannot evict while load or reload preparation is in progress");
+				oldver = curr;
+				oldPending = pending;
+				if (oldver is null && oldPending is null && lastLoadException is null && lastReloadFailure is null)
+					return false;
+				if (oldver is not null && oldPending is null)
+					newestRequestedVersion++;
+				curr = null;
+				pending = null;
+				lastLoadException = null;
+				lastReloadFailure = null;
+				pulseReloadStateChangedLocked();
+			}
+			oldPending?.Dispose();
+#pragma warning disable IDE0001 // name can be simplified
+			if (oldver is not null)
+				Store.QueueRetire<T>(oldver.Value, Store.ReserveRetireEpoch());
+#pragma warning restore IDE0001 // name can be simplified
+			return true;
 		}
 
 		public bool ApplyQueuedReload(ulong epoch, ImmutableArray<AssetReloadFailure>.Builder failures) {
@@ -407,13 +437,19 @@ public sealed class AssetStore {
 			IPendingAssetValue? pendingValue = null;
 			T? newval = null;
 			try {
+				ulong version;
+				lock (@lock)
+					version = newestRequestedVersion;
+
 				(pendingValue, ImmutableArray<IAssetDependency> deps) =
 					await Store.tryPrepareValueAsync<T>(AssetID).ConfigureAwait(false);
 				newval = finalizePrepared<T>(AssetID, pendingValue);
-				AssetVersion<T> newver = new(newval, version: 1, deps);
+				AssetVersion<T> newver = new(newval, version, deps);
 
 				lock (@lock) {
 					if (curr is null) {
+						if (version != newestRequestedVersion)
+							throw new InternalStateException("materialized asset version became stale before publication");
 						curr = newver;
 						lastLoadException = null;
 						materializeTask = null;
@@ -728,7 +764,7 @@ public sealed class AssetStore {
 	/// </remarks>
 	public AssetReloadReport ApplyQueuedReloads() {
 		ImmutableArray<AssetReloadFailure>.Builder failures = ImmutableArray.CreateBuilder<AssetReloadFailure>();
-		ulong epoch = Interlocked.Increment(ref publishedEpoch);
+		ulong epoch = ReserveRetireEpoch();
 		int n = 0;
 		foreach (IAssetSlot s in slots.Values.ToArray())
 			if (s.ApplyQueuedReload(epoch, failures))
@@ -1098,14 +1134,17 @@ public sealed class AssetStore {
 			throw new InvalidOperationException("tried to detach a thread that is not attached to this AssetStore. if you're using Task/etc., crossing an await is not guaranteed to resume on the same physical thread, use a real Thread");
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal void RecordFailedReload(AssetReloadFailure f) {
 		lock (reloadFailureLock)
 			reloadFailures.PushNewest(f);
 	}
 
-	internal void QueueRetire<T>(T val, ulong epoch) where T : class {
-		retired.Enqueue(new PendingRetired(val, epoch));
-	}
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal ulong ReserveRetireEpoch() => Interlocked.Increment(ref publishedEpoch);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal void QueueRetire<T>(T val, ulong epoch) where T : class => retired.Enqueue(new PendingRetired(val, epoch));
 
 	internal void TryCollectRetired() {
 		ulong cutoff = ulong.MaxValue;
@@ -1224,8 +1263,8 @@ public sealed class AssetStore {
 		foreach (IAssetResolver resolver in snapshot) {
 			DependencyCollector childColl = new();
 			AssetResolveInfo info = new(id,
-				(AssetID toFetch, CancellationToken passedCt) => tryAllSourcesAsync(toFetch, childColl, t, passedCt),
-				(AssetID toFetch, CancellationToken passedCt) => tryAllSourcesAsyncOrNull(toFetch, childColl, t, passedCt)
+				(toFetch, passedCt) => tryAllSourcesAsync(toFetch, childColl, t, passedCt),
+				(toFetch, passedCt) => tryAllSourcesAsyncOrNull(toFetch, childColl, t, passedCt)
 			);
 			AssetResolveResult res = await resolver.TryResolveAsync(info, childColl, ct).ConfigureAwait(false);
 			switch (res.Kind.Tag) {

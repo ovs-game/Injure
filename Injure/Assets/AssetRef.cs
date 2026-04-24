@@ -42,6 +42,9 @@ public interface IUntypedAssetRef {
 
 	/// <summary>Synchronous blocking wrapper over <see cref="QueueReloadAsync(CancellationToken)"/>.</summary>
 	void QueueReload(CancellationToken ct = default);
+
+	/// <summary>Returns the asset to its unloaded state.</summary>
+	bool Evict();
 }
 
 /// <summary>
@@ -175,6 +178,22 @@ public sealed class AssetRef<T> : IUntypedAssetRef where T : class {
 	/// </summary>
 	/// <inheritdoc cref="QueueReloadAsync(CancellationToken)"/>
 	public void QueueReload(CancellationToken ct = default) => QueueReloadAsync(ct).GetAwaiter().GetResult();
+
+	/// <summary>
+	/// Returns the asset to its unloaded state, reclaiming the current version,
+	/// clearing cached/pending state, and clearing <see cref="LastLoadException"/>
+	/// and <see cref="LastReloadFailure"/>.
+	/// </summary>
+	/// <returns>
+	/// <see langword="true"/> if something was cleared; <see langword="false"/> if the
+	/// asset was already in its initial/cleared state.
+	/// </returns>
+	/// <remarks>
+	/// This does <b>not</b> reset the version number (<see cref="AssetLease{T}.Version"/>); the
+	/// version number is incremented if a current version was cleared and stays the same if only
+	/// failure records were cleared.
+	/// </remarks>
+	public bool Evict() => Slot.Evict();
 }
 
 /// <summary>
@@ -227,7 +246,7 @@ public static class AssetRefExtensions {
 	public static async Task WarmAllAsync(this IEnumerable<IUntypedAssetRef> assetRefs, int maxConcurrency = 8, CancellationToken ct = default) {
 		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxConcurrency);
 		using SemaphoreSlim sem = new(maxConcurrency, maxConcurrency);
-		await Task.WhenAll(assetRefs.Select(async (IUntypedAssetRef assetRef) => {
+		await Task.WhenAll(assetRefs.Select(async assetRef => {
 			await sem.WaitAsync(ct).ConfigureAwait(false);
 			try {
 				await assetRef.WarmAsync(ct).ConfigureAwait(false);
@@ -251,7 +270,7 @@ public static class AssetRefExtensions {
 	public static async Task QueueReloadAllAsync(this IEnumerable<IUntypedAssetRef> assetRefs, int maxConcurrency = 8, CancellationToken ct = default) {
 		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxConcurrency);
 		using SemaphoreSlim sem = new(maxConcurrency, maxConcurrency);
-		await Task.WhenAll(assetRefs.Select(async (IUntypedAssetRef assetRef) => {
+		await Task.WhenAll(assetRefs.Select(async assetRef => {
 			await sem.WaitAsync(ct).ConfigureAwait(false);
 			try {
 				await assetRef.QueueReloadAsync(ct).ConfigureAwait(false);

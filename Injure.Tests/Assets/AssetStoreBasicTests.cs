@@ -32,6 +32,17 @@ public sealed class AssetStoreBasicTests {
 
 		watcher.Raise(new TestDependency("dep"));
 		await AssetTestWait.ForQueuedReloadAsync(asset);
+		Assert.True(asset.HasQueuedReload);
+
+		lease = asset.Borrow();
+		Assert.Equal(1ul, lease.Version);
+
+		asset.Evict();
+		Assert.False(asset.IsLoaded);
+		Assert.False(asset.HasQueuedReload);
+		Assert.False(asset.TryPassiveBorrow(out _));
+		lease = asset.Borrow();
+		Assert.Equal(2ul, lease.Version);
 
 		store.UnregisterCreator(ch);
 		AssetRef<TestAsset> asset2 = store.GetAsset<TestAsset>(new AssetID(ownerID, "asset2"));

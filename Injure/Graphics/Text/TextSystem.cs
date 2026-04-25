@@ -12,14 +12,25 @@ using Injure.Rendering;
 
 namespace Injure.Graphics.Text;
 
+public readonly record struct TextLayoutOptions(
+	float MaxWidth = float.PositiveInfinity,
+	TextWrapMode WrapMode = default,
+	TextHorizontalAlign HorizontalAlign = default
+) {
+	public TextLayoutOptions() : this(float.PositiveInfinity) {}
+};
+
 public readonly record struct TextStyle(
 	FontOptions FontOptions,
 	Color32 Color,
-	float MaxWidth = float.PositiveInfinity,
-	TextWrapMode WrapMode = default,
+	TextLayoutOptions LayoutOptions,
 	string Locale = "und",
 	string? LanguageBCP47 = null
-);
+) {
+	public TextStyle(int fontSize, Color32 color, TextLayoutOptions? layoutOptions = null) : this(
+		new FontOptions(fontSize), color, layoutOptions ?? new TextLayoutOptions()) {
+	}
+};
 
 public sealed class TextCacheOptions {
 	public int MaxShapeEntries { get; init; } = 4096;
@@ -136,62 +147,56 @@ public sealed unsafe class TextSystem : IDisposable {
 		return face;
 	}
 
+	internal TextMeasurement Measure(ResolvedFontFallbackChain fonts, ReadOnlySpan<char> text, in TextStyle style) {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		TextLayoutPlan plan = TextLayouter.BuildPlan(itemizer, fallbackResolver, fonts, text, in style, TextLayoutPlanMode.MeasureOnly);
+		return new TextMeasurement(plan.Width, plan.Height, plan.Lines.Length);
+	}
+
+	internal TextLayoutMeasurement MeasureLayout(ResolvedFontFallbackChain fonts, ReadOnlySpan<char> text, in TextStyle style) {
+		ObjectDisposedException.ThrowIf(disposed, this);
+		TextLayoutPlan plan = TextLayouter.BuildPlan(itemizer, fallbackResolver, fonts, text, in style, TextLayoutPlanMode.MeasureOnly);
+		return new TextLayoutMeasurement(plan.Lines, plan.Width, plan.Height);
+	}
+
 	internal TextLayout Layout(ResolvedFontFallbackChain fonts, ReadOnlySpan<char> text, in TextStyle style) {
 		ObjectDisposedException.ThrowIf(disposed, this);
-		List<PlannedGlyph> scratch = new();
-		List<TextGlyph> glyphs = new();
-		List<TextLine> lines = new();
-		float lineTopY = 0f;
-		float maxLineWidth = 0f;
-		int paraStart = 0;
-		for (int i = 0; i <= text.Length; i++) {
-			bool isParaBreak = i == text.Length || text[i] == '\n';
-			if (!isParaBreak)
-				continue;
-			string paraText = new(text[paraStart..i]);
-			ParagraphRun[] paraRuns = TextLayouter.BuildParaRuns(itemizer, fallbackResolver, fonts, paraText, paraStart, style.Locale, style.LanguageBCP47);
-			ParagraphCluster[] logiClusters = TextLayouter.FlattenSourceOrderClusters(paraRuns);
-			LogicalLine[] logiLines = TextLayouter.WrapParaLogicalLines(logiClusters, paraStart, paraText.Length, style.MaxWidth, style.WrapMode);
-			foreach (LogicalLine logiLine in logiLines) {
-				FontLineMetrics metrics = TextLayouter.ComputeLineMetrics(paraRuns, logiLine, fonts.Primary.GetState().LineMetrics);
-				int glyphStart = glyphs.Count;
-				float baselineY = lineTopY + metrics.Ascent;
-				float lineW = emitMaterializedGlyphs(paraRuns, paraText, paraStart, logiLine, baselineY, style.Color, scratch, glyphs);
-				lines.Add(new TextLine(GlyphStart: glyphStart, GlyphCount: glyphs.Count - glyphStart, Width: lineW, BaselineY: baselineY));
-				maxLineWidth = Math.Max(lineW, maxLineWidth);
-				lineTopY += metrics.Height;
+
+		TextLayoutPlan plan = TextLayouter.BuildPlan(itemizer, fallbackResolver, fonts, text, in style, TextLayoutPlanMode.GlyphPlan);
+		List<TextGlyph> glyphs = new(plan.Glyphs.Length);
+		TextLine[] lines = new TextLine[plan.Lines.Length];
+
+		for (int lineIndex = 0; lineIndex < plan.Lines.Length; lineIndex++) {
+			TextLine plannedLine = plan.Lines[lineIndex];
+			int materializedStart = glyphs.Count;
+			for (int i = plannedLine.GlyphStart; i < plannedLine.GlyphStart + plannedLine.GlyphCount; i++) {
+				PlannedGlyph planned = plan.Glyphs[i];
+				if (!atlas.TryGetOrCreate(planned.Font, planned.GlyphID, out GlyphAtlasEntry atlasEntry))
+					continue;
+				float x = planned.X + atlasEntry.BitmapLeft;
+				float y = planned.Y - atlasEntry.BitmapTop;
+				glyphs.Add(new TextGlyph(
+					Page: atlasEntry.Page,
+					SrcPixels: atlasEntry.SrcPixels,
+					DstPixels: new RectF(x, y, atlasEntry.Width, atlasEntry.Height),
+					Color: style.Color,
+					GlyphID: planned.GlyphID,
+					Cluster: planned.Cluster
+				));
 			}
-			paraStart = i + 1;
+			lines[lineIndex] = plannedLine with {
+				GlyphStart = materializedStart,
+				GlyphCount = glyphs.Count - materializedStart
+			};
 		}
 
 		return new TextLayout(
 			glyphs: glyphs.ToArray(),
-			lines: lines.ToArray(),
-			width: maxLineWidth,
-			height: lineTopY,
+			lines: lines,
+			width: plan.Width,
+			height: plan.Height,
 			retainedPages: glyphs.Select(static g => g.Page).Distinct().ToArray()
 		);
-	}
-
-	private float emitMaterializedGlyphs(ReadOnlySpan<ParagraphRun> paraRuns, string paraText, int paraAbsoluteStart,
-		LogicalLine logiLine, float baselineY, Color32 color, List<PlannedGlyph> scratch, List<TextGlyph> dst) {
-		scratch.Clear();
-		float lineW = TextLayouter.EmitVisualLineGlyphs(paraRuns, paraText, paraAbsoluteStart, logiLine, baselineY, scratch);
-		foreach (PlannedGlyph planned in scratch) {
-			if (!atlas.TryGetOrCreate(planned.Font, planned.GlyphID, out GlyphAtlasEntry atlasEntry))
-				continue;
-			float x = planned.X + atlasEntry.BitmapLeft;
-			float y = planned.Y - atlasEntry.BitmapTop;
-			dst.Add(new TextGlyph(
-				Page: atlasEntry.Page,
-				SrcPixels: atlasEntry.SrcPixels,
-				DstPixels: new RectF(x, y, atlasEntry.Width, atlasEntry.Height),
-				Color: color,
-				GlyphID: planned.GlyphID,
-				Cluster: planned.Cluster
-			));
-		}
-		return lineW;
 	}
 
 	public Font LoadFont(byte[] data, string? debugName = null) {
@@ -212,6 +217,18 @@ public sealed unsafe class TextSystem : IDisposable {
 
 	public LiveText Make(FontFallbackChain fonts, ReadOnlySpan<char> text, TextStyle style) =>
 		new(this, fonts, text, style);
+
+	public TextMeasurement Measure(FontSpec font, ReadOnlySpan<char> text, in TextStyle style) =>
+		Measure(ResolveFallbackChain(new FontFallbackChain(font), style.FontOptions), text, in style);
+
+	public TextMeasurement Measure(FontFallbackChain fonts, ReadOnlySpan<char> text, in TextStyle style) =>
+		Measure(ResolveFallbackChain(fonts, style.FontOptions), text, in style);
+
+	public TextLayoutMeasurement MeasureLayout(FontSpec font, ReadOnlySpan<char> text, in TextStyle style) =>
+		MeasureLayout(ResolveFallbackChain(new FontFallbackChain(font), style.FontOptions), text, in style);
+
+	public TextLayoutMeasurement MeasureLayout(FontFallbackChain fonts, ReadOnlySpan<char> text, in TextStyle style) =>
+		MeasureLayout(ResolveFallbackChain(fonts, style.FontOptions), text, in style);
 
 	public TextLayout Layout(FontSpec font, ReadOnlySpan<char> text, in TextStyle style) =>
 		Layout(ResolveFallbackChain(new FontFallbackChain(font), style.FontOptions), text, in style);

@@ -200,7 +200,7 @@ public sealed class ActionContext(ActionProfile profile) {
 			handleButtonSourceEdge(gp.Tick, InputButtonSource.GamepadButton(gp.Button), gp.Edge, ButtonActionEventInfo.None);
 			break;
 		case PointerMoveEvent move:
-			events.Add(new PointerMoveControlEvent(move.Tick, move.X, move.Y, move.DeltaX, move.DeltaY));
+			events.Add(new PointerMoveControlEvent(move.Tick, move.X, move.Y, new Vector2(move.DeltaX, move.DeltaY)));
 			break;
 		case PointerButtonEvent ptr:
 			handleButtonSourceEdge(ptr.Tick, InputButtonSource.PointerButton(ptr.Button), ptr.Edge, ButtonActionEventInfo.FromPointer(ptr.X, ptr.Y, ptr.Clicks));

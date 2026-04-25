@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Numerics;
 using HarfBuzzSharp;
 
@@ -14,6 +15,23 @@ public readonly partial struct TextWrapMode {
 	public enum Case {
 		None,
 		Greedy
+	}
+}
+
+[ClosedEnum(CheckZeroName = false)] // left is the natural alignment from not adding an X offset so it's an alright "default"/"neutral"
+public readonly partial struct TextHorizontalAlign {
+	public enum Case {
+		Left,
+		Center,
+		Right
+	}
+}
+
+[ClosedEnum(CheckZeroName = false)] // clip is kind of the plain default one may expect for "max lines"
+public readonly partial struct TextOverflowMode {
+	public enum Case {
+		Clip,
+		Ellipsis
 	}
 }
 
@@ -76,7 +94,106 @@ internal readonly record struct PlannedGlyph(
 	float Y
 );
 
+public readonly record struct TextLine(
+	int GlyphStart,
+	int GlyphCount,
+	float Width,
+	float BaselineY,
+	float Ascent,
+	float Descent,
+	float LineGap,
+	float Height,
+	float OffsetX
+);
+
+internal sealed class TextLayoutPlan {
+	public required PlannedGlyph[] Glyphs { get; init; }
+	public required TextLine[] Lines { get; init; }
+	public required float Width { get; init; }
+	public required float Height { get; init; }
+}
+
+internal enum TextLayoutPlanMode {
+	MeasureOnly,
+	GlyphPlan
+}
+
 internal static class TextLayouter {
+	public static TextLayoutPlan BuildPlan(ITextItemizer itemizer, FallbackResolver fallbackResolver,
+		ResolvedFontFallbackChain fonts, ReadOnlySpan<char> text, in TextStyle style, TextLayoutPlanMode mode) {
+		List<PlannedGlyph>? glyphs = mode == TextLayoutPlanMode.GlyphPlan ? new() : null;
+		List<TextLine> lines = new();
+
+		float lineTopY = 0f;
+		float maxLineWidth = 0f;
+		int paraStart = 0;
+		for (int i = 0; i <= text.Length; i++) {
+			bool isParaBreak = i == text.Length || text[i] == '\n';
+			if (!isParaBreak)
+				continue;
+			string paraText = new(text[paraStart..i]);
+			ParagraphRun[] paraRuns = BuildParaRuns(itemizer, fallbackResolver, fonts, paraText, paraStart, style.Locale, style.LanguageBCP47);
+			ParagraphCluster[] logiClusters = FlattenSourceOrderClusters(paraRuns);
+			LogicalLine[] logiLines = WrapParaLogicalLines(logiClusters, paraStart, paraText.Length, style.LayoutOptions.MaxWidth, style.LayoutOptions.WrapMode);
+			foreach (LogicalLine logiLine in logiLines) {
+				FontLineMetrics metrics = ComputeLineMetrics(paraRuns, logiLine, fonts.Primary.GetState().LineMetrics);
+				int glyphStart = glyphs?.Count ?? 0;
+				float baselineY = lineTopY + metrics.Ascent;
+				float lineW;
+				if (glyphs is not null) {
+					lineW = EmitVisualLineGlyphs(paraRuns, paraText, paraStart, logiLine, baselineY, glyphs);
+				} else {
+					lineW = 0f;
+					foreach (ParagraphCluster cluster in logiClusters)
+						if (Contains(cluster, logiLine.Start, logiLine.Limit))
+							lineW += cluster.Width;
+				}
+				float alignOffsetX = getAlignOffset(lineW, style.LayoutOptions.MaxWidth, style.LayoutOptions.HorizontalAlign);
+				if (glyphs is not null && alignOffsetX != 0f)
+					shiftPlannedGlyphs(glyphs, glyphStart, glyphs.Count, alignOffsetX);
+				lines.Add(new TextLine(
+					GlyphStart: glyphStart,
+					GlyphCount: glyphs is not null ? glyphs.Count - glyphStart : 0,
+					Width: lineW,
+					BaselineY: baselineY,
+					Ascent: metrics.Ascent,
+					Descent: metrics.Descent,
+					LineGap: metrics.LineGap,
+					Height: metrics.Height,
+					OffsetX: alignOffsetX
+				));
+				maxLineWidth = Math.Max(lineW, maxLineWidth);
+				lineTopY += metrics.Height;
+			}
+			paraStart = i + 1;
+		}
+		return new TextLayoutPlan {
+			Glyphs = glyphs?.ToArray() ?? Array.Empty<PlannedGlyph>(),
+			Lines = lines.ToArray(),
+			Width = maxLineWidth,
+			Height = lineTopY
+		};
+	}
+
+	private static float getAlignOffset(float lineWidth, float boxWidth, TextHorizontalAlign align) {
+		if (float.IsPositiveInfinity(boxWidth))
+			return 0f;
+		float free = boxWidth - lineWidth;
+		if (free <= 0f)
+			return 0f;
+		return align.Tag switch {
+			TextHorizontalAlign.Case.Left => 0f,
+			TextHorizontalAlign.Case.Center => free * 0.5f,
+			TextHorizontalAlign.Case.Right => free,
+			_ => throw new UnreachableException()
+		};
+	}
+
+	private static void shiftPlannedGlyphs(List<PlannedGlyph> glyphs, int start, int end, float dx) {
+		for (int i = start; i < end; i++)
+			glyphs[i] = glyphs[i] with { X = glyphs[i].X + dx };
+	}
+
 	public static FontLineMetrics ComputeLineMetrics(ReadOnlySpan<ParagraphRun> paraRuns, LogicalLine logiLine, FontLineMetrics fallback) {
 		float ascent = 0f;
 		float descent = 0f;
@@ -308,18 +425,34 @@ internal readonly record struct TextGlyph(
 	uint Cluster
 );
 
-internal readonly record struct TextLine(
-	int GlyphStart,
-	int GlyphCount,
+public readonly record struct TextMeasurement(
 	float Width,
-	float BaselineY
+	float Height,
+	int LineCount
 );
+
+public sealed class TextLayoutMeasurement {
+	public TextLine[] Lines { get; }
+	public float Width { get; }
+	public float Height { get; }
+	public int LineCount => Lines.Length;
+
+	internal TextLayoutMeasurement(TextLine[] lines, float width, float height) {
+		Lines = lines;
+		Width = width;
+		Height = height;
+	}
+}
 
 public sealed class TextLayout : IDisposable {
 	internal TextGlyph[] Glyphs { get; }
-	internal TextLine[] Lines { get; }
+	public TextLine[] Lines { get; }
 	public float Width { get; }
 	public float Height { get; }
+	public int LineCount => Lines.Length;
+
+	public TextMeasurement Measurement => new(Width, Height, LineCount);
+	public TextLayoutMeasurement LayoutMeasurement => new(Lines, Width, Height);
 
 	private GlyphAtlasPage[] retainedPages;
 	private bool disposed = false;

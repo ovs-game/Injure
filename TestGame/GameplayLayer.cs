@@ -27,7 +27,7 @@ public sealed class GameplayLayer : Layer {
 
 	public override void OnEnter() {
 		helloWorldText = TestGame.Text.Make(TestGame.TestFont, "ficelle\u0301 fffffi AVAVAV. ToToTo WaWaWa",
-			new TextStyle(new FontOptions(PixelSize: 32), new Color32(255, 244, 216)));
+			new TextStyle(32, new Color32(128, 244, 216)));
 	}
 
 	public override void Update(in LayerTickContext ctx) {

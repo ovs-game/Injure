@@ -118,8 +118,7 @@ public sealed record PointerMoveControlEvent(
 	MonoTick Tick,
 	float X,
 	float Y,
-	float DeltaX,
-	float DeltaY
+	Vector2 Delta
 ) : ControlEvent(Tick);
 
 public sealed record TextEnteredControlEvent(

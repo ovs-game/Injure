@@ -19,6 +19,7 @@ using Injure.Rendering;
 using Injure.Scheduling;
 using Injure.Timing;
 
+using EngineInfo = Injure.ModKit.Abstractions.EngineInfo;
 using Thread = System.Threading.Thread;
 
 namespace Injure.Core;
@@ -234,17 +235,17 @@ bootstrapCancelled:
 		AssetThreadContext? assetCtx = null;
 		if (svconf.Assets) {
 			assets = new AssetStore();
-			assets.RegisterResolver(ModUtils.Info.OwnerID, new Texture2DJsonAssetResolver(), "Texture2DJsonAssetResolver");
-			assets.RegisterResolver(ModUtils.Info.OwnerID, new Texture2DImageAssetResolver(), "Texture2DImageAssetResolver");
-			assets.RegisterStagedCreator(ModUtils.Info.OwnerID, new Texture2DAssetCreator(gpuDevice), "Texture2DAssetCreator");
+			assets.RegisterResolver(EngineInfo.OwnerID, new Texture2DJsonAssetResolver(), "Texture2DJsonAssetResolver");
+			assets.RegisterResolver(EngineInfo.OwnerID, new Texture2DImageAssetResolver(), "Texture2DImageAssetResolver");
+			assets.RegisterStagedCreator(EngineInfo.OwnerID, new Texture2DAssetCreator(gpuDevice), "Texture2DAssetCreator");
 			assetCtx = assets.AttachCurrentThread();
 		}
 		AudioEngine? audio = svconf.Audio ? new AudioEngine() : null;
 		TextSystem? text = null;
 		if (svconf.Text) {
 			text = new TextSystem(gpuDevice);
-			assets?.RegisterResolver(ModUtils.Info.OwnerID, new FontAssetResolver(), "FontSourceAssetResolver");
-			assets?.RegisterCreator(ModUtils.Info.OwnerID, new FontAssetCreator(text), "FontSourceAssetCreator");
+			assets?.RegisterResolver(EngineInfo.OwnerID, new FontAssetResolver(), "FontSourceAssetResolver");
+			assets?.RegisterCreator(EngineInfo.OwnerID, new FontAssetCreator(text), "FontSourceAssetCreator");
 		}
 		services = new GameServices(
 			sched,

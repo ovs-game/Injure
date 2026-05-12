@@ -13,7 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Injure.DataStructures;
-using Injure.ModUtils;
+using Injure.ModKit.Abstractions;
 
 namespace Injure.Assets;
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-namespace Injure.ModUtils;
+namespace Injure.ModKit.Abstractions;
 
-public static class Info {
+public static class EngineInfo {
 	public const string OwnerID = "injure";
 }

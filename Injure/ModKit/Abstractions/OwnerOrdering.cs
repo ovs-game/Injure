@@ -6,7 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 
-namespace Injure.ModUtils;
+namespace Injure.ModKit.Abstractions;
 
 public sealed class OwnerOrderingException(string message) : Exception(message) {
 }

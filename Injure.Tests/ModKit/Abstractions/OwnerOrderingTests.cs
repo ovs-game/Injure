@@ -2,9 +2,9 @@
 
 using System;
 
-using Injure.ModUtils;
+using Injure.ModKit.Abstractions;
 
-namespace Injure.Tests.ModUtils;
+namespace Injure.Tests.ModKit.Abstractions;
 
 public class OwnerOrderingTests {
 	[Fact]

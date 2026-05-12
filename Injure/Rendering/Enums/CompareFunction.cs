@@ -16,6 +16,6 @@ public readonly partial struct CompareFunction {
 		Greater = 5,
 		NotEqual = 6,
 		GreaterEqual = 7,
-		Always = 8
+		Always = 8,
 	}
 }

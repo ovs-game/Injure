@@ -109,7 +109,7 @@ public static class UICanvasLayout {
 			UICanvasFitMode.Case.Letterbox => policy.ScaleMode.Tag switch {
 				UICanvasScaleMode.Case.Fractional => computeLetterboxedFracScale(logicalRect.Size, drawableSize),
 				UICanvasScaleMode.Case.Integer => computeLetterboxedIntScale(logicalRect.Size, drawableSize),
-				_ => throw new InternalStateException("unexpected UICanvasScaleMode value")
+				_ => throw new InternalStateException("unexpected UICanvasScaleMode value"),
 			},
 			_ => throw new UnreachableException(),
 		};

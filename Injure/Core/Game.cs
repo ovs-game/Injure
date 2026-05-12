@@ -12,7 +12,7 @@ public readonly partial struct LoadingPhase {
 	public enum Case {
 		Start = 1,
 		Tick,
-		Finish
+		Finish,
 	}
 }
 
@@ -39,7 +39,7 @@ public readonly partial struct HostEvent {
 		FocusLost,
 		MouseEnter,
 		MouseLeave,
-		DisplayScaleChanged
+		DisplayScaleChanged,
 	}
 }
 

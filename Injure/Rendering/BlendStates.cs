@@ -7,51 +7,51 @@ public static class BlendStates {
 		Color = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.SrcAlpha,
-			DstFactor = BlendFactor.OneMinusSrcAlpha
+			DstFactor = BlendFactor.OneMinusSrcAlpha,
 		},
 		Alpha = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.One,
-			DstFactor = BlendFactor.OneMinusSrcAlpha
-		}
+			DstFactor = BlendFactor.OneMinusSrcAlpha,
+		},
 	};
 
 	public static readonly BlendState PremultipliedAlpha = new() {
 		Color = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.One,
-			DstFactor = BlendFactor.OneMinusSrcAlpha
+			DstFactor = BlendFactor.OneMinusSrcAlpha,
 		},
 		Alpha = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.One,
-			DstFactor = BlendFactor.OneMinusSrcAlpha
-		}
+			DstFactor = BlendFactor.OneMinusSrcAlpha,
+		},
 	};
 
 	public static readonly BlendState Additive = new() {
 		Color = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.SrcAlpha,
-			DstFactor = BlendFactor.One
+			DstFactor = BlendFactor.One,
 		},
 		Alpha = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.One,
-			DstFactor = BlendFactor.OneMinusSrcAlpha
-		}
+			DstFactor = BlendFactor.OneMinusSrcAlpha,
+		},
 	};
 
 	public static readonly BlendState PremultipliedAdditive = new() {
 		Color = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.One,
-			DstFactor = BlendFactor.One
+			DstFactor = BlendFactor.One,
 		},
 		Alpha = new BlendComponent {
 			Operation = BlendOperation.Add,
 			SrcFactor = BlendFactor.One,
-			DstFactor = BlendFactor.OneMinusSrcAlpha
-		}
+			DstFactor = BlendFactor.OneMinusSrcAlpha,
+		},
 	};
 }

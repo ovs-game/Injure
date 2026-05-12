@@ -14,6 +14,6 @@ public readonly partial struct TextureViewDimension {
 		Dimension2DArray = 3,
 		DimensionCube = 4,
 		DimensionCubeArray = 5,
-		Dimension3D = 6
+		Dimension3D = 6,
 	}
 }

@@ -123,7 +123,7 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 			TextureDimension.Case.Dimension1D => TextureViewDimension.Dimension1D,
 			TextureDimension.Case.Dimension2D => (depthOrArrayLayers > 1) ? TextureViewDimension.Dimension2DArray : TextureViewDimension.Dimension2D,
 			TextureDimension.Case.Dimension3D => TextureViewDimension.Dimension3D,
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 		Format = format;
 		Usage = usage;
@@ -153,7 +153,7 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 			(TextureFormat.Case.Depth32FloatStencil8, TextureAspect.Case.StencilOnly) => TextureFormat.Stencil8,
 			(_, TextureAspect.Case.All) => Format,
 			(_, TextureAspect.Case.Undefined) => throw new ArgumentException("texture aspect must not be Undefined", nameof(@params)),
-			_ => throw new ArgumentException("texture format/aspect combination has no aspect-specific view format", nameof(@params))
+			_ => throw new ArgumentException("texture format/aspect combination has no aspect-specific view format", nameof(@params)),
 		};
 		TextureViewDimension dim = @params.Dimension ?? DefaultViewDimension;
 		uint mipLvCount = @params.MipLevelCount ?? checked(MipLevelCount - @params.BaseMipLevel);
@@ -161,7 +161,7 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 			TextureViewDimension.Case.Dimension1D or TextureViewDimension.Case.Dimension2D or TextureViewDimension.Case.Dimension3D => 1,
 			TextureViewDimension.Case.DimensionCube => 6,
 			TextureViewDimension.Case.Dimension2DArray or TextureViewDimension.Case.DimensionCubeArray => DepthOrArrayLayers - @params.BaseArrayLayer,
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 		WGPUTextureViewDescriptor desc = new() {
 			format = fmt.ToWebGPUType(),
@@ -170,7 +170,7 @@ public sealed unsafe class GPUTexture : GPUTextureHandle, IDisposable {
 			baseMipLevel = @params.BaseMipLevel,
 			mipLevelCount = mipLvCount,
 			baseArrayLayer = @params.BaseArrayLayer,
-			arrayLayerCount = arrLayerCount
+			arrayLayerCount = arrLayerCount,
 		};
 		return new GPUTextureView(WebGPUException.Check(wgpuTextureCreateView(WGPUTexture, &desc)),
 			fmt,

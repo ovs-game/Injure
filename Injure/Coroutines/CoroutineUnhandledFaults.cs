@@ -12,7 +12,7 @@ public readonly partial struct CoroUnhandledFaultMode {
 		Ignore,
 		LogAfterTick,
 		ThrowAfterTick,
-		LogAndThrowAfterTick
+		LogAndThrowAfterTick,
 	}
 }
 

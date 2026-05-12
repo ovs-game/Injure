@@ -103,6 +103,6 @@ public readonly partial struct TextureFormat {
 		ASTC12x10Unorm = 92,
 		ASTC12x10UnormSrgb = 93,
 		ASTC12x12Unorm = 94,
-		ASTC12x12UnormSrgb = 95
+		ASTC12x12UnormSrgb = 95,
 	}
 }

@@ -47,7 +47,7 @@ public static class Util {
 		PixelFormat.Case.RGBA4444_UNormPack16_BE => 2,
 		PixelFormat.Case.RGBA5551_UNormPack16_LE => 2,
 		PixelFormat.Case.RGBA5551_UNormPack16_BE => 2,
-		_ => throw new UnreachableException()
+		_ => throw new UnreachableException(),
 	};
 
 }

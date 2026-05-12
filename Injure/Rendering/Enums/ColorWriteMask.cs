@@ -16,6 +16,6 @@ public readonly partial struct ColorWriteMask {
 		Green = 2ul,
 		Blue = 4ul,
 		Alpha = 8ul,
-		All = 15ul
+		All = 15ul,
 	}
 }

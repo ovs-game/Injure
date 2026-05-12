@@ -24,7 +24,7 @@ public readonly partial struct Texture2DFormat {
 		RGBA32_UNorm,
 		RGBA32_UNorm_Srgb,
 		BGRA32_UNorm,
-		BGRA32_UNorm_Srgb
+		BGRA32_UNorm_Srgb,
 	}
 }
 
@@ -235,7 +235,7 @@ public sealed class Texture2D : IRevokable, IDisposable {
 		Texture2DFormat.Case.RGBA32_UNorm_Srgb => TextureFormat.RGBA8UnormSrgb,
 		Texture2DFormat.Case.BGRA32_UNorm      => TextureFormat.BGRA8Unorm,
 		Texture2DFormat.Case.BGRA32_UNorm_Srgb => TextureFormat.BGRA8UnormSrgb,
-		_ => throw new UnreachableException()
+		_ => throw new UnreachableException(),
 	};
 
 	private static PixelFormat getUploadPixelFormat(Texture2DFormat fmt) => fmt.Tag switch {
@@ -245,7 +245,7 @@ public sealed class Texture2D : IRevokable, IDisposable {
 		Texture2DFormat.Case.RGBA32_UNorm_Srgb => PixelFormat.RGBA32_UNorm,
 		Texture2DFormat.Case.BGRA32_UNorm      => PixelFormat.BGRA32_UNorm,
 		Texture2DFormat.Case.BGRA32_UNorm_Srgb => PixelFormat.BGRA32_UNorm,
-		_ => throw new UnreachableException()
+		_ => throw new UnreachableException(),
 	};
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

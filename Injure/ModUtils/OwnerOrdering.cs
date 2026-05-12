@@ -69,7 +69,7 @@ public static class OwnerOrderedSorter {
 
 	private enum VisitState {
 		Visiting,
-		Done
+		Done,
 	}
 
 	public static T[] Sort<T>(IReadOnlyList<OwnerOrderedEntry<T>> entries) {

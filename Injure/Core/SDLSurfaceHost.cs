@@ -59,13 +59,13 @@ public sealed unsafe partial class SDLSurfaceHost(SDLWindow *win, void *metalLay
 		container->WindowsHWND = new WGPUSurfaceSourceWindowsHWND {
 			chain = new WGPUChainedStruct {
 				sType = WGPUSType.SurfaceSourceWindowsHWND,
-				next = null
+				next = null,
 			},
 			hwnd = hwnd,
-			hinstance = hinstance
+			hinstance = hinstance,
 		};
 		container->Desc = new WGPUSurfaceDescriptor {
-			nextInChain = &container->WindowsHWND.chain
+			nextInChain = &container->WindowsHWND.chain,
 		};
 	}
 
@@ -73,12 +73,12 @@ public sealed unsafe partial class SDLSurfaceHost(SDLWindow *win, void *metalLay
 		container->MetalLayer = new WGPUSurfaceSourceMetalLayer {
 			chain = new WGPUChainedStruct {
 				sType = WGPUSType.SurfaceSourceMetalLayer,
-				next = null
+				next = null,
 			},
-			layer = metalLayer
+			layer = metalLayer,
 		};
 		container->Desc = new WGPUSurfaceDescriptor {
-			nextInChain = &container->MetalLayer.chain
+			nextInChain = &container->MetalLayer.chain,
 		};
 	}
 
@@ -91,13 +91,13 @@ public sealed unsafe partial class SDLSurfaceHost(SDLWindow *win, void *metalLay
 		container->XlibWindow = new WGPUSurfaceSourceXlibWindow {
 			chain = new WGPUChainedStruct {
 				sType = WGPUSType.SurfaceSourceXlibWindow,
-				next = null
+				next = null,
 			},
 			display = dpy,
-			window = win
+			window = win,
 		};
 		container->Desc = new WGPUSurfaceDescriptor {
-			nextInChain = &container->XlibWindow.chain
+			nextInChain = &container->XlibWindow.chain,
 		};
 	}
 
@@ -108,13 +108,13 @@ public sealed unsafe partial class SDLSurfaceHost(SDLWindow *win, void *metalLay
 		container->WaylandSurface = new WGPUSurfaceSourceWaylandSurface {
 			chain = new WGPUChainedStruct {
 				sType = WGPUSType.SurfaceSourceWaylandSurface,
-				next = null
+				next = null,
 			},
 			display = wl_display,
-			surface = wl_surface
+			surface = wl_surface,
 		};
 		container->Desc = new WGPUSurfaceDescriptor {
-			nextInChain = &container->WaylandSurface.chain
+			nextInChain = &container->WaylandSurface.chain,
 		};
 	}
 }

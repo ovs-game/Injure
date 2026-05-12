@@ -155,6 +155,6 @@ public sealed class StronglyTypedIntGenerator : IIncrementalGenerator {
 	private static string accessibility(INamedTypeSymbol sym) => sym.DeclaredAccessibility switch {
 		Accessibility.Public => "public ",
 		Accessibility.Internal => "internal ",
-		_ => ""
+		_ => "",
 	};
 }

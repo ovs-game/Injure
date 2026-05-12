@@ -42,7 +42,7 @@ public readonly partial struct SurfacePresentModePolicy {
 		/// <remarks>
 		/// May tear. Lowest latency.
 		/// </remarks>
-		AutoImmediate
+		AutoImmediate,
 	}
 }
 
@@ -51,7 +51,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 		Acquired,
 		AcquiredNeedsReconfigure,
 		SkipFrame,
-		DeviceLost
+		DeviceLost,
 	}
 
 	private readonly WebGPUDevice device;
@@ -141,7 +141,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 			width = width,
 			height = height,
 			presentMode = presentMode,
-			alphaMode = WGPUCompositeAlphaMode.Auto
+			alphaMode = WGPUCompositeAlphaMode.Auto,
 		};
 	}
 
@@ -164,7 +164,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 				WGPUSurfaceGetCurrentTextureStatus.Lost => AcquireStatus.SkipFrame,
 				WGPUSurfaceGetCurrentTextureStatus.DeviceLost => AcquireStatus.DeviceLost,
 				WGPUSurfaceGetCurrentTextureStatus.OutOfMemory => throw new OutOfMemoryException("WebGPU: wgpuSurfaceGetCurrentTexture: out of memory"),
-				_ => throw new WebGPUException("wgpuSurfaceGetCurrentTexture", st.ToString())
+				_ => throw new WebGPUException("wgpuSurfaceGetCurrentTexture", st.ToString()),
 			};
 		}
 
@@ -237,7 +237,7 @@ public sealed unsafe class SurfaceRenderOutput : IRenderOutput {
 			baseMipLevel = 0,
 			mipLevelCount = 1,
 			baseArrayLayer = 0,
-			arrayLayerCount = 1
+			arrayLayerCount = 1,
 		};
 		WGPUTextureView backbufferView = wgpuTextureCreateView(currTex.texture, &tvdesc);
 		if (backbufferView.IsNull) {

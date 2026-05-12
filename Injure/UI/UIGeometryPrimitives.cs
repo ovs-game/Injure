@@ -105,7 +105,7 @@ public static class UIGeometryExtensions {
 public readonly partial struct UIAxis {
 	public enum Case {
 		Horizontal = 1,
-		Vertical
+		Vertical,
 	}
 }
 
@@ -115,6 +115,6 @@ public readonly partial struct UIAlign {
 		Start = 1,
 		Center,
 		End,
-		Stretch
+		Stretch,
 	}
 }

@@ -11,7 +11,7 @@ public readonly partial struct CoroutineStatus {
 		Paused,
 		Completed,
 		Cancelled,
-		Faulted
+		Faulted,
 	}
 }
 
@@ -23,13 +23,13 @@ public readonly partial struct CoroCancellationReason {
 		ScopeCancelled,
 		ScopeEnded,
 		Timeout,
-		FaultPropagation
+		FaultPropagation,
 	}
 }
 
 [ClosedEnum(DefaultIsInvalid = true)]
 public readonly partial struct CoroUpdatePhase {
 	public enum Case {
-		Update = 1
+		Update = 1,
 	}
 }

@@ -54,7 +54,7 @@ public readonly struct KeyboardState {
 			1 => (keys1 & (1ul << bit)) != 0,
 			2 => (keys2 & (1ul << bit)) != 0,
 			3 => (keys3 & (1ul << bit)) != 0,
-			_ => throw new UnreachableException() // if 0 <= x <= 255 then x >> 6 can't be above 3
+			_ => throw new UnreachableException(), // if 0 <= x <= 255 then x >> 6 can't be above 3
 		};
 	}
 
@@ -131,7 +131,7 @@ public readonly struct GamepadState {
 			GamepadAxis.Case.RightY => RightY,
 			GamepadAxis.Case.LeftTrigger => LeftTrigger,
 			GamepadAxis.Case.RightTrigger => RightTrigger,
-			_ => 0f
+			_ => 0f,
 		};
 	}
 }

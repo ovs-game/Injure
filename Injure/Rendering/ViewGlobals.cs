@@ -37,7 +37,7 @@ public sealed class ViewGlobals : IDisposable {
 		height = h;
 		inited = true;
 		GlobalsUniform uniform = new() {
-			Projection = MatrixUtil.OrthoTopLeft(w, h)
+			Projection = MatrixUtil.OrthoTopLeft(w, h),
 		};
 		device.WriteToBuffer(buffer, 0, uniform);
 	}

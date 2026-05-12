@@ -28,7 +28,7 @@ public readonly partial struct PlanExecutionPath {
 		/// <summary>
 		/// The conversion has no dedicated path and uses the generic fallback converter.
 		/// </summary>
-		GenericKernel
+		GenericKernel,
 	}
 }
 
@@ -71,7 +71,7 @@ public readonly partial struct PlanBackend {
 		/// <summary>
 		/// The conversion uses a non-hardware-vectorized, scalar implementation.
 		/// </summary>
-		Scalar
+		Scalar,
 	}
 }
 

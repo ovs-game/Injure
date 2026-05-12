@@ -10,6 +10,6 @@ public readonly partial struct FrontFace {
 	public enum Case {
 	Undefined = 0,
 		CCW = 1,
-		CW = 2
+		CW = 2,
 	}
 }

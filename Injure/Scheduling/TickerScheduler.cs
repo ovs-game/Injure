@@ -49,7 +49,7 @@ internal sealed class ScheduledTicker {
 		NextAt = options.StartMode.Tag switch {
 			TickerStartMode.Case.FromCommitTime => commitAt + timing.InitialOffset,
 			TickerStartMode.Case.AtAbsoluteTick => options.StartAt,
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 		InsertionOrder = insertionOrder;
 	}
@@ -141,7 +141,7 @@ public sealed class TickerScheduler(in TickerSchedulerOptions options) : ITicker
 	private enum TickerSlotState {
 		Empty,
 		PendingAdd,
-		Active
+		Active,
 	}
 	private sealed class TickerSlot {
 		public required int Generation;
@@ -159,7 +159,7 @@ public sealed class TickerScheduler(in TickerSchedulerOptions options) : ITicker
 	private enum TickerCommandKind {
 		Add,
 		Remove,
-		Retime
+		Retime,
 	}
 	private readonly record struct TickerCommand(
 		TickerCommandKind Kind,

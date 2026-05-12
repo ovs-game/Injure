@@ -80,7 +80,7 @@ public readonly partial struct CanvasScissorKind {
 		/// Intersect the current scissor with the given rectangle. Only valid on
 		/// overrides, not base params.
 		/// </summary>
-		Intersect
+		Intersect,
 	}
 }
 
@@ -172,17 +172,17 @@ public readonly struct CanvasOutputState : IEquatable<CanvasOutputState> {
 public static class CanvasOutputStates {
 	public static readonly CanvasOutputState Opaque = new() {
 		Blend = null,
-		WriteMask = ColorWriteMask.All
+		WriteMask = ColorWriteMask.All,
 	};
 
 	public static readonly CanvasOutputState Alpha = new() {
 		Blend = BlendStates.Alpha,
-		WriteMask = ColorWriteMask.All
+		WriteMask = ColorWriteMask.All,
 	};
 
 	public static readonly CanvasOutputState PremultipliedAlpha = new() {
 		Blend = BlendStates.PremultipliedAlpha,
-		WriteMask = ColorWriteMask.All
+		WriteMask = ColorWriteMask.All,
 	};
 }
 
@@ -216,7 +216,7 @@ public static class CanvasMaterials {
 	/// A material that interprets textures as ordinary color data.
 	/// </summary>
 	public static readonly CanvasMaterial Color = new() {
-		TextureInterpretation = TextureInterpretation.Color
+		TextureInterpretation = TextureInterpretation.Color,
 	};
 
 	/// <summary>
@@ -224,7 +224,7 @@ public static class CanvasMaterials {
 	/// ignores the other channels.
 	/// </summary>
 	public static readonly CanvasMaterial RMask = new() {
-		TextureInterpretation = TextureInterpretation.RMask
+		TextureInterpretation = TextureInterpretation.RMask,
 	};
 
 	/// <summary>
@@ -233,7 +233,7 @@ public static class CanvasMaterials {
 	/// </summary>
 	public static CanvasMaterial SDF(SdfParams @params) => new() {
 		TextureInterpretation = TextureInterpretation.SDF,
-		SdfParams = @params
+		SdfParams = @params,
 	};
 }
 
@@ -264,7 +264,7 @@ public readonly partial struct CanvasSubmitMode {
 		/// Accumulate primitive and textured draws separately, then submit textured draws
 		/// first and primitives second when flushed.
 		/// </summary>
-		TexturesThenPrimitives
+		TexturesThenPrimitives,
 	}
 }
 
@@ -432,7 +432,7 @@ public sealed class Canvas : IDisposable {
 	private enum ActiveBatchType {
 		None,
 		Primitive,
-		Textured
+		Textured,
 	}
 
 	private sealed class ParamsScope(Canvas canvas) : IDisposable {
@@ -1146,9 +1146,9 @@ public sealed class Canvas : IDisposable {
 			CanvasScissorKind.Case.Intersect => curr.Kind.Tag switch {
 				CanvasScissorKind.Case.None => CanvasScissor.Set(s.Rect),
 				CanvasScissorKind.Case.Set => CanvasScissor.Set(intersect(curr.Rect, s.Rect)),
-				_ => throw new UnreachableException()
+				_ => throw new UnreachableException(),
 			},
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 
@@ -1162,7 +1162,7 @@ public sealed class Canvas : IDisposable {
 			CanvasScissorKind.Case.Set => intersect(full, p.Scissor.Rect),
 			CanvasScissorKind.Case.Intersect =>
 				throw new InternalStateException("Intersect scissor made it to applyScissor"),
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 		pass.SetScissorRect((uint)effective.X, (uint)effective.Y, (uint)effective.Width, (uint)effective.Height);
 	}

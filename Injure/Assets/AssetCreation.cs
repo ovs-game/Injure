@@ -27,7 +27,7 @@ public readonly partial struct AssetSourceResultKind {
 		/// <summary>
 		/// The source successfully provided a stream for the requested asset.
 		/// </summary>
-		Success
+		Success,
 	}
 }
 
@@ -91,7 +91,7 @@ public readonly partial struct AssetResolveResultKind {
 		/// <summary>
 		/// The resolver successfully produced asset data for the creation stage.
 		/// </summary>
-		Success
+		Success,
 	}
 }
 
@@ -159,7 +159,7 @@ public readonly partial struct AssetCreateResultKind {
 		/// The creator successfully produced the asset or, for staged creators,
 		/// the prepared data for the finalize stage.
 		/// </summary>
-		Success
+		Success,
 	}
 }
 

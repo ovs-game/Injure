@@ -11,7 +11,7 @@ public readonly record struct TickerTiming(MonoTick Period, MonoTick InitialOffs
 public readonly partial struct TickerOverrunMode {
 	public enum Case {
 		CatchUp = 1,
-		Once
+		Once,
 	}
 }
 
@@ -19,7 +19,7 @@ public readonly partial struct TickerOverrunMode {
 public readonly partial struct TickerStartMode {
 	public enum Case {
 		FromCommitTime = 1,
-		AtAbsoluteTick
+		AtAbsoluteTick,
 	}
 }
 
@@ -27,7 +27,7 @@ public readonly partial struct TickerStartMode {
 public readonly partial struct TickerRetimingMode {
 	public enum Case {
 		KeepPhase = 1,
-		RestartFromCommitTime
+		RestartFromCommitTime,
 	}
 }
 

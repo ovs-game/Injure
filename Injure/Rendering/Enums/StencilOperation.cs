@@ -16,6 +16,6 @@ public readonly partial struct StencilOperation {
 		IncrementClamp = 5,
 		DecrementClamp = 6,
 		IncrementWrap = 7,
-		DecrementWrap = 8
+		DecrementWrap = 8,
 	}
 }

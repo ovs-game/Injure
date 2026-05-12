@@ -18,7 +18,7 @@ public sealed class FullConversionTests {
 		PlanBackend.SSSE3,
 		PlanBackend.SSE2,
 		PlanBackend.AdvSIMD,
-		PlanBackend.Scalar
+		PlanBackend.Scalar,
 	];
 
 	public readonly record struct ConversionCase(
@@ -49,7 +49,7 @@ public sealed class FullConversionTests {
 		new ConversionCase("Packed16To32_RGBA4444_LE_to_BGRA", ReferenceFamily.Packed16To32, PixelFormat.RGBA4444_UNormPack16_LE, PixelFormat.BGRA32_UNorm, new PixelConvertOptions(), 257, 6),
 		new ConversionCase("Packed16To32_BGR565_BE_to_ARGB", ReferenceFamily.Packed16To32, PixelFormat.BGR565_UNormPack16_BE, PixelFormat.ARGB32_UNorm, new PixelConvertOptions { Alpha16UNorm = 0x8181 }, 255, 6),
 		new ConversionCase("Unpacked32ToPacked16_BGRA_to_RGBA4444_BE", ReferenceFamily.Unpacked32ToPacked16, PixelFormat.BGRA32_UNorm, PixelFormat.RGBA4444_UNormPack16_BE, new PixelConvertOptions { Flags = ConversionFlags.AllowNarrowing }, 257, 6),
-		new ConversionCase("Unpacked32ToPacked16_ARGB_to_BGR565_LE", ReferenceFamily.Unpacked32ToPacked16, PixelFormat.ARGB32_UNorm, PixelFormat.BGR565_UNormPack16_LE, new PixelConvertOptions { Flags = ConversionFlags.AllowNarrowing | ConversionFlags.AllowDroppingAlpha }, 255, 6)
+		new ConversionCase("Unpacked32ToPacked16_ARGB_to_BGR565_LE", ReferenceFamily.Unpacked32ToPacked16, PixelFormat.ARGB32_UNorm, PixelFormat.BGR565_UNormPack16_LE, new PixelConvertOptions { Flags = ConversionFlags.AllowNarrowing | ConversionFlags.AllowDroppingAlpha }, 255, 6),
 	};
 
 	[Theory]

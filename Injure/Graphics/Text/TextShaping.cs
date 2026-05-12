@@ -101,7 +101,7 @@ internal sealed class ShapeCache(TextSystem text, int maxEntries, int maxEstimat
 		cache.Add(key, new Entry {
 			Shaped = shaped,
 			LastUseStamp = ++nextUseStamp,
-			EstimatedCost = est
+			EstimatedCost = est,
 		});
 		totalEstimatedCost += est;
 		text.OnCacheActivity();
@@ -153,7 +153,7 @@ internal sealed class ShapeCache(TextSystem text, int maxEntries, int maxEstimat
 			Glyphs = glyphs,
 			SourceOrderClusters = sourceOrderClusters,
 			GlyphOrderClusters = glyphOrderClusters,
-			Width = w
+			Width = w,
 		};
 	}
 

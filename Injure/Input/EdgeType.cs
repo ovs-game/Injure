@@ -8,6 +8,6 @@ namespace Injure.Input;
 public readonly partial struct EdgeType {
 	public enum Case {
 		Press = 1,
-		Release
+		Release,
 	}
 }

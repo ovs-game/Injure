@@ -14,6 +14,6 @@ public readonly partial struct TextureSampleType {
 		UnfilterableFloat = 3,
 		Depth = 4,
 		Sint = 5,
-		Uint = 6
+		Uint = 6,
 	}
 }

@@ -83,7 +83,7 @@ public sealed class LayerStack : IDisposable {
 		PushBottom,
 		Remove,
 		Replace,
-		Clear
+		Clear,
 	}
 
 	private readonly record struct PendingOp(
@@ -385,7 +385,7 @@ public sealed class LayerStack : IDisposable {
 			Ticker = ticker,
 			Runtime = runtime,
 			InputCursor = input.CreateCursor(),
-			Tags = layer.Tags
+			Tags = layer.Tags,
 		};
 
 		if (pushToTop)
@@ -442,7 +442,7 @@ public sealed class LayerStack : IDisposable {
 			Ticker = newTicker,
 			Runtime = newRuntime,
 			InputCursor = input.CreateCursor(),
-			Tags = newLayer.Tags
+			Tags = newLayer.Tags,
 		};
 
 		if (oldTicker != newTicker)

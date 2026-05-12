@@ -33,7 +33,7 @@ public sealed class DirectoryAssetSource(string matchNamespace, string root, Fil
 		Access = FileAccess.Read,
 		Share = FileShare.ReadWrite | FileShare.Delete,
 		Options = FileOptions.Asynchronous | FileOptions.SequentialScan,
-		BufferSize = 64 * 1024
+		BufferSize = 64 * 1024,
 	};
 
 	public ValueTask<AssetSourceResult> TrySourceAsync(AssetSourceInfo info, IAssetDependencyCollector coll, CancellationToken ct = default) {

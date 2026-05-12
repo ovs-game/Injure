@@ -23,7 +23,7 @@ public readonly partial struct AssetReloadFailureStage {
 		/// <summary>
 		/// The reload failed while applying the prepared replacement version.
 		/// </summary>
-		Finalize
+		Finalize,
 	}
 }
 
@@ -42,7 +42,7 @@ public readonly partial struct AssetReloadRequestOrigin {
 		/// <summary>
 		/// The reload was caused by a watcher reporting a change in a published dependency.
 		/// </summary>
-		Dependency
+		Dependency,
 	}
 }
 

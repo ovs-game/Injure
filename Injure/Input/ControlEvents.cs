@@ -12,7 +12,7 @@ namespace Injure.Input;
 public readonly partial struct ButtonActionEventInfoKind {
 	public enum Case {
 		None,
-		Pointer
+		Pointer,
 	}
 }
 
@@ -51,7 +51,7 @@ public readonly struct ButtonActionEventInfo {
 public readonly partial struct ImpulseAxisActionEventInfoKind {
 	public enum Case {
 		None,
-		Pointer
+		Pointer,
 	}
 }
 

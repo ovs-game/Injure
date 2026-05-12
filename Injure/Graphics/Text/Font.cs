@@ -36,7 +36,7 @@ public sealed class Font : IRevokable {
 
 internal enum FontSourceKind {
 	Direct,
-	Asset
+	Asset,
 }
 
 public readonly struct FontSpec {

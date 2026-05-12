@@ -135,7 +135,7 @@ public readonly partial struct PixelFormat {
 		/// RGBA stored as four 5:5:5:1 unsigned normalized channels packed into
 		/// 16 bits in big-endian byte order.
 		/// </summary>
-		RGBA5551_UNormPack16_BE
+		RGBA5551_UNormPack16_BE,
 	}
 }
 
@@ -145,17 +145,17 @@ internal enum PixelFormatFamily : byte {
 	ByteAligned3x8,
 	ByteAligned4x8,
 	ByteAligned4x16,
-	Packed16
+	Packed16,
 }
 
 internal enum PixelNumericKind : byte {
-	UNorm
+	UNorm,
 }
 
 internal enum PixelByteOrder : byte {
 	NotApplicable,
 	LittleEndian,
-	BigEndian
+	BigEndian,
 }
 
 internal readonly struct PixelFormatDesc(

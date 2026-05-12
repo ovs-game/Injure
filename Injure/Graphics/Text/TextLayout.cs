@@ -14,7 +14,7 @@ namespace Injure.Graphics.Text;
 public readonly partial struct TextWrapMode {
 	public enum Case {
 		None,
-		Greedy
+		Greedy,
 	}
 }
 
@@ -23,7 +23,7 @@ public readonly partial struct TextHorizontalAlign {
 	public enum Case {
 		Left,
 		Center,
-		Right
+		Right,
 	}
 }
 
@@ -31,14 +31,14 @@ public readonly partial struct TextHorizontalAlign {
 public readonly partial struct TextOverflowMode {
 	public enum Case {
 		Clip,
-		Ellipsis
+		Ellipsis,
 	}
 }
 
 internal enum LineBreakKind {
 	None,
 	Soft,
-	Hard
+	Hard,
 }
 
 internal readonly record struct LineBreakOpportunity(
@@ -115,7 +115,7 @@ internal sealed class TextLayoutPlan {
 
 internal enum TextLayoutPlanMode {
 	MeasureOnly,
-	GlyphPlan
+	GlyphPlan,
 }
 
 internal static class TextLayouter {
@@ -171,7 +171,7 @@ internal static class TextLayouter {
 			Glyphs = glyphs?.ToArray() ?? Array.Empty<PlannedGlyph>(),
 			Lines = lines.ToArray(),
 			Width = maxLineWidth,
-			Height = lineTopY
+			Height = lineTopY,
 		};
 	}
 
@@ -185,7 +185,7 @@ internal static class TextLayouter {
 			TextHorizontalAlign.Case.Left => 0f,
 			TextHorizontalAlign.Case.Center => free * 0.5f,
 			TextHorizontalAlign.Case.Right => free,
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 

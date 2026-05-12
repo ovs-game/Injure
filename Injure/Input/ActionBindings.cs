@@ -35,7 +35,7 @@ public readonly record struct ImpulseAxisBinding(
 public readonly partial struct StateAxisMergePolicy {
 	public enum Case {
 		MaxAbs = 1,
-		SumClamp
+		SumClamp,
 	}
 }
 
@@ -43,6 +43,6 @@ public readonly partial struct StateAxisMergePolicy {
 public readonly partial struct StateAxis2DMergePolicy {
 	public enum Case {
 		MaxMagnitude = 1,
-		SumClamp
+		SumClamp,
 	}
 }

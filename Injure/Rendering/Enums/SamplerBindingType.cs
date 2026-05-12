@@ -12,6 +12,6 @@ public readonly partial struct SamplerBindingType {
 		Undefined = 1,
 		Filtering = 2,
 		NonFiltering = 3,
-		Comparison = 4
+		Comparison = 4,
 	}
 }

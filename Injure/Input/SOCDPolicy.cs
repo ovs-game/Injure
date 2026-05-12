@@ -11,6 +11,6 @@ public readonly partial struct SOCDPolicy {
 		First,    // oldest still-held wins
 		Neutral,  // both held = 0
 		Positive, // both held = +1
-		Negative  // both held = -1
+		Negative, // both held = -1
 	}
 }

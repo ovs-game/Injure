@@ -14,7 +14,7 @@ namespace Injure.Audio;
 
 public enum SoundPanMode {
 	Balance = ma_pan_mode_balance,
-	Pan = ma_pan_mode_pan
+	Pan = ma_pan_mode_pan,
 }
 
 public sealed unsafe class Sound : ICurrentSampleable<AudioFrame>, IDisposable {

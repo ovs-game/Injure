@@ -16,6 +16,6 @@ public readonly partial struct BackendType {
 		Metal = 5,
 		Vulkan = 6,
 		OpenGL = 7,
-		OpenGLES = 8
+		OpenGLES = 8,
 	}
 }

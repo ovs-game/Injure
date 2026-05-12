@@ -19,7 +19,7 @@ public readonly partial struct EngineResourceSourceResultKind {
 		/// <summary>
 		/// The source successfully provided the requested resource.
 		/// </summary>
-		Success
+		Success,
 	}
 }
 

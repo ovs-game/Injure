@@ -73,12 +73,12 @@ public sealed unsafe class RenderFrame : IDisposable {
 			loadOp = colorOps.LoadOp.ToWebGPUType(),
 			storeOp = colorOps.StoreOp.ToWebGPUType(),
 			clearValue = colorOps.ClearValue.ToWebGPUColor(),
-			depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
+			depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
 		};
 
 		WGPURenderPassDescriptor desc = new() {
 			colorAttachmentCount = 1,
-			colorAttachments = colorAttachments
+			colorAttachments = colorAttachments,
 		};
 
 		if (depthStencilView.IsNotNull) {
@@ -89,7 +89,7 @@ public sealed unsafe class RenderFrame : IDisposable {
 				depthLoadOp = d.LoadOp.ToWebGPUType(),
 				depthStoreOp = d.StoreOp.ToWebGPUType(),
 				depthClearValue = d.ClearValue,
-				depthReadOnly = false
+				depthReadOnly = false,
 			};
 			if (stencilOps is StencilAttachmentOps st) {
 				depthStencilAttachment[0].stencilLoadOp = st.LoadOp.ToWebGPUType();

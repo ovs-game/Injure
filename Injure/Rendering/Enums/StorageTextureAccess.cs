@@ -12,6 +12,6 @@ public readonly partial struct StorageTextureAccess {
 		Undefined = 1,
 		WriteOnly = 2,
 		ReadOnly = 3,
-		ReadWrite = 4
+		ReadWrite = 4,
 	}
 }

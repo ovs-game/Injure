@@ -13,7 +13,7 @@ public readonly partial struct AxisDeadzoneKind {
 	public enum Case {
 		None,
 		Threshold,
-		Scaled
+		Scaled,
 	}
 }
 
@@ -51,7 +51,7 @@ public readonly partial struct Axis2DDeadzoneKind {
 		Radial,
 		ScaledRadial,
 		Axial,
-		ScaledAxial
+		ScaledAxial,
 	}
 }
 
@@ -76,7 +76,7 @@ public readonly record struct Axis2DDeadzone(
 			Axis2DDeadzoneKind.Case.ScaledRadial => applyRadial(v, scaled: true),
 			Axis2DDeadzoneKind.Case.Axial => new Vector2(applyAxis(v.X, scaled: false), applyAxis(v.Y, scaled: false)),
 			Axis2DDeadzoneKind.Case.ScaledAxial => new Vector2(applyAxis(v.X, scaled: true), applyAxis(v.Y, scaled: true)),
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 

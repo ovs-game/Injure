@@ -11,7 +11,7 @@ public readonly partial struct InputButtonSourceKind {
 	public enum Case {
 		Key = 1,
 		GamepadButton,
-		PointerButton
+		PointerButton,
 	}
 }
 
@@ -103,7 +103,7 @@ public readonly struct DigitalAxisSource : IEquatable<DigitalAxisSource> {
 public readonly partial struct InputStateAxisSourceKind {
 	public enum Case {
 		GamepadAxis = 1,
-		DigitalPair
+		DigitalPair,
 	}
 }
 
@@ -142,7 +142,7 @@ public readonly partial struct InputStateAxis2DSourceKind {
 	public enum Case {
 		GamepadStick = 1,
 		DigitalButtons,
-		Pair
+		Pair,
 	}
 }
 
@@ -150,7 +150,7 @@ public readonly partial struct InputStateAxis2DSourceKind {
 public readonly partial struct GamepadStick {
 	public enum Case {
 		Left = 1,
-		Right
+		Right,
 	}
 }
 
@@ -244,14 +244,14 @@ public readonly struct InputStateAxis2DSource : IEquatable<InputStateAxis2DSourc
 public readonly partial struct PointerWheelAxis {
 	public enum Case {
 		X = 1,
-		Y
+		Y,
 	}
 }
 
 [ClosedEnum(DefaultIsInvalid = true)]
 public readonly partial struct InputImpulseAxisSourceKind {
 	public enum Case {
-		PointerWheel = 1
+		PointerWheel = 1,
 	}
 }
 

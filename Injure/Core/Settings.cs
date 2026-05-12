@@ -9,7 +9,7 @@ public readonly partial struct WindowMode {
 	public enum Case {
 		Normal,
 		Minimized,
-		Maximized
+		Maximized,
 	}
 }
 
@@ -18,7 +18,7 @@ public readonly partial struct WindowPositioning {
 	public enum Case {
 		Undefined,
 		Centered,
-		Explicit
+		Explicit,
 	}
 }
 
@@ -39,7 +39,7 @@ public readonly partial struct PresentMode {
 	public enum Case {
 		TearFree = 1,
 		Adaptive,
-		LowLatency
+		LowLatency,
 	}
 }
 
@@ -51,7 +51,7 @@ public readonly record struct RenderSettings(
 public readonly partial struct RenderTimingMode {
 	public enum Case {
 		Capped = 1,
-		Uncapped
+		Uncapped,
 	}
 }
 
@@ -59,7 +59,7 @@ public readonly partial struct RenderTimingMode {
 public readonly partial struct LoopTimingMode {
 	public enum Case {
 		Normal,
-		Uncapped // you probably don't want this unless you really know what you're doing
+		Uncapped, // you probably don't want this unless you really know what you're doing
 	}
 }
 

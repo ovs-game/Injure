@@ -54,7 +54,7 @@ public sealed class LiveText : IDisposable {
 		req = req with {
 			Fonts = fonts ?? req.Fonts,
 			Text = text ?? req.Text,
-			Style = style ?? req.Style
+			Style = style ?? req.Style,
 		};
 		rebuild();
 	}

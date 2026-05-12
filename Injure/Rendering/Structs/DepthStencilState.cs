@@ -42,6 +42,6 @@ public readonly record struct DepthStencilState(
 		stencilWriteMask = StencilWriteMask,
 		depthBias = DepthBias,
 		depthBiasSlopeScale = DepthBiasSlopeScale,
-		depthBiasClamp = DepthBiasClamp
+		depthBiasClamp = DepthBiasClamp,
 	};
 }

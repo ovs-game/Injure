@@ -23,7 +23,7 @@ public enum Texture2DSamplerMode {
 	NearestClamp,
 	LinearClamp,
 	NearestRepeat,
-	LinearRepeat
+	LinearRepeat,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -124,7 +124,7 @@ public sealed class Texture2DAssetCreator(WebGPUDevice gpuDevice) : IAssetStaged
 			Texture2DSamplerMode.LinearClamp => SamplerStates.LinearClamp,
 			Texture2DSamplerMode.NearestRepeat => SamplerStates.NearestRepeat,
 			Texture2DSamplerMode.LinearRepeat => SamplerStates.LinearRepeat,
-			_ => throw new InvalidDataException($"invalid {nameof(Texture2DSamplerMode)} value '{p.Metadata.SamplerMode}'")
+			_ => throw new InvalidDataException($"invalid {nameof(Texture2DSamplerMode)} value '{p.Metadata.SamplerMode}'"),
 		};
 		ReadOnlySpan<byte> src;
 		uint srcStride, w, h;

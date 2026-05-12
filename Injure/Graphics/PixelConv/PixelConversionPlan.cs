@@ -22,7 +22,7 @@ internal enum PlanKind : byte {
 	Packed16To32,
 	Unpacked32ToPacked16,
 
-	Generic
+	Generic,
 }
 
 /// <summary>

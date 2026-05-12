@@ -26,7 +26,7 @@ public readonly record struct FontLineMetrics(
 public readonly partial struct FontRasterMode {
 	public enum Case {
 		Normal,
-		Monochrome
+		Monochrome,
 	}
 }
 
@@ -36,7 +36,7 @@ public readonly partial struct FontHinting {
 		Default,
 		None,
 		Light,
-		Normal
+		Normal,
 	}
 }
 
@@ -313,7 +313,7 @@ internal sealed unsafe class ResolvedFontState : IDisposable {
 			XBearing = checked((int)m.horiBearingX),
 			YBearing = checked((int)m.horiBearingY),
 			Width = checked((int)m.width),
-			Height = checked((int)-m.height)
+			Height = checked((int)-m.height),
 		};
 		return true;
 	}
@@ -324,7 +324,7 @@ internal sealed unsafe class ResolvedFontState : IDisposable {
 		extents = new FontExtents {
 			Ascender = checked((int)m.ascender),
 			Descender = checked((int)m.descender),
-			LineGap = checked((int)(m.height - (m.ascender - m.descender)))
+			LineGap = checked((int)(m.height - (m.ascender - m.descender))),
 		};
 		return true;
 	}

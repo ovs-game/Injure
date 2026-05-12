@@ -14,6 +14,6 @@ public readonly partial struct ShaderStage {
 		None = 0ul,
 		Vertex = 1ul,
 		Fragment = 2ul,
-		Compute = 4ul
+		Compute = 4ul,
 	}
 }

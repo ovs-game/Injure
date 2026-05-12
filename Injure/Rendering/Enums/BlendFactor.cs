@@ -25,6 +25,6 @@ public readonly partial struct BlendFactor {
 		Src1 = 14,
 		OneMinusSrc1 = 15,
 		Src1Alpha = 16,
-		OneMinusSrc1Alpha = 17
+		OneMinusSrc1Alpha = 17,
 	}
 }

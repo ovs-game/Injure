@@ -16,6 +16,6 @@ public readonly partial struct TextureUsage {
 		CopyDst = 2ul,
 		TextureBinding = 4ul,
 		StorageBinding = 8ul,
-		RenderAttachment = 0x10ul
+		RenderAttachment = 0x10ul,
 	}
 }

@@ -23,6 +23,6 @@ public readonly record struct MultisampleState(
 	public WGPUMultisampleState ToWebGPUType() => new() {
 		count = Count,
 		mask = Mask,
-		alphaToCoverageEnabled = AlphaToCoverageEnabled ? WGPUBool.True : WGPUBool.False
+		alphaToCoverageEnabled = AlphaToCoverageEnabled ? WGPUBool.True : WGPUBool.False,
 	};
 }

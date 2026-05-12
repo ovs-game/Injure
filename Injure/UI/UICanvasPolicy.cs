@@ -13,7 +13,7 @@ public readonly partial struct UICanvasMode {
 		Fixed = 1,
 		FixedHeightExpandWidth,
 		FixedWidthExpandHeight,
-		MatchDrawable
+		MatchDrawable,
 	}
 }
 
@@ -21,7 +21,7 @@ public readonly partial struct UICanvasMode {
 public readonly partial struct UICanvasFitMode {
 	public enum Case {
 		Letterbox = 1,
-		Stretch
+		Stretch,
 	}
 }
 
@@ -29,7 +29,7 @@ public readonly partial struct UICanvasFitMode {
 public readonly partial struct UICanvasScaleMode {
 	public enum Case {
 		Fractional = 1,
-		Integer
+		Integer,
 	}
 }
 

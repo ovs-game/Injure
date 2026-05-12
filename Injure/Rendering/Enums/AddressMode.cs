@@ -11,6 +11,6 @@ public readonly partial struct AddressMode {
 		Undefined = 0,
 		ClampToEdge = 1,
 		Repeat = 2,
-		MirrorRepeat = 3
+		MirrorRepeat = 3,
 	}
 }

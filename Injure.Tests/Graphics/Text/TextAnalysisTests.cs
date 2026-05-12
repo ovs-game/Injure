@@ -12,7 +12,7 @@ public sealed class TextAnalysisTests {
 		{ "ab", new[] { (0, 1), (1, 1) } },
 		{ "e\u0301", new[] { (0, 2) } },
 		{ "A\u030A", new[] { (0, 2) } },
-		{ "x\r\ny", new[] { (0, 1), (1, 2), (3, 1) } }
+		{ "x\r\ny", new[] { (0, 1), (1, 2), (3, 1) } },
 	};
 
 	[Theory]

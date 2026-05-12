@@ -357,7 +357,7 @@ public sealed class ActionContext(ActionProfile profile) {
 		return source.Kind.Tag switch {
 			InputStateAxisSourceKind.Case.GamepadAxis => getAnyGamepadAxis(raw.Gamepads, source.GamepadAxisValue),
 			InputStateAxisSourceKind.Case.DigitalPair => getDigitalAxisValue(source.DigitalValue),
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 
@@ -366,7 +366,7 @@ public sealed class ActionContext(ActionProfile profile) {
 			InputStateAxis2DSourceKind.Case.GamepadStick => getAnyGamepadStick(raw.Gamepads, source.GamepadStickValue),
 			InputStateAxis2DSourceKind.Case.DigitalButtons => getDigital2D(source.DigitalValue),
 			InputStateAxis2DSourceKind.Case.Pair => getPair2D(raw, source.PairValue),
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 
@@ -401,7 +401,7 @@ public sealed class ActionContext(ActionProfile profile) {
 			SOCDPolicy.Case.Neutral => 0f,
 			SOCDPolicy.Case.Positive => 1f,
 			SOCDPolicy.Case.Negative => -1f,
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 
@@ -426,7 +426,7 @@ public sealed class ActionContext(ActionProfile profile) {
 			InputButtonSourceKind.Case.Key => raw.Keyboard.IsDown(source.KeyValue),
 			InputButtonSourceKind.Case.PointerButton => raw.Pointer.IsDown(source.PointerButtonValue),
 			InputButtonSourceKind.Case.GamepadButton => anyGamepadButtonDown(raw.Gamepads, source.GamepadButtonValue),
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 
@@ -464,7 +464,7 @@ public sealed class ActionContext(ActionProfile profile) {
 		return policy.Tag switch {
 			StateAxisMergePolicy.Case.MaxAbs => MathF.Abs(b) > MathF.Abs(a) ? b : a,
 			StateAxisMergePolicy.Case.SumClamp => Math.Clamp(a + b, -1f, 1f),
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 
@@ -472,7 +472,7 @@ public sealed class ActionContext(ActionProfile profile) {
 		return policy.Tag switch {
 			StateAxis2DMergePolicy.Case.MaxMagnitude => b.LengthSquared() > a.LengthSquared() ? b : a,
 			StateAxis2DMergePolicy.Case.SumClamp => clampMag1(a + b),
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 

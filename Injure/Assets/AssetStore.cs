@@ -560,7 +560,7 @@ public sealed class AssetStore {
 				AssetCreateResultKind.Case.Success => UntypedCreateResult.Success(new DirectPendingAssetValue<T>(
 					result.Value ?? throw new AssetLoadException(info.AssetID, typeof(T), "asset creator returned Success but didn't set Value")
 				)),
-				_ => throw new UnreachableException()
+				_ => throw new UnreachableException(),
 			};
 		}
 	}
@@ -576,7 +576,7 @@ public sealed class AssetStore {
 				AssetCreateResultKind.Case.Success => UntypedCreateResult.Success(new StagedPendingAssetValue<T, TPrepared>(creator,
 					result.Prepared ?? throw new AssetLoadException(info.AssetID, typeof(T), "asset staged creator returned Success but didn't set Prepared")
 				)),
-				_ => throw new UnreachableException()
+				_ => throw new UnreachableException(),
 			};
 		}
 	}
@@ -1016,7 +1016,7 @@ public sealed class AssetStore {
 				reg = new OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>();
 				id = reg.Register(ent);
 				Dictionary<Type, OwnerOrderedRegistry<IUntypedAssetDependencyWatcher>> @new = new(old) {
-					[typeof(T)] = reg
+					[typeof(T)] = reg,
 				};
 				Volatile.Write(ref watchers, @new);
 			}

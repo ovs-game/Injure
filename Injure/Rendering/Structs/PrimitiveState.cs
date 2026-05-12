@@ -33,6 +33,6 @@ public readonly record struct PrimitiveState(
 		stripIndexFormat = StripIndexFormat.ToWebGPUType(),
 		frontFace = FrontFace.ToWebGPUType(),
 		cullMode = CullMode.ToWebGPUType(),
-		unclippedDepth = UnclippedDepth ? WGPUBool.True : WGPUBool.False
+		unclippedDepth = UnclippedDepth ? WGPUBool.True : WGPUBool.False,
 	};
 }

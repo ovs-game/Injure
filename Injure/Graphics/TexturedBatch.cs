@@ -38,7 +38,7 @@ public readonly partial struct TextureInterpretation {
 		/// parameter will also expose some way to pass in a <see cref="SdfParams"/> struct,
 		/// as setting those parameters is required for this interpretation mode.
 		/// </remarks>
-		SDF
+		SDF,
 	}
 }
 
@@ -94,7 +94,7 @@ public sealed class TexturedBatchSharedState : IDisposable {
 			TextureInterpretation.Case.Color => BuiltinShaders.Textured2DColor,
 			TextureInterpretation.Case.RMask => BuiltinShaders.Textured2DRMask,
 			TextureInterpretation.Case.SDF => BuiltinShaders.Textured2DSDF,
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 		_shader = device.CreateShaderModuleWGSL(engineResources.GetText(shaderInfo.ResourceID));
 		if (interp != TextureInterpretation.SDF)
@@ -104,7 +104,7 @@ public sealed class TexturedBatchSharedState : IDisposable {
 		_pipelineLayout = device.CreatePipelineLayout([
 			device.StdGlobalsUniformLayout,
 			_localsBindGroupLayout,
-			device.StdColorTexture2DLayout
+			device.StdColorTexture2DLayout,
 		]);
 		_pipeline = device.CreateRenderPipeline(new GPURenderPipelineCreateParams(
 			Layout: PipelineLayout,
@@ -130,9 +130,9 @@ public sealed class TexturedBatchSharedState : IDisposable {
 								Format: VertexFormat.Unorm8x4,
 								Offset: 16,
 								ShaderLocation: 2
-							)
+							),
 						]
-					)
+					),
 				]
 			),
 			Fragment: new FragmentState(
@@ -143,7 +143,7 @@ public sealed class TexturedBatchSharedState : IDisposable {
 						Format: colorTargetFormat,
 						Blend: blend,
 						WriteMask: colorWriteMask
-					)
+					),
 				]
 			),
 			Primitive: new PrimitiveState(
@@ -210,7 +210,7 @@ public sealed class TexturedBatch : IDisposable {
 
 		if (shared.TextureInterpretation != TextureInterpretation.SDF) {
 			TexturedBatchLocalsUniformPlain l = new() {
-				Transform = MatrixUtil.To4x4(@params.Transform)
+				Transform = MatrixUtil.To4x4(@params.Transform),
 			};
 			localsUniformBuffer = device.CreateBuffer((ulong)TexturedBatchLocalsUniformPlain.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
 			device.WriteToBuffer(localsUniformBuffer, 0, in l);
@@ -223,7 +223,7 @@ public sealed class TexturedBatch : IDisposable {
 				EdgeValue = p.EdgeValue,
 				SoftnessPixels = p.SoftnessPixels,
 				OutlineWidthPixels = p.OutlineWidthPixels,
-				OutlineColor = p.OutlineColor.ToVector4()
+				OutlineColor = p.OutlineColor.ToVector4(),
 			};
 			localsUniformBuffer = device.CreateBuffer((ulong)TexturedBatchLocalsUniformSDF.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
 			device.WriteToBuffer(localsUniformBuffer, 0, in l);
@@ -278,7 +278,7 @@ public sealed class TexturedBatch : IDisposable {
 				Identity = tex.Identity,
 				BindGroup = tex.BindGroup,
 				FirstIndex = (uint)icount,
-				IndexCount = idxcount
+				IndexCount = idxcount,
 			};
 	}
 

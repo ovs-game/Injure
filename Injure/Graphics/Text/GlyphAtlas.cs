@@ -185,7 +185,7 @@ internal sealed unsafe class GlyphAtlas(WebGPUDevice gpuDevice, TextSystem text,
 			Height = pageHeight,
 			WriteX = 0,
 			WriteY = 0,
-			RowHeight = 0
+			RowHeight = 0,
 		};
 		pages.Add(page);
 		return page;

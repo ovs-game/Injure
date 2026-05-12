@@ -33,7 +33,7 @@ public sealed class CoroutineScheduler {
 	private enum PendingControlAction {
 		None,
 		Pause,
-		Resume
+		Resume,
 	}
 
 	private sealed class CoroutineInstance {
@@ -217,7 +217,7 @@ public sealed class CoroutineScheduler {
 			Scope = scope,
 			Options = options,
 			Status = CoroutineStatus.Running,
-			StartTick = tick
+			StartTick = tick,
 		};
 		string debugName = options.Name ?? enumDebugName(routine) ?? CoroNameCleanup.Clean(routine.GetType().Name);
 		inst.StackPush(routine, debugName,
@@ -548,7 +548,7 @@ public sealed class CoroutineScheduler {
 			Instance = null,
 			TerminalInfo = null,
 			TerminalTrace = null,
-			RetainCount = 0
+			RetainCount = 0,
 		});
 		return new CoroutineHandle(slots.Count - 1, 1);
 	}
@@ -578,7 +578,7 @@ public sealed class CoroutineScheduler {
 			StackDepth = inst.StackDepth,
 			CurrentWaitDebugDescription = desc,
 			Fault = inst.Fault,
-			CancellationReason = inst.CancellationReason
+			CancellationReason = inst.CancellationReason,
 		};
 	}
 
@@ -591,7 +591,7 @@ public sealed class CoroutineScheduler {
 				EnumeratorTypeName = frame.Enumerator.GetType().FullName ?? "<null>",
 				SourceFile = frame.SourceFile,
 				SourceLine = frame.SourceLine,
-				SourceMember = frame.SourceMember
+				SourceMember = frame.SourceMember,
 			};
 		}
 		string? desc = getDebugWaitDesc(inst);
@@ -603,7 +603,7 @@ public sealed class CoroutineScheduler {
 			Name = name,
 			ScopeName = inst.Scope?.Name,
 			CurrentWaitDebugDescription = desc,
-			Frames = frames
+			Frames = frames,
 		};
 	}
 
@@ -813,7 +813,7 @@ public sealed class CoroutineScheduler {
 			pendingUnhandledFaults.Add(new CoroutineUnhandledFaultInfo {
 				Exception = ex,
 				Info = makeInfo(inst),
-				Trace = inst.PreservedTerminalTrace
+				Trace = inst.PreservedTerminalTrace,
 			});
 		}
 		requestReap(inst.Handle.Slot);

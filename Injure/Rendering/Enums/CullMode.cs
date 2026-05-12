@@ -11,6 +11,6 @@ public readonly partial struct CullMode {
 		Undefined = 0,
 		None = 1,
 		Front = 2,
-		Back = 3
+		Back = 3,
 	}
 }

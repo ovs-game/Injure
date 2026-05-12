@@ -38,7 +38,7 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 		_localsBindGroupLayout = device.CreateUniformBufferBindGroupLayout(ShaderStage.Vertex, (ulong)PrimitiveBatchLocalsUniform.Size);
 		_pipelineLayout = device.CreatePipelineLayout([
 			device.StdGlobalsUniformLayout,
-			_localsBindGroupLayout
+			_localsBindGroupLayout,
 		]);
 		_pipeline = device.CreateRenderPipeline(new GPURenderPipelineCreateParams(
 			Layout: PipelineLayout,
@@ -59,9 +59,9 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 								Format: VertexFormat.Unorm8x4,
 								Offset: 8,
 								ShaderLocation: 1
-							)
+							),
 						]
-					)
+					),
 				]
 			),
 			Fragment: new FragmentState(
@@ -72,7 +72,7 @@ public sealed class PrimitiveBatchSharedState : IDisposable {
 						Format: colorTargetFormat,
 						Blend: blend,
 						WriteMask: colorWriteMask
-					)
+					),
 				]
 			),
 			Primitive: new PrimitiveState(
@@ -129,7 +129,7 @@ public sealed class PrimitiveBatch : IDisposable {
 
 		localsUniformBuffer = device.CreateBuffer((ulong)PrimitiveBatchLocalsUniform.Size, BufferUsage.Uniform | BufferUsage.CopyDst);
 		PrimitiveBatchLocalsUniform l = new() {
-			Transform = MatrixUtil.To4x4(@params.Transform)
+			Transform = MatrixUtil.To4x4(@params.Transform),
 		};
 		device.WriteToBuffer(localsUniformBuffer, 0, in l);
 		localsUniformBindGroup = device.CreateUniformBufferBindGroup(shared.LocalsBindGroupLayout, localsUniformBuffer);

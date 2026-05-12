@@ -18,7 +18,7 @@ public enum ReferenceFamily {
 	Widen32To64,
 	Narrow64To32,
 	Packed16To32,
-	Unpacked32ToPacked16
+	Unpacked32ToPacked16,
 }
 
 public static class ReferenceConverter {
@@ -64,7 +64,7 @@ public static class ReferenceConverter {
 			ReferenceFamily.Narrow64To32 => Narrow64To32(src, srcStride, srcFmt, dstFmt, width, height, opts.Alpha16UNorm, opts.OverrideAlpha),
 			ReferenceFamily.Packed16To32 => Packed16To32(src, srcStride, srcFmt, dstFmt, width, height, opts.Alpha16UNorm, opts.OverrideAlpha),
 			ReferenceFamily.Unpacked32ToPacked16 => Unpacked32ToPacked16(src, srcStride, srcFmt, dstFmt, width, height, opts.Alpha16UNorm, opts.OverrideAlpha),
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 
@@ -318,7 +318,7 @@ public static class ReferenceConverter {
 		PixelFormat.Case.RGB24_UNorm => new(0, 1, 2),
 		PixelFormat.Case.BGR24_UNorm => new(2, 1, 0),
 
-		_ => throw new ArgumentOutOfRangeException(nameof(fmt))
+		_ => throw new ArgumentOutOfRangeException(nameof(fmt)),
 	};
 
 	private static RGBA32Layout rgba32LayoutFor(PixelFormat fmt) => fmt.Tag switch {
@@ -327,7 +327,7 @@ public static class ReferenceConverter {
 		PixelFormat.Case.ARGB32_UNorm => new(1, 2, 3, 0),
 		PixelFormat.Case.ABGR32_UNorm => new(3, 2, 1, 0),
 
-		_ => throw new ArgumentOutOfRangeException(nameof(fmt))
+		_ => throw new ArgumentOutOfRangeException(nameof(fmt)),
 	};
 
 	private static RGBA64Layout rgba64LayoutFor(PixelFormat fmt) => fmt.Tag switch {
@@ -341,7 +341,7 @@ public static class ReferenceConverter {
 		PixelFormat.Case.ARGB64_UNorm_BE => new(1, 2, 3, 0, true),
 		PixelFormat.Case.ABGR64_UNorm_BE => new(3, 2, 1, 0, true),
 
-		_ => throw new ArgumentOutOfRangeException(nameof(fmt))
+		_ => throw new ArgumentOutOfRangeException(nameof(fmt)),
 	};
 
 	private static Packed16Layout packed16LayoutFor(PixelFormat fmt) => fmt.Tag switch {
@@ -353,7 +353,7 @@ public static class ReferenceConverter {
 		PixelFormat.Case.RGBA4444_UNormPack16_BE => new(4, 4, 4, 4, 12, 8, 4, 0, true),
 		PixelFormat.Case.RGBA5551_UNormPack16_BE => new(5, 5, 5, 1, 11, 6, 1, 0, true),
 
-		_ => throw new ArgumentOutOfRangeException(nameof(fmt))
+		_ => throw new ArgumentOutOfRangeException(nameof(fmt)),
 	};
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

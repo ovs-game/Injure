@@ -49,6 +49,6 @@ public readonly partial struct VertexFormat {
 		Sint32x3 = 38,
 		Sint32x4 = 39,
 		Unorm1010102 = 40,
-		Unorm8x4BGRA = 41
+		Unorm8x4BGRA = 41,
 	}
 }

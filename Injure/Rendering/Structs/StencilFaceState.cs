@@ -24,6 +24,6 @@ public readonly record struct StencilFaceState(
 		compare = Compare.ToWebGPUType(),
 		failOp = FailOp.ToWebGPUType(),
 		depthFailOp = DepthFailOp.ToWebGPUType(),
-		passOp = PassOp.ToWebGPUType()
+		passOp = PassOp.ToWebGPUType(),
 	};
 }

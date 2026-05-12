@@ -18,6 +18,6 @@ public readonly record struct BlendState(
 	/// </summary>
 	public WGPUBlendState ToWebGPUType() => new() {
 		color = Color.ToWebGPUType(),
-		alpha = Alpha.ToWebGPUType()
+		alpha = Alpha.ToWebGPUType(),
 	};
 }

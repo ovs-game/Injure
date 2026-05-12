@@ -26,7 +26,7 @@ public readonly record struct ColorTargetState(
 	public unsafe WGPUColorTargetState ToWebGPUType(WGPUBlendState *blendStorage) {
 		WGPUColorTargetState ret = new() {
 			format = Format.ToWebGPUType(),
-			writeMask = WriteMask.ToWebGPUType()
+			writeMask = WriteMask.ToWebGPUType(),
 		};
 		if (Blend is BlendState b) {
 			*blendStorage = b.ToWebGPUType();

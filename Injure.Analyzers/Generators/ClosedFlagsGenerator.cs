@@ -287,7 +287,7 @@ public sealed class ClosedFlagsGenerator : IIncrementalGenerator {
 	private static string accessibility(INamedTypeSymbol sym) => sym.DeclaredAccessibility switch {
 		Accessibility.Public => "public ",
 		Accessibility.Internal => "internal ",
-		_ => ""
+		_ => "",
 	};
 
 	private static string escapeIdentifier(string name) => SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None ||

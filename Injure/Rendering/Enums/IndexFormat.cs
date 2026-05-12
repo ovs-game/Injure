@@ -10,6 +10,6 @@ public readonly partial struct IndexFormat {
 	public enum Case {
 		Undefined = 0,
 		Uint16 = 1,
-		Uint32 = 2
+		Uint32 = 2,
 	}
 }

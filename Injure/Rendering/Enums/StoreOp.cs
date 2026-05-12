@@ -10,6 +10,6 @@ public readonly partial struct StoreOp {
 	public enum Case {
 		Undefined = 0,
 		Store = 1,
-		Discard = 2
+		Discard = 2,
 	}
 }

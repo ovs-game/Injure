@@ -15,7 +15,7 @@ public sealed class FrozenSnapshotTwoWayMap<TLeft, TRight> : ITwoWayMap<TLeft, T
 	private readonly ref struct PairSource {
 		private enum Kind : byte {
 			PairSpan,
-			SplitSpans
+			SplitSpans,
 		}
 		private readonly ReadOnlySpan<(TLeft Left, TRight Right)> pairs;
 		private readonly ReadOnlySpan<TLeft> lefts;

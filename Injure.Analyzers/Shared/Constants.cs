@@ -26,7 +26,7 @@ internal static class Constants {
 		"Noop",
 		"NoOp",
 		"Ignore",
-		"Ignored"
+		"Ignored",
 	}.ToFrozenSet(StringComparer.Ordinal);
 	public static readonly ImmutableArray<string> ClosedTypeNeutralZeroPrefixes = ImmutableArray.Create(
 		"No",
@@ -45,7 +45,7 @@ internal static class Constants {
 		"GetHashCode",
 		"ToString",
 		ClosedEnumBackingFieldName,
-		ClosedEnumIsDefinedMethodName
+		ClosedEnumIsDefinedMethodName,
 	}.ToFrozenSet(StringComparer.Ordinal);
 
 	public const string ClosedFlagsGeneratedSourceSuffix = ".ClosedFlags.g.cs";
@@ -66,7 +66,7 @@ internal static class Constants {
 		ClosedFlagsBackingFieldName,
 		ClosedFlagsAllBitsConstName,
 		ClosedFlagsIsDefinedMethodName,
-		ClosedFlagsValidateMethodName
+		ClosedFlagsValidateMethodName,
 	}.ToFrozenSet(StringComparer.Ordinal);
 
 	public const string StronglyTypedIntGeneratedSourceSuffix = ".StronglyTypedInt.g.cs";

@@ -144,7 +144,7 @@ internal sealed class FallbackProbeCache(TextSystem text, int maxEntries, int ma
 		cache[key] = new Entry {
 			FontIndex = fontIndex,
 			LastUseStamp = ++nextUseStamp,
-			EstimatedCost = est
+			EstimatedCost = est,
 		};
 		totalEstimatedCost += est;
 		text.OnCacheActivity();
@@ -211,7 +211,7 @@ internal sealed class FallbackResolver(ShapeCache shapeCache, FallbackProbeCache
 			(int start, int limit, int fontIndex) = spans[i];
 			TextItem mergedItem = item with {
 				SourceStart = item.SourceStart + start,
-				Text = item.Text[start..limit]
+				Text = item.Text[start..limit],
 			};
 			IResolvedFont font = fonts.AllFonts[fontIndex];
 			ShapedRun shapedRun = shapeCache.GetOrCreate(font, mergedItem);
@@ -237,7 +237,7 @@ internal sealed class FallbackResolver(ShapeCache shapeCache, FallbackProbeCache
 			return fontidx;
 		TextItem graphemeItem = parentItem with {
 			SourceStart = parentItem.SourceStart + grapheme.Start,
-			Text = parentItem.Text.Substring(grapheme.Start, grapheme.Length)
+			Text = parentItem.Text.Substring(grapheme.Start, grapheme.Length),
 		};
 		for (int i = 0; i < fonts.AllFonts.Length; i++) {
 			if (noNotdefs(shapeCache.GetOrCreate(fonts.AllFonts[i], graphemeItem))) {

@@ -13,6 +13,6 @@ public readonly partial struct BlendOperation {
 		Subtract = 2,
 		ReverseSubtract = 3,
 		Min = 4,
-		Max = 5
+		Max = 5,
 	}
 }

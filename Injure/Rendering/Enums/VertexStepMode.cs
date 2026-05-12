@@ -11,6 +11,6 @@ public readonly partial struct VertexStepMode {
 		VertexBufferNotUsed = 0,
 		Undefined = 1,
 		Vertex = 2,
-		Instance = 3
+		Instance = 3,
 	}
 }

@@ -19,7 +19,7 @@ public readonly partial struct UIAnchor {
 		Right,
 		BottomLeft,
 		Bottom,
-		BottomRight
+		BottomRight,
 	}
 }
 
@@ -28,7 +28,7 @@ public readonly partial struct UISizingMode {
 	public enum Case {
 		Auto = 1,
 		Explicit,
-		Fill
+		Fill,
 	}
 }
 

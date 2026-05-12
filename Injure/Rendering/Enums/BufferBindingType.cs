@@ -12,6 +12,6 @@ public readonly partial struct BufferBindingType {
 		Undefined = 1,
 		Uniform = 2,
 		Storage = 3,
-		ReadOnlyStorage = 4
+		ReadOnlyStorage = 4,
 	}
 }

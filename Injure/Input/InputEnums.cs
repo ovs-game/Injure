@@ -78,7 +78,7 @@ public readonly partial struct Key {
 		LeftGui,
 		RightGui,
 
-		Application
+		Application,
 	}
 }
 
@@ -89,7 +89,7 @@ public readonly partial struct GamepadAxis {
 
 		LeftX, LeftY,
 		RightX, RightY,
-		LeftTrigger, RightTrigger
+		LeftTrigger, RightTrigger,
 	}
 }
 
@@ -107,7 +107,7 @@ public readonly partial struct GamepadButton {
 		// situational but why not
 		Misc1,
 		RightPaddle1, LeftPaddle1, RightPaddle2, LeftPaddle2,
-		Touchpad
+		Touchpad,
 	}
 }
 
@@ -120,6 +120,6 @@ public readonly partial struct PointerButton {
 		Right,
 		Middle,
 		X1,
-		X2
+		X2,
 	}
 }

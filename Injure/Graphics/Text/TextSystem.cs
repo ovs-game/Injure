@@ -111,7 +111,7 @@ public sealed unsafe class TextSystem : IDisposable {
 		return spec.SourceKind switch {
 			FontSourceKind.Direct => ResolveFont(spec.Direct, spec.FaceIndex, opts),
 			FontSourceKind.Asset => ResolveFont(spec.Asset, spec.FaceIndex, opts),
-			_ => throw new UnreachableException()
+			_ => throw new UnreachableException(),
 		};
 	}
 
@@ -186,7 +186,7 @@ public sealed unsafe class TextSystem : IDisposable {
 			}
 			lines[lineIndex] = plannedLine with {
 				GlyphStart = materializedStart,
-				GlyphCount = glyphs.Count - materializedStart
+				GlyphCount = glyphs.Count - materializedStart,
 			};
 		}
 

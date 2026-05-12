@@ -38,7 +38,7 @@ public sealed class TextLayoutTests {
 					new ParagraphCluster(0, 1, 0, 1, 10, false, LineBreakKind.None),
 					new ParagraphCluster(1, 1, 1, 1, 10, false, LineBreakKind.None),
 				],
-				GlyphOrderClusters = null!
+				GlyphOrderClusters = null!,
 			},
 			new ParagraphRun {
 				Font = null!,
@@ -47,8 +47,8 @@ public sealed class TextLayoutTests {
 				SourceOrderClusters = [
 					new ParagraphCluster(0, 1, 2, 1, 10, false, LineBreakKind.None),
 				],
-				GlyphOrderClusters = null!
-			}
+				GlyphOrderClusters = null!,
+			},
 		];
 		ParagraphCluster[] flat = TextLayouter.FlattenSourceOrderClusters(runs);
 		Assert.Equal(3, flat.Length);

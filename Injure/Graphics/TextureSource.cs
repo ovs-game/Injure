@@ -12,7 +12,7 @@ namespace Injure.Graphics;
 internal enum TextureSourceKind {
 	Texture2D,
 	RenderTarget2D,
-	Texture2DAssetRef
+	Texture2DAssetRef,
 }
 
 public readonly struct TextureSource : IEquatable<TextureSource> {
@@ -42,14 +42,14 @@ public readonly struct TextureSource : IEquatable<TextureSource> {
 		TextureSourceKind.Texture2D => new ResolvedTextureSource((Texture2D)val),
 		TextureSourceKind.RenderTarget2D => new ResolvedTextureSource((RenderTarget2D)val),
 		TextureSourceKind.Texture2DAssetRef => new ResolvedTextureSource(((AssetRef<Texture2D>)val).Borrow()),
-		_ => throw new UnreachableException()
+		_ => throw new UnreachableException(),
 	};
 }
 
 internal enum ResolvedTextureSourceKind {
 	Texture2D,
 	RenderTarget2D,
-	LeasedTexture2D
+	LeasedTexture2D,
 }
 
 internal readonly ref struct ResolvedTextureSource {
@@ -78,26 +78,26 @@ internal readonly ref struct ResolvedTextureSource {
 		ResolvedTextureSourceKind.Texture2D => texture!.Width,
 		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!.Width,
 		ResolvedTextureSourceKind.LeasedTexture2D => lease.Value.Width,
-		_ => throw new UnreachableException()
+		_ => throw new UnreachableException(),
 	};
 	public uint Height => Kind switch {
 		ResolvedTextureSourceKind.Texture2D => texture!.Height,
 		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!.Height,
 		ResolvedTextureSourceKind.LeasedTexture2D => lease.Value.Height,
-		_ => throw new UnreachableException()
+		_ => throw new UnreachableException(),
 	};
 	public GPUBindGroupRef BindGroup => Kind switch {
 		ResolvedTextureSourceKind.Texture2D => texture!.BindGroup,
 		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!.ColorBindGroup,
 		ResolvedTextureSourceKind.LeasedTexture2D => lease.Value.BindGroup,
-		_ => throw new UnreachableException()
+		_ => throw new UnreachableException(),
 	};
 
 	public object Identity => Kind switch {
 		ResolvedTextureSourceKind.Texture2D => texture!,
 		ResolvedTextureSourceKind.RenderTarget2D => renderTarget!,
 		ResolvedTextureSourceKind.LeasedTexture2D => lease.Value,
-		_ => throw new UnreachableException()
+		_ => throw new UnreachableException(),
 	};
 
 	// comparing color textures only is enough since every render target has its own one

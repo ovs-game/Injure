@@ -10,6 +10,6 @@ public readonly partial struct LoadOp {
 	public enum Case {
 		Undefined = 0,
 		Load = 1,
-		Clear = 2
+		Clear = 2,
 	}
 }

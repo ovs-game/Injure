@@ -10,6 +10,6 @@ public readonly partial struct FilterMode {
 	public enum Case {
 		Undefined = 0,
 		Nearest = 1,
-		Linear = 2
+		Linear = 2,
 	}
 }

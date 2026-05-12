@@ -13,6 +13,6 @@ public readonly partial struct PrimitiveTopology {
 		LineList = 2,
 		LineStrip = 3,
 		TriangleList = 4,
-		TriangleStrip = 5
+		TriangleStrip = 5,
 	}
 }

@@ -68,7 +68,7 @@ public sealed class ActionMapBuilder {
 		ArgumentNullException.ThrowIfNull(snapshot);
 		ActionMapBuilder b = new() {
 			StateAxisMergePolicy = snapshot.StateAxisMergePolicy,
-			StateAxis2DMergePolicy = snapshot.StateAxis2DMergePolicy
+			StateAxis2DMergePolicy = snapshot.StateAxis2DMergePolicy,
 		};
 		b.buttonBindings.AddRange(snapshot.ButtonBindings);
 		b.stateAxisBindings.AddRange(snapshot.StateAxisBindings);

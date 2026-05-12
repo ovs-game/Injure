@@ -168,7 +168,7 @@ public sealed unsafe class SDLWindowController : IWindowController {
 			HasMouseFocus = (flags & SDLWindowFlags.MouseFocus) != 0,
 			X = x,
 			Y = y,
-			UpdatedAt = now
+			UpdatedAt = now,
 		};
 	}
 

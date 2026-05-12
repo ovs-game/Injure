@@ -99,6 +99,6 @@ internal static unsafe class KernelRegistry {
 		new KernelFallbackChain(null, null, null, null, &ScalarKernels.Packed16To32),
 		new KernelFallbackChain(null, null, null, null, &ScalarKernels.Unpacked32ToPacked16),
 
-		new KernelFallbackChain(null, null, null, null, &ScalarKernels.Generic)
+		new KernelFallbackChain(null, null, null, null, &ScalarKernels.Generic),
 	];
 }

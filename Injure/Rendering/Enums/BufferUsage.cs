@@ -21,6 +21,6 @@ public readonly partial struct BufferUsage {
 		Uniform = 0x40ul,
 		Storage = 0x80ul,
 		Indirect = 0x100ul,
-		QueryResolve = 0x200ul
+		QueryResolve = 0x200ul,
 	}
 }

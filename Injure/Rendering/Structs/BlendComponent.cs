@@ -21,6 +21,6 @@ public readonly record struct BlendComponent(
 	public WGPUBlendComponent ToWebGPUType() => new() {
 		operation = Operation.ToWebGPUType(),
 		srcFactor = SrcFactor.ToWebGPUType(),
-		dstFactor = DstFactor.ToWebGPUType()
+		dstFactor = DstFactor.ToWebGPUType(),
 	};
 }

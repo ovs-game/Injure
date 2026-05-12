@@ -197,7 +197,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 					Type: BufferBindingType.Uniform,
 					MinBindingSize: (ulong)sizeof(GlobalsUniform)
 				)
-			)
+			),
 		]);
 		StdGlobalsUniformLayout = globalsUniformBindGroupLayout.AsRef();
 
@@ -217,7 +217,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				Layout: new GPUSamplerBindingLayout(
 					Type: SamplerBindingType.Filtering
 				)
-			)
+			),
 		]);
 		StdColorTexture2DLayout = colorTex2DBindGroupLayout.AsRef();
 
@@ -237,7 +237,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				Layout: new GPUSamplerBindingLayout(
 					Type: SamplerBindingType.Filtering
 				)
-			)
+			),
 		]);
 		StdFilteringDepthTexture2DLayout = filteringDepthTex2DBindGroupLayout.AsRef();
 
@@ -257,7 +257,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				Layout: new GPUSamplerBindingLayout(
 					Type: SamplerBindingType.Comparison
 				)
-			)
+			),
 		]);
 		StdComparisonDepthTexture2DLayout = comparisonDepthTex2DBindGroupLayout.AsRef();
 	}
@@ -272,12 +272,12 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			WGPURequestAdapterOptions opts = new() {
 				compatibleSurface = compatibleSurface,
 				powerPreference = powerPreference,
-				backendType = backendType
+				backendType = backendType,
 			};
 			WGPURequestAdapterCallbackInfo cb = new() {
 				mode = WGPUCallbackMode.AllowSpontaneous,
 				callback = &adapterRequestCallback,
-				userdata1 = (void *)GCHandle.ToIntPtr(h)
+				userdata1 = (void *)GCHandle.ToIntPtr(h),
 			};
 			WGPUFuture future = wgpuInstanceRequestAdapter(instance, &opts, cb);
 			req.Done.Wait();
@@ -310,13 +310,13 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				deviceLostCallbackInfo = new WGPUDeviceLostCallbackInfo {
 					mode = WGPUCallbackMode.AllowSpontaneous,
 					callback = &deviceLostCallback,
-					userdata1 = (void *)GCHandle.ToIntPtr(stHandle)
-				}
+					userdata1 = (void *)GCHandle.ToIntPtr(stHandle),
+				},
 			};
 			WGPURequestDeviceCallbackInfo cb = new() {
 				mode = WGPUCallbackMode.AllowSpontaneous,
 				callback = &deviceRequestCallback,
-				userdata1 = (void *)GCHandle.ToIntPtr(reqHandle)
+				userdata1 = (void *)GCHandle.ToIntPtr(reqHandle),
 			};
 			WGPUFuture future = wgpuAdapterRequestDevice(adapter, &desc, cb);
 			req.Done.Wait();
@@ -368,7 +368,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		WGPUBufferDescriptor desc = new() {
 			size = size,
 			usage = usage.ToWebGPUType(),
-			mappedAtCreation = mappedAtCreation
+			mappedAtCreation = mappedAtCreation,
 		};
 		return new GPUBuffer(Check(wgpuDeviceCreateBuffer(Device, &desc)), size, usage);
 	}
@@ -454,7 +454,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				size = new WGPUExtent3D {
 					width = @params.Width,
 					height = @params.Height,
-					depthOrArrayLayers = @params.DepthOrArrayLayers
+					depthOrArrayLayers = @params.DepthOrArrayLayers,
 				},
 				mipLevelCount = @params.MipLevelCount,
 				sampleCount = @params.SampleCount,
@@ -462,7 +462,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				format = @params.Format.ToWebGPUType(),
 				usage = @params.Usage.ToWebGPUType(),
 				viewFormatCount = (nuint)viewFormats.Length,
-				viewFormats = p
+				viewFormats = p,
 			};
 			WGPUTexture tex = Check(wgpuDeviceCreateTexture(Device, &desc));
 			try {
@@ -540,17 +540,17 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				y = dst.Y,
 				z = dst.Z,
 			},
-			aspect = dst.Aspect.ToWebGPUType()
+			aspect = dst.Aspect.ToWebGPUType(),
 		};
 		WGPUTexelCopyBufferLayout dataLayout = new() {
 			offset = layout.Offset,
 			bytesPerRow = layout.BytesPerRow,
-			rowsPerImage = layout.RowsPerImage
+			rowsPerImage = layout.RowsPerImage,
 		};
 		WGPUExtent3D texSize = new() {
 			width = dst.Width,
 			height = dst.Height,
-			depthOrArrayLayers = dst.DepthOrArrayLayers
+			depthOrArrayLayers = dst.DepthOrArrayLayers,
 		};
 		wgpuQueueWriteTexture(Queue, &copyDst, data, size, &dataLayout, &texSize);
 	}
@@ -584,7 +584,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			lodMinClamp = @params.LodMinClamp,
 			lodMaxClamp = @params.LodMaxClamp,
 			compare = @params.Compare.ToWebGPUType(),
-			maxAnisotropy = @params.MaxAnisotropy
+			maxAnisotropy = @params.MaxAnisotropy,
 		};
 		return new GPUSampler(Check(wgpuDeviceCreateSampler(Device, &desc)));
 	}
@@ -592,33 +592,33 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 	private static WGPUBindGroupLayoutEntry toRawBindGroupLayoutEntry(in GPUBindGroupLayoutEntry entry) {
 		WGPUBindGroupLayoutEntry raw = new() {
 			binding = entry.Binding,
-			visibility = entry.Visibility.ToWebGPUType()
+			visibility = entry.Visibility.ToWebGPUType(),
 		};
 		switch (entry.Layout) {
 		case GPUBufferBindingLayout b:
 			raw.buffer = new WGPUBufferBindingLayout {
 				type = b.Type.ToWebGPUType(),
 				hasDynamicOffset = b.HasDynamicOffset,
-				minBindingSize = b.MinBindingSize
+				minBindingSize = b.MinBindingSize,
 			};
 			return raw;
 		case GPUSamplerBindingLayout s:
 			raw.sampler = new WGPUSamplerBindingLayout {
-				type = s.Type.ToWebGPUType()
+				type = s.Type.ToWebGPUType(),
 			};
 			return raw;
 		case GPUStorageTextureBindingLayout st:
 			raw.storageTexture = new WGPUStorageTextureBindingLayout {
 				access = st.Access.ToWebGPUType(),
 				format = st.Format.ToWebGPUType(),
-				viewDimension = st.ViewDimension.ToWebGPUType()
+				viewDimension = st.ViewDimension.ToWebGPUType(),
 			};
 			return raw;
 		case GPUTextureBindingLayout t:
 			raw.texture = new WGPUTextureBindingLayout {
 				sampleType = t.SampleType.ToWebGPUType(),
 				viewDimension = t.ViewDimension.ToWebGPUType(),
-				multisampled = t.Multisampled
+				multisampled = t.Multisampled,
 			};
 			return raw;
 		default:
@@ -669,14 +669,14 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			rawEntries[i] = toRawBindGroupLayoutEntry(entries[i]);
 		WGPUBindGroupLayoutDescriptor desc = new() {
 			entryCount = (nuint)entries.Length,
-			entries = rawEntries
+			entries = rawEntries,
 		};
 		return new GPUBindGroupLayout(Check(wgpuDeviceCreateBindGroupLayout(Device, &desc)));
 	}
 
 	private static WGPUBindGroupEntry toRawBindGroupEntry(in GPUBindGroupEntry entry) {
 		WGPUBindGroupEntry raw = new() {
-			binding = entry.Binding
+			binding = entry.Binding,
 		};
 		switch (entry.Resource) {
 		case GPUBufferBindingResource b:
@@ -763,7 +763,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 		WGPUBindGroupDescriptor desc = new() {
 			layout = layout.WGPUBindGroupLayout,
 			entryCount = (nuint)entries.Length,
-			entries = rawEntries
+			entries = rawEntries,
 		};
 		return new GPUBindGroup(Check(wgpuDeviceCreateBindGroup(Device, &desc)));
 	}
@@ -785,12 +785,12 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			WGPUShaderSourceWGSL src = new() {
 				chain = new WGPUChainedStruct {
 					sType = WGPUSType.ShaderSourceWGSL,
-					next = null
+					next = null,
 				},
-				code = new WGPUStringView(p, written)
+				code = new WGPUStringView(p, written),
 			};
 			WGPUShaderModuleDescriptor desc = new() {
-				nextInChain = &src.chain
+				nextInChain = &src.chain,
 			};
 			return new GPUShaderModule(Check(wgpuDeviceCreateShaderModule(Device, &desc)));
 		}
@@ -810,13 +810,13 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			WGPUShaderSourceSPIRV src = new() {
 				chain = new WGPUChainedStruct {
 					sType = WGPUSType.ShaderSourceSPIRV,
-					next = null
+					next = null,
 				},
 				codeSize = (uint)code.Length,
-				code = p
+				code = p,
 			};
 			WGPUShaderModuleDescriptor desc = new() {
-				nextInChain = &src.chain
+				nextInChain = &src.chain,
 			};
 			return new GPUShaderModule(Check(wgpuDeviceCreateShaderModule(Device, &desc)));
 		}
@@ -868,7 +868,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 
 		WGPUPipelineLayoutDescriptor desc = new() {
 			bindGroupLayoutCount = (nuint)layouts.Length,
-			bindGroupLayouts = bgLayouts
+			bindGroupLayouts = bgLayouts,
 		};
 		return new GPUPipelineLayout(Check(wgpuDeviceCreatePipelineLayout(Device, &desc)));
 	}
@@ -941,7 +941,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				arrayStride = vb.ArrayStride,
 				stepMode = vb.StepMode.ToWebGPUType(),
 				attributeCount = (nuint)vbAttributes.Length,
-				attributes = vbAttributes.IsEmpty ? null : (wgpuVertAttrs + attrBase)
+				attributes = vbAttributes.IsEmpty ? null : (wgpuVertAttrs + attrBase),
 			};
 			attrBase += vbAttributes.Length;
 		}
@@ -952,7 +952,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			constantCount = 0, // TODO
 			constants = null,  // TODO
 			bufferCount = (nuint)vertBuffers.Length,
-			buffers = vertBuffers.IsEmpty ? null : wgpuVertBuffers
+			buffers = vertBuffers.IsEmpty ? null : wgpuVertBuffers,
 		};
 
 		// -----------------------------------------------------------------
@@ -968,7 +968,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 				constantCount = 0, // TODO
 				constants = null,  // TODO
 				targetCount = (nuint)colorTargets.Length,
-				targets = colorTargets.IsEmpty ? null : wgpuColorTargets
+				targets = colorTargets.IsEmpty ? null : wgpuColorTargets,
 			};
 			pWgpuFrag = &wgpuFrag;
 		}
@@ -994,7 +994,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			primitive = wgpuPrim,
 			depthStencil = pWgpuDepthStencil,
 			multisample = wgpuMs,
-			fragment = pWgpuFrag
+			fragment = pWgpuFrag,
 		};
 		return new GPURenderPipeline(Check(wgpuDeviceCreateRenderPipeline(Device, &desc)));
 	}
@@ -1045,7 +1045,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 					HasDynamicOffset: hasDynamicOffset,
 					MinBindingSize: minBindingSize
 				)
-			)
+			),
 		]);
 
 	/// <summary>
@@ -1072,7 +1072,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 					Offset: offset,
 					Size: size
 				)
-			)
+			),
 		]);
 
 	/// <summary>
@@ -1114,7 +1114,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			throw new ArgumentException("view must be a color format", nameof(view));
 		return CreateBindGroup(StdColorTexture2DLayout, [
 			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
-			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler))
+			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler)),
 		]);
 	}
 
@@ -1176,7 +1176,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			throw new ArgumentException("view must be a depth-only format", nameof(view));
 		return CreateBindGroup(StdFilteringDepthTexture2DLayout, [
 			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
-			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler))
+			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler)),
 		]);
 	}
 
@@ -1218,7 +1218,7 @@ public sealed unsafe class WebGPUDevice : IDisposable {
 			throw new ArgumentException("view must be a depth-only format", nameof(view));
 		return CreateBindGroup(StdComparisonDepthTexture2DLayout, [
 			new GPUBindGroupEntry(Binding: 0, new GPUTextureViewBindingResource(view)),
-			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler))
+			new GPUBindGroupEntry(Binding: 1, new GPUSamplerBindingResource(sampler)),
 		]);
 	}
 

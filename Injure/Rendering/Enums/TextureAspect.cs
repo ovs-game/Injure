@@ -11,6 +11,6 @@ public readonly partial struct TextureAspect {
 		Undefined = 0,
 		All = 1,
 		StencilOnly = 2,
-		DepthOnly = 3
+		DepthOnly = 3,
 	}
 }

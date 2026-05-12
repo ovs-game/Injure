@@ -11,7 +11,7 @@ public readonly partial struct DeviceState {
 	public enum Case {
 		Alive = 1,
 		Lost,
-		Disposed
+		Disposed,
 	}
 }
 
@@ -19,7 +19,7 @@ public readonly partial struct DeviceState {
 public readonly partial struct DeviceLossInfoKind {
 	public enum Case {
 		Provisional = 1,
-		Final
+		Final,
 	}
 }
 
@@ -30,7 +30,7 @@ public readonly partial struct DeviceLossEventReason {
 		Destroyed,
 		InstanceDropped,
 		FailedCreation,
-		SurfaceAcquireDeviceLost
+		SurfaceAcquireDeviceLost,
 	}
 }
 

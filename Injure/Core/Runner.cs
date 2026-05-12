@@ -129,7 +129,7 @@ public static unsafe class Runner {
 		PresentMode.Case.TearFree => SurfacePresentModePolicy.AutoMailbox,
 		PresentMode.Case.Adaptive => SurfacePresentModePolicy.AutoFifoRelaxed,
 		PresentMode.Case.LowLatency => SurfacePresentModePolicy.AutoImmediate,
-		_ => throw new UnreachableException()
+		_ => throw new UnreachableException(),
 	};
 
 	public static void Run(IGame game, in GameConfig conf) {
@@ -227,7 +227,7 @@ bootstrapCancelled:
 				BuiltinShaders.Primitive2D.ResourceID,
 				BuiltinShaders.Textured2DColor.ResourceID,
 				BuiltinShaders.Textured2DRMask.ResourceID,
-				BuiltinShaders.Textured2DSDF.ResourceID
+				BuiltinShaders.Textured2DSDF.ResourceID,
 			])
 		));
 		AssetStore? assets = null;

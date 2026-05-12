@@ -15,7 +15,7 @@ public readonly partial struct LayerFeatures {
 	public enum Bits {
 		None   = 0,
 		Render = 1 << 0,
-		Input  = 1 << 1
+		Input  = 1 << 1,
 	}
 }
 
@@ -26,7 +26,7 @@ public readonly partial struct LayerBlockMask {
 		None   = 0,
 		Update = 1 << 0,
 		Render = 1 << 1,
-		Input  = 1 << 2
+		Input  = 1 << 2,
 	}
 }
 

@@ -27,7 +27,7 @@ public static class NativeLoader {
 		string arch = RuntimeInformation.ProcessArchitecture switch {
 			Architecture.X64 => "x64",
 			Architecture.Arm64 => "arm64",
-			_ => throw new NotSupportedException($"arch '{RuntimeInformation.ProcessArchitecture}' not supported (supported: x64, arm64)")
+			_ => throw new NotSupportedException($"arch '{RuntimeInformation.ProcessArchitecture}' not supported (supported: x64, arm64)"),
 		};
 		if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			return "win-" + arch;

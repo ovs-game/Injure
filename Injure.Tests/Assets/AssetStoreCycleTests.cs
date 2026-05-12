@@ -15,7 +15,7 @@ public sealed class AssetStoreCycleTests {
 		AssetStore store = new();
 		AssetLoadingResolver resolver = new(store, new Dictionary<AssetID, AssetID> {
 			[new AssetID(ownerID, "assetA")] = new AssetID(ownerID, "assetB"),
-			[new AssetID(ownerID, "assetB")] = new AssetID(ownerID, "assetC")
+			[new AssetID(ownerID, "assetB")] = new AssetID(ownerID, "assetC"),
 		});
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, resolver, "resolver");
@@ -30,7 +30,7 @@ public sealed class AssetStoreCycleTests {
 		AssetStore store = new();
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, new AssetLoadingResolver(store, new Dictionary<AssetID, AssetID> {
-			[new AssetID(ownerID, "assetA")] = new AssetID(ownerID, "assetA")
+			[new AssetID(ownerID, "assetA")] = new AssetID(ownerID, "assetA"),
 		}), "resolver");
 		store.RegisterStagedCreator(ownerID, new TestCreator(), "creator");
 
@@ -44,7 +44,7 @@ public sealed class AssetStoreCycleTests {
 		AssetStore store = new();
 		AssetLoadingResolver resolver = new(store, new Dictionary<AssetID, AssetID> {
 			[new AssetID(ownerID, "assetA")] = new AssetID(ownerID, "assetB"),
-			[new AssetID(ownerID, "assetB")] = new AssetID(ownerID, "assetA")
+			[new AssetID(ownerID, "assetB")] = new AssetID(ownerID, "assetA"),
 		});
 		store.RegisterSource(ownerID, new TestSource(), "source");
 		store.RegisterResolver(ownerID, resolver, "resolver");
@@ -59,7 +59,7 @@ public sealed class AssetStoreCycleTests {
 			[new AssetID(ownerID, "assetB")] = new AssetID(ownerID, "assetC"),
 			[new AssetID(ownerID, "assetC")] = new AssetID(ownerID, "assetD"),
 			[new AssetID(ownerID, "assetD")] = new AssetID(ownerID, "assetE"),
-			[new AssetID(ownerID, "assetE")] = new AssetID(ownerID, "assetA")
+			[new AssetID(ownerID, "assetE")] = new AssetID(ownerID, "assetA"),
 		};
 
 		asset = store.GetAsset<TestAsset>(new AssetID(ownerID, "assetA"));

@@ -475,7 +475,7 @@ internal sealed class InputSystem {
 
 		SDLScancode.Application => Key.Application,
 
-		_ => Key.Unknown
+		_ => Key.Unknown,
 	};
 
 	public static GamepadAxis TranslateGamepadAxis(SDLGamepadAxis axis) => axis switch {
@@ -485,7 +485,7 @@ internal sealed class InputSystem {
 		SDLGamepadAxis.Righty => GamepadAxis.RightY,
 		SDLGamepadAxis.LeftTrigger => GamepadAxis.LeftTrigger,
 		SDLGamepadAxis.RightTrigger => GamepadAxis.RightTrigger,
-		_ => GamepadAxis.Unknown
+		_ => GamepadAxis.Unknown,
 	};
 
 	public static GamepadButton TranslateGamepadButton(SDLGamepadButton button) => button switch {
@@ -510,7 +510,7 @@ internal sealed class InputSystem {
 		SDLGamepadButton.LeftPaddle1 => GamepadButton.LeftPaddle1,
 		SDLGamepadButton.LeftPaddle2 => GamepadButton.LeftPaddle2,
 		SDLGamepadButton.Touchpad => GamepadButton.Touchpad,
-		_ => GamepadButton.Unknown
+		_ => GamepadButton.Unknown,
 	};
 
 	public static PointerButton TranslatePointerButton(byte button) => button switch {
@@ -519,7 +519,7 @@ internal sealed class InputSystem {
 		SDL.SDL_BUTTON_MIDDLE => PointerButton.Middle,
 		SDL.SDL_BUTTON_X1 => PointerButton.X1,
 		SDL.SDL_BUTTON_X2 => PointerButton.X2,
-		_ => PointerButton.Unknown
+		_ => PointerButton.Unknown,
 	};
 
 	public static float NormalizeGamepadAxis(GamepadAxis axis, short raw) {
@@ -528,7 +528,7 @@ internal sealed class InputSystem {
 		return axis.Tag switch {
 			GamepadAxis.Case.LeftX or GamepadAxis.Case.LeftY or GamepadAxis.Case.RightX or GamepadAxis.Case.RightY => normalizeStick(raw),
 			GamepadAxis.Case.LeftTrigger or GamepadAxis.Case.RightTrigger => normalizeTrigger(raw),
-			_ => throw new ArgumentOutOfRangeException(nameof(axis), $"unknown gamepad axis '{axis}'")
+			_ => throw new ArgumentOutOfRangeException(nameof(axis), $"unknown gamepad axis '{axis}'"),
 		};
 	}
 }

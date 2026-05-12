@@ -56,11 +56,9 @@ public ref struct UIEventContext {
 	}
 
 	public static UIEventContext Create(UIRoot root, UIWidget target) => new(root, target);
-	/*
-	public void Focus(UIWidget? widget) => ...
-	public void CapturePointer() => ...
-	public void ReleasePointerCapture() => ...
-	*/
+	public readonly void Focus(UIWidget? widget) => Root.Focus(widget);
+	public readonly void CapturePointer() => Root.CapturePointer(Target);
+	public readonly void ReleasePointerCapture() => Root.ReleasePointerCapture(Target);
 }
 
 public interface IUIHoverSink {

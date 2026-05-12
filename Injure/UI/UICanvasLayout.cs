@@ -29,7 +29,6 @@ public static class UICanvasLayout {
 			(float)viewport.Width / logical.Width,
 			(float)viewport.Height / logical.Height
 		);
-
 		return new UICanvasTransform(
 			LogicalRect: logical,
 			ViewportRect: viewport,
@@ -58,7 +57,22 @@ public static class UICanvasLayout {
 		);
 	}
 
+	public static RectI LogicalToScissor(UICanvasTransform tx, RectF logicalRect) {
+		Vector2 a = LogicalToScreen(tx, logicalRect.Position);
+		Vector2 b = LogicalToScreen(tx, new Vector2(logicalRect.Right, logicalRect.Bottom));
+
+		int left = (int)MathF.Floor(MathF.Min(a.X, b.X));
+		int top = (int)MathF.Floor(MathF.Min(a.Y, b.Y));
+		int right = (int)MathF.Ceiling(MathF.Max(a.X, b.X));
+		int bottom = (int)MathF.Ceiling(MathF.Max(a.Y, b.Y));
+
+		return RectI.FromLTRB(left, top, right, bottom);
+	}
+
 	private static RectF computeLogicalRect(UICanvasPolicy policy, SizeI drawableSize) {
+		if (policy.Mode == UICanvasMode.MatchDrawable)
+			return new RectF(0f, 0f, drawableSize.Width, drawableSize.Height);
+
 		float refW = policy.ReferenceSize.Width;
 		float refH = policy.ReferenceSize.Height;
 		if (refW <= 0f)
@@ -88,6 +102,8 @@ public static class UICanvasLayout {
 	}
 
 	private static RectI computeViewport(UICanvasPolicy policy, RectF logicalRect, SizeI drawableSize) {
+		if (policy.Mode == UICanvasMode.MatchDrawable)
+			return new RectI(0, 0, drawableSize.Width, drawableSize.Height);
 		return policy.FitMode.Tag switch {
 			UICanvasFitMode.Case.Stretch => new RectI(0, 0, drawableSize.Width, drawableSize.Height),
 			UICanvasFitMode.Case.Letterbox => policy.ScaleMode.Tag switch {

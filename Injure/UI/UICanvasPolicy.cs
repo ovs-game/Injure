@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+using System;
 using System.Numerics;
 
 using Injure.Analyzers.Attributes;
@@ -11,7 +12,8 @@ public readonly partial struct UICanvasMode {
 	public enum Case {
 		Fixed = 1,
 		FixedHeightExpandWidth,
-		FixedWidthExpandHeight
+		FixedWidthExpandHeight,
+		MatchDrawable
 	}
 }
 
@@ -42,10 +44,14 @@ public readonly record struct UICanvasPolicy(
 	public static UICanvasPolicy Fixed(float width, float height) => new(UICanvasMode.Fixed, new SizeF(width, height));
 	public static UICanvasPolicy FixedHeight(float width, float height) => new(UICanvasMode.FixedHeightExpandWidth, new SizeF(width, height));
 	public static UICanvasPolicy FixedWidth(float width, float height) => new(UICanvasMode.FixedWidthExpandHeight, new SizeF(width, height));
+	public static readonly UICanvasPolicy MatchDrawable = new(UICanvasMode.MatchDrawable, new SizeF(1f, 1f),
+		UICanvasFitMode.Stretch, UICanvasScaleMode.Fractional);
 }
 
 public readonly record struct UICanvasTransform(
 	RectF LogicalRect,
 	RectI ViewportRect,
 	Vector2 Scale
-);
+) {
+	public float TextScale => MathF.Min(Scale.X, Scale.Y);
+}

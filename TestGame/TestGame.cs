@@ -26,6 +26,8 @@ public sealed class TestGame : IGame {
 	public static AssetStore Assets => GameServices.Assets;
 	public static TextSystem Text => GameServices.Text;
 
+	public static WindowState WindowState => GameServices.Host.Window.State;
+
 	public const string TestFontFilename = "Aileron-Regular.otf";
 	public static AssetRef<Font> TestFont {
 		get => field ?? throw new InvalidOperationException("game not initialized yet or already shut down");

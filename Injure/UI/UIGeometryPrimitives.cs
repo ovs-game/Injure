@@ -6,20 +6,82 @@ using Injure.Analyzers.Attributes;
 
 namespace Injure.UI;
 
-public readonly record struct UIThickness(float Left, float Top, float Right, float Bottom) {
+public readonly record struct UIThickness {
+	public float Left {
+		get;
+		init {
+			if (!float.IsFinite(value))
+				throw new ArgumentOutOfRangeException(nameof(Left), "UI thickness values must be finite");
+			field = value;
+		}
+	}
+	public float Top {
+		get;
+		init {
+			if (!float.IsFinite(value))
+				throw new ArgumentOutOfRangeException(nameof(Top), "UI thickness values must be finite");
+			field = value;
+		}
+	}
+	public float Right {
+		get;
+		init {
+			if (!float.IsFinite(value))
+				throw new ArgumentOutOfRangeException(nameof(Right), "UI thickness values must be finite");
+			field = value;
+		}
+	}
+	public float Bottom {
+		get;
+		init {
+			if (!float.IsFinite(value))
+				throw new ArgumentOutOfRangeException(nameof(Bottom), "UI thickness values must be finite");
+			field = value;
+		}
+	}
+
 	public static readonly UIThickness Zero = default;
 
-	public UIThickness(float uniform) : this(uniform, uniform, uniform, uniform) {
-	}
+	public UIThickness(float uniform) => Left = Top = Right = Bottom = uniform;
 
 	public float Horizontal => Left + Right;
 	public float Vertical => Top + Bottom;
 }
 
-public readonly record struct UISizeConstraint(float MaxWidth, float MaxHeight) {
-	public static readonly UISizeConstraint Unbounded = new(float.PositiveInfinity, float.PositiveInfinity);
+public readonly record struct UISizeConstraint {
+	public float MaxWidth {
+		get;
+		init {
+			if (float.IsNaN(value) || value < 0f)
+				throw new ArgumentOutOfRangeException(nameof(MaxWidth), "max width must not be NaN or negative");
+			field = value;
+		}
+	}
+	public float MaxHeight {
+		get;
+		init {
+			if (float.IsNaN(value) || value < 0f)
+				throw new ArgumentOutOfRangeException(nameof(MaxHeight), "max height must not be NaN or negative");
+			field = value;
+		}
+	}
 
-	public UISizeConstraint(SizeF size) : this(size.Width, size.Height) {
+	public bool IsWidthBounded => !float.IsPositiveInfinity(MaxWidth);
+	public bool IsHeightBounded => !float.IsPositiveInfinity(MaxHeight);
+
+	public static readonly UISizeConstraint Unbounded = new UISizeConstraint {
+		MaxWidth = float.PositiveInfinity,
+		MaxHeight = float.PositiveInfinity,
+	};
+
+	public UISizeConstraint(float maxWidth, float maxHeight) {
+		MaxWidth = maxWidth;
+		MaxHeight = maxHeight;
+	}
+
+	public UISizeConstraint(SizeF size) {
+		MaxWidth = size.Width;
+		MaxHeight = size.Height;
 	}
 
 	public SizeF Clamp(SizeF s) => new(MathF.Min(s.Width, MaxWidth), MathF.Min(s.Height, MaxHeight));

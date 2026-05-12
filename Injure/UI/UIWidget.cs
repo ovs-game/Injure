@@ -27,11 +27,11 @@ public abstract class UIWidget {
 		Parent = p;
 	}
 
-	public SizeF Measure(in UISizeConstraint constraint) {
-		DesiredSize = Visible ? MeasureCore(constraint) : SizeF.Zero;
+	public SizeF Measure(in UILayoutContext ctx, in UISizeConstraint constraint) {
+		DesiredSize = Visible ? MeasureCore(in ctx, in constraint) : SizeF.Zero;
 		return DesiredSize;
 	}
-	protected abstract SizeF MeasureCore(in UISizeConstraint constraint);
+	protected abstract SizeF MeasureCore(in UILayoutContext ctx, in UISizeConstraint constraint);
 
 	public void Arrange(in RectF rect) {
 		LayoutRect = rect;
@@ -41,7 +41,7 @@ public abstract class UIWidget {
 	protected virtual void ArrangeCore(in RectF rect) {
 	}
 
-	public virtual void Render(Canvas cv) {
+	public virtual void Render(Canvas cv, in UIRenderContext ctx) {
 	}
 
 	public virtual bool HitTest(Vector2 pos) => Visible && HitTestVisible && LayoutRect.Contains(pos);

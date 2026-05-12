@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -34,13 +35,24 @@ public sealed class UIRoot(UICanvasPolicy canvasPolicy) {
 		}
 	}
 
+	public void CapturePointer(UIWidget widget) {
+		ArgumentNullException.ThrowIfNull(widget);
+		CapturedPointerWidget = widget;
+	}
+
+	public void ReleasePointerCapture(UIWidget widget) {
+		if (ReferenceEquals(CapturedPointerWidget, widget))
+			CapturedPointerWidget = null;
+	}
+
 	public void Update(in ControlView input, in WindowState window) {
 		SizeI drawable = new(window.DrawableWidth, window.DrawableHeight);
 		CanvasTransform = UICanvasLayout.Compute(CanvasPolicy, drawable);
 
 		if (RootWidget is null)
 			return;
-		RootWidget.Measure(new UISizeConstraint(CanvasTransform.LogicalRect.Size));
+		UILayoutContext ctx = new(this, CanvasTransform);
+		RootWidget.Measure(in ctx, new UISizeConstraint(CanvasTransform.LogicalRect.Size));
 		RootWidget.Arrange(CanvasTransform.LogicalRect);
 
 		processControlEvents(input);
@@ -54,7 +66,8 @@ public sealed class UIRoot(UICanvasPolicy canvasPolicy) {
 			Scissor: CanvasScissor.Set(CanvasTransform.ViewportRect),
 			Transform: Matrix3x2.CreateScale(CanvasTransform.Scale) * Matrix3x2.CreateTranslation(CanvasTransform.ViewportRect.Position.ToVector2())
 		)) {
-			RootWidget.Render(cv);
+			UIRenderContext ctx = new(this, CanvasTransform);
+			RootWidget.Render(cv, in ctx);
 		}
 	}
 

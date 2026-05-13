@@ -6,24 +6,52 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 
+using Injure.Analyzers.Attributes;
+
 namespace Injure.ModKit.Abstractions;
 
 public sealed class OwnerOrderingException(string message) : Exception(message) {
 }
 
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct OwnerOrderingConstraintKind {
+	public enum Case {
+		Soft = 1,
+		Hard,
+	}
+}
+
+public readonly struct OwnerOrderingConstraint {
+	public string OwnerID { get; }
+	public OwnerOrderingConstraintKind Kind { get; }
+
+	private OwnerOrderingConstraint(string ownerID, OwnerOrderingConstraintKind kind) {
+		if (string.IsNullOrWhiteSpace(ownerID))
+			throw new ArgumentException("owner ID cannot be null/empty/whitespace", nameof(ownerID));
+		OwnerID = ownerID;
+		Kind = kind;
+	}
+
+	public static OwnerOrderingConstraint Soft(string ownerID) => new(ownerID, OwnerOrderingConstraintKind.Soft);
+	public static OwnerOrderingConstraint Hard(string ownerID) => new(ownerID, OwnerOrderingConstraintKind.Hard);
+}
+
 public sealed class OwnerOrderedEntry<T> {
-	private readonly string[] beforeOwners;
-	private readonly string[] afterOwners;
+	private readonly OwnerOrderingConstraint[] beforeOwners;
+	private readonly OwnerOrderingConstraint[] afterOwners;
 
 	public T Item { get; }
 	public string OwnerID { get; }
 	public string LocalID { get; }
 	public int LocalPriority { get; }
-	public IReadOnlyList<string>? BeforeOwners => beforeOwners;
-	public IReadOnlyList<string>? AfterOwners => afterOwners;
+	public IReadOnlyList<OwnerOrderingConstraint> BeforeOwners => beforeOwners;
+	public IReadOnlyList<OwnerOrderingConstraint> AfterOwners => afterOwners;
 
-	public OwnerOrderedEntry(T item, string ownerID, string localID,
-		int localPriority = 0, IEnumerable<string>? beforeOwners = null, IEnumerable<string>? afterOwners = null) {
+	public OwnerOrderedEntry(
+		T item, string ownerID, string localID, int localPriority = 0,
+		IEnumerable<OwnerOrderingConstraint>? beforeOwners = null,
+		IEnumerable<OwnerOrderingConstraint>? afterOwners = null
+	) {
 		ArgumentNullException.ThrowIfNull(item);
 		if (string.IsNullOrWhiteSpace(ownerID))
 			throw new ArgumentException("owner ID cannot be null/empty/whitespace", nameof(ownerID));
@@ -37,24 +65,19 @@ public sealed class OwnerOrderedEntry<T> {
 		this.afterOwners = fold(afterOwners, nameof(afterOwners));
 	}
 
-	public OwnerOrderedEntry<TOut> Convert<TOut>(Func<T, TOut> conv) {
-		ArgumentNullException.ThrowIfNull(conv);
-		return new OwnerOrderedEntry<TOut>(conv(Item), OwnerID, LocalID, LocalPriority, BeforeOwners, AfterOwners);
-	}
-
-	private static string[] fold(IEnumerable<string>? owners, string paramName) {
+	private static OwnerOrderingConstraint[] fold(IEnumerable<OwnerOrderingConstraint>? owners, string paramName) {
 		if (owners is null)
-			return Array.Empty<string>();
+			return Array.Empty<OwnerOrderingConstraint>();
 		HashSet<string> seen = new(StringComparer.Ordinal);
-		List<string> list = new();
-		foreach (string owner in owners) {
-			if (string.IsNullOrWhiteSpace(owner))
+		List<OwnerOrderingConstraint> list = new();
+		foreach (OwnerOrderingConstraint cons in owners) {
+			if (string.IsNullOrWhiteSpace(cons.OwnerID))
 				throw new ArgumentException("owner list cannot contain null/empty/whitespace strings", paramName);
-			if (!seen.Add(owner))
+			if (!seen.Add(cons.OwnerID))
 				throw new ArgumentException("owner list cannot contain duplicates", paramName);
-			list.Add(owner);
+			list.Add(cons);
 		}
-		return list.Count == 0 ? Array.Empty<string>() : list.ToArray();
+		return list.Count == 0 ? Array.Empty<OwnerOrderingConstraint>() : list.ToArray();
 	}
 }
 
@@ -86,14 +109,10 @@ public static class OwnerOrderedSorter {
 
 		foreach (Node<T> node in nodes.Values) {
 			foreach (OwnerOrderedEntry<T> entry in node.Items) {
-				if (entry.BeforeOwners is not null)
-					foreach (string before in entry.BeforeOwners)
-						if (nodes.ContainsKey(before)) // don't throw if a referenced owner isn't known yet
-							addEdge(nodes, node.OwnerID, before);
-				if (entry.AfterOwners is not null)
-					foreach (string after in entry.AfterOwners)
-						if (nodes.ContainsKey(after)) // don't throw if a referenced owner isn't known yet
-							addEdge(nodes, after, node.OwnerID);
+				foreach (OwnerOrderingConstraint before in entry.BeforeOwners)
+					addConstraintEdge(nodes, entry, before, node.OwnerID, before.OwnerID, "before");
+				foreach (OwnerOrderingConstraint after in entry.AfterOwners)
+					addConstraintEdge(nodes, entry, after, after.OwnerID, node.OwnerID, "after");
 			}
 		}
 
@@ -122,11 +141,11 @@ public static class OwnerOrderedSorter {
 			throw new OwnerOrderingException(msg);
 		}
 
-		// topo sort done, do a second pass sorting by local priority
+		// sort within owners by local priority
 		T[] result = new T[entries.Count];
 		int resultidx = 0;
 		foreach (Node<T> node in ordered) {
-			node.Items.Sort(static (OwnerOrderedEntry<T> a, OwnerOrderedEntry<T> b) => {
+			node.Items.Sort(static (a, b) => {
 				int n = b.LocalPriority.CompareTo(a.LocalPriority);
 				if (n != 0)
 					return n;
@@ -136,6 +155,22 @@ public static class OwnerOrderedSorter {
 				result[resultidx++] = ent.Item;
 		}
 		return result;
+	}
+
+	private static void addConstraintEdge<T>(
+		Dictionary<string, Node<T>> nodes,
+		OwnerOrderedEntry<T> entry,
+		OwnerOrderingConstraint constraint,
+		string fromOwnerID,
+		string toOwnerID,
+		string direction
+	) {
+		if (!nodes.ContainsKey(constraint.OwnerID)) {
+			if (constraint.Kind == OwnerOrderingConstraintKind.Hard)
+				throw new OwnerOrderingException($"owner '{entry.OwnerID}' local '{entry.LocalID}' has hard '{direction}' constraint targeting unknown owner '{constraint.OwnerID}'");
+			return;
+		}
+		addEdge(nodes, fromOwnerID, toOwnerID);
 	}
 
 	private static void addEdge<T>(Dictionary<string, Node<T>> nodes, string fromOwnerID, string toOwnerID) {
@@ -164,7 +199,7 @@ public static class OwnerOrderedSorter {
 		List<string>? cycle = null;
 
 		// iterate by Ordinal order instead of the nondeterministic hashset iter order
-		foreach (string id in remaining.OrderBy(x => x, StringComparer.Ordinal)) {
+		foreach (string id in remaining.OrderBy(static x => x, StringComparer.Ordinal)) {
 			if (state.ContainsKey(id))
 				continue;
 			dfs(id);
@@ -177,7 +212,7 @@ public static class OwnerOrderedSorter {
 			state[id] = VisitState.Visiting;
 			stackIndex[id] = stack.Count;
 			stack.Add(id);
-			foreach (string nextID in nodes[id].Outgoing.Where(remaining.Contains).OrderBy(x => x, StringComparer.Ordinal)) {
+			foreach (string nextID in nodes[id].Outgoing.Where(remaining.Contains).OrderBy(static x => x, StringComparer.Ordinal)) {
 				if (!state.TryGetValue(nextID, out VisitState nextState)) {
 					dfs(nextID);
 					if (cycle is not null)
@@ -195,17 +230,148 @@ public static class OwnerOrderedSorter {
 	}
 }
 
-// TODO: document better that the model is single-writer multiple-reader and that
-// registry/unregistry needs to be externally mutexed
-public sealed class OwnerOrderedRegistry<T> {
+/// <summary>
+/// Maintains owner-ordered entries and publishes read-only snapshots of their sorted values.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is single-writer, multiple-reader. Writes (or any other methods that end in `<c>Locked</c>`)
+/// must be externally mutexed/synchronized, otherwise they will race and corrupt state.
+/// </para>
+/// <para>
+/// <see cref="ReadSnapshot"/> may be called concurrently, including concurrently with writes.
+/// It returns the last successfully published snapshot. Mutating operations publish a new
+/// snapshot only if sorting succeeds.
+/// </para>
+/// </remarks>
+public sealed class UnsafeOwnerOrderedRegistry<T> {
+	private readonly record struct AddedEntry(ulong ID, string OwnerID, string LocalID, bool CreatedOwnerSet);
+	private readonly record struct RemovedEntry(ulong ID, OwnerOrderedEntry<T> Entry, bool RemovedLocalID, bool RemovedOwnerSet);
+
 	private readonly Dictionary<ulong, OwnerOrderedEntry<T>> entries = new();
-	private readonly Dictionary<string, HashSet<string>> localIDsByOwner =
-		new(StringComparer.Ordinal);
+	private readonly Dictionary<string, HashSet<string>> localIDsByOwner = new(StringComparer.Ordinal);
 	private ulong nextID = 0; // first ID will be 1 since this gets incremented upfront
 	private T[] snapshot = Array.Empty<T>();
 
-	public ulong Register(OwnerOrderedEntry<T> entry) {
+	public ulong RegisterLocked(OwnerOrderedEntry<T> entry) {
 		ArgumentNullException.ThrowIfNull(entry);
+		ulong oldNextID = nextID;
+		List<AddedEntry> added = new(capacity: 1);
+		try {
+			ulong id = addEntry(entry, added);
+
+			T[] s = OwnerOrderedSorter.Sort(entries.Values.ToArray());
+			Volatile.Write(ref snapshot, s);
+			return id;
+		} catch {
+			rollbackAdded(added);
+			nextID = oldNextID;
+			throw;
+		}
+	}
+
+	public ulong[] RegisterManyLocked(IReadOnlyList<OwnerOrderedEntry<T>> entries) {
+		ArgumentNullException.ThrowIfNull(entries);
+		if (entries.Count == 0)
+			return Array.Empty<ulong>();
+
+		ulong oldNextID = nextID;
+		List<AddedEntry> added = new(capacity: entries.Count);
+		ulong[] ids = new ulong[entries.Count];
+		try {
+			for (int i = 0; i < entries.Count; i++) {
+				OwnerOrderedEntry<T> entry = entries[i];
+				ArgumentNullException.ThrowIfNull(entry);
+				ids[i] = addEntry(entry, added);
+			}
+
+			T[] s = OwnerOrderedSorter.Sort(this.entries.Values.ToArray());
+			Volatile.Write(ref snapshot, s);
+			return ids;
+		} catch {
+			rollbackAdded(added);
+			nextID = oldNextID;
+			throw;
+		}
+	}
+
+	public bool UnregisterLocked(ulong id, [NotNullWhen(true)] out OwnerOrderedEntry<T>? removed) {
+		List<RemovedEntry> removedEntries = new(capacity: 1);
+		try {
+			if (!removeEntry(id, removedEntries)) {
+				removed = null;
+				return false;
+			}
+
+			T[] s = OwnerOrderedSorter.Sort(entries.Values.ToArray());
+			Volatile.Write(ref snapshot, s);
+			removed = removedEntries[0].Entry;
+			return true;
+		} catch {
+			rollbackRemoved(removedEntries);
+			throw;
+		}
+	}
+
+	public OwnerOrderedEntry<T>[] UnregisterManyLocked(IReadOnlySet<ulong> ids) {
+		ArgumentNullException.ThrowIfNull(ids);
+		if (ids.Count == 0)
+			return Array.Empty<OwnerOrderedEntry<T>>();
+
+		List<RemovedEntry> removedEntries = new(capacity: ids.Count);
+		try {
+			foreach (ulong id in ids)
+				removeEntry(id, removedEntries);
+			if (removedEntries.Count == 0)
+				return Array.Empty<OwnerOrderedEntry<T>>();
+
+			T[] s = OwnerOrderedSorter.Sort(entries.Values.ToArray());
+			Volatile.Write(ref snapshot, s);
+			OwnerOrderedEntry<T>[] result = new OwnerOrderedEntry<T>[removedEntries.Count];
+			for (int i = 0; i < removedEntries.Count; i++)
+				result[i] = removedEntries[i].Entry;
+			return result;
+		} catch {
+			rollbackRemoved(removedEntries);
+			throw;
+		}
+	}
+
+	public ulong[] ReplaceManyLocked(IReadOnlySet<ulong> remove, IReadOnlyList<OwnerOrderedEntry<T>> add) {
+		ArgumentNullException.ThrowIfNull(remove);
+		ArgumentNullException.ThrowIfNull(add);
+		if (remove.Count == 0 && add.Count == 0)
+			return Array.Empty<ulong>();
+
+		ulong oldNextID = nextID;
+		List<RemovedEntry> removed = new(remove.Count);
+		List<AddedEntry> added = new(add.Count);
+		ulong[] ids = new ulong[add.Count];
+		try {
+			foreach (ulong id in remove)
+				removeEntry(id, removed);
+			for (int i = 0; i < add.Count; i++) {
+				OwnerOrderedEntry<T> entry = add[i];
+				ArgumentNullException.ThrowIfNull(entry);
+				ids[i] = addEntry(entry, added);
+			}
+
+			if (removed.Count != 0 || added.Count != 0) {
+				T[] s = OwnerOrderedSorter.Sort(entries.Values.ToArray());
+				Volatile.Write(ref snapshot, s);
+			}
+			return ids;
+		} catch {
+			rollbackAdded(added);
+			rollbackRemoved(removed);
+			nextID = oldNextID;
+			throw;
+		}
+	}
+
+	public IReadOnlyList<T> ReadSnapshot() => Volatile.Read(ref snapshot);
+
+	private ulong addEntry(OwnerOrderedEntry<T> entry, List<AddedEntry> added) {
 		bool createdLocalIDSet = false;
 		if (!localIDsByOwner.TryGetValue(entry.OwnerID, out HashSet<string>? localIDs)) {
 			localIDs = new HashSet<string>(StringComparer.Ordinal);
@@ -214,33 +380,91 @@ public sealed class OwnerOrderedRegistry<T> {
 		}
 		if (!localIDs.Add(entry.LocalID))
 			throw new OwnerOrderingException($"duplicate LocalID '{entry.LocalID}' for owner '{entry.OwnerID}'");
-		ulong id = nextID + 1;
+		ulong id = checked(nextID + 1);
 		entries.Add(id, entry);
-		try {
-			T[] s = OwnerOrderedSorter.Sort(entries.Values.ToArray());
-			Volatile.Write(ref snapshot, s);
-		} catch {
-			entries.Remove(id);
-			localIDs.Remove(entry.LocalID);
-			if (createdLocalIDSet)
-				localIDsByOwner.Remove(entry.OwnerID);
-			throw;
-		}
-		nextID = id; // do you understand yet why this isn't thread safe
+		nextID = id;
+		added.Add(new AddedEntry(id, entry.OwnerID, entry.LocalID, createdLocalIDSet));
 		return id;
 	}
 
-	public bool Unregister(ulong id, [NotNullWhen(true)] out OwnerOrderedEntry<T>? removed) {
-		if (!entries.Remove(id, out removed))
+	private bool removeEntry(ulong id, List<RemovedEntry> removedEntries) {
+		if (!entries.TryGetValue(id, out OwnerOrderedEntry<T>? removed))
 			return false;
 		HashSet<string> localIDs = localIDsByOwner[removed.OwnerID];
-		localIDs.Remove(removed.LocalID);
-		if (localIDs.Count == 0)
+		entries.Remove(id);
+		bool removedLocalID = localIDs.Remove(removed.LocalID);
+		bool removedOwnerSet = false;
+		if (localIDs.Count == 0) {
 			localIDsByOwner.Remove(removed.OwnerID);
-		T[] s = OwnerOrderedSorter.Sort(entries.Values.ToArray());
-		Volatile.Write(ref snapshot, s);
+			removedOwnerSet = true;
+		}
+		removedEntries.Add(new RemovedEntry(id, removed, removedLocalID, removedOwnerSet));
 		return true;
 	}
 
-	public IReadOnlyList<T> ReadSnapshot() => Volatile.Read(ref snapshot);
+	private void rollbackAdded(List<AddedEntry> added) {
+		for (int i = added.Count - 1; i >= 0; i--) {
+			AddedEntry entry = added[i];
+			entries.Remove(entry.ID);
+			HashSet<string> localIDs = localIDsByOwner[entry.OwnerID];
+			localIDs.Remove(entry.LocalID);
+			if (entry.CreatedOwnerSet)
+				localIDsByOwner.Remove(entry.OwnerID);
+		}
+	}
+
+	private void rollbackRemoved(List<RemovedEntry> removedEntries) {
+		for (int i = removedEntries.Count - 1; i >= 0; i--) {
+			RemovedEntry removed = removedEntries[i];
+			entries.Add(removed.ID, removed.Entry);
+			HashSet<string> localIDs;
+			if (removed.RemovedOwnerSet) {
+				localIDs = new HashSet<string>(StringComparer.Ordinal);
+				localIDsByOwner.Add(removed.Entry.OwnerID, localIDs);
+			} else {
+				localIDs = localIDsByOwner[removed.Entry.OwnerID];
+			}
+			if (removed.RemovedLocalID)
+				localIDs.Add(removed.Entry.LocalID);
+		}
+	}
+}
+
+/// <summary>
+/// Maintains owner-ordered entries and publishes read-only snapshots of their sorted values.
+/// </summary>
+/// <remarks>
+/// Thread-safe; concurrent reads are lock-free, concurrent writes are internally mutexed.
+/// If you wish to do external synchronization of writes, see <see cref="UnsafeOwnerOrderedRegistry{T}"/>.
+/// </remarks>
+public sealed class OwnerOrderedRegistry<T> {
+	private readonly Lock @lock = new();
+	private readonly UnsafeOwnerOrderedRegistry<T> inner = new();
+
+	public ulong Register(OwnerOrderedEntry<T> entry) {
+		lock (@lock)
+			return inner.RegisterLocked(entry);
+	}
+
+	public ulong[] RegisterMany(IReadOnlyList<OwnerOrderedEntry<T>> entries) {
+		lock (@lock)
+			return inner.RegisterManyLocked(entries);
+	}
+
+	public bool Unregister(ulong id, [NotNullWhen(true)] out OwnerOrderedEntry<T>? removed) {
+		lock (@lock)
+			return inner.UnregisterLocked(id, out removed);
+	}
+
+	public OwnerOrderedEntry<T>[] UnregisterMany(IReadOnlySet<ulong> ids) {
+		lock (@lock)
+			return inner.UnregisterManyLocked(ids);
+	}
+
+	public ulong[] ReplaceMany(IReadOnlySet<ulong> remove, IReadOnlyList<OwnerOrderedEntry<T>> add) {
+		lock (@lock)
+			return inner.ReplaceManyLocked(remove, add);
+	}
+
+	public IReadOnlyList<T> ReadSnapshot() => inner.ReadSnapshot();
 }

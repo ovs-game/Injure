@@ -12,11 +12,6 @@ public sealed class ManifestReaderTests {
 		return ManifestReader.Parse(doc.RootElement, "test-manifest");
 	}
 
-	private static void assertDep(ModManifest manifest, string ownerId, Semver version) {
-		Assert.True(manifest.Dependencies.TryGetValue(ownerId, out Semver actual), $"missing dependency '{ownerId}'");
-		Assert.Equal(version, actual);
-	}
-
 	[Fact]
 	public void ParsesContentManifest() {
 		ContentModManifest manifest = Assert.IsType<ContentModManifest>(parse("""
@@ -25,11 +20,7 @@ public sealed class ManifestReaderTests {
 			"type": "content",
 			"id": "jdoe.my-awesome-texture-pack",
 			"version": "1.0.0",
-			"dependencies": {},
-			"order": {
-				"after": [],
-				"before": []
-			},
+			"relationships": [],
 			"assets": {
 				"management": "tracked",
 				"root": "Assets"
@@ -39,10 +30,8 @@ public sealed class ManifestReaderTests {
 		Assert.Equal("jdoe.my-awesome-texture-pack", manifest.OwnerID);
 		Assert.Equal(new Semver(1, 0, 0), manifest.Version);
 		Assert.Equal(ModAssetManagementKind.Tracked, manifest.Assets.ManagementKind);
+		Assert.Empty(manifest.Relationships);
 		Assert.Equal("Assets", manifest.Assets.Root);
-		Assert.Empty(manifest.Dependencies);
-		Assert.Empty(manifest.Order.After);
-		Assert.Empty(manifest.Order.Before);
 	}
 
 	[Fact]
@@ -56,11 +45,7 @@ public sealed class ManifestReaderTests {
 			"entry-assembly": "MyAwesomeMod.dll",
 			"code-hot-reload": "live",
 			"patching": "monomod",
-			"dependencies": {},
-			"order": {
-				"after": [],
-				"before": []
-			},
+			"relationships": [],
 			"assets": {
 				"management": "none"
 			}
@@ -72,11 +57,9 @@ public sealed class ManifestReaderTests {
 		Assert.Equal("MyAwesomeMod.dll", manifest.EntryAssembly);
 		Assert.Equal(ModCodeHotReloadLevel.Live, manifest.CodeHotReload);
 		Assert.Equal(ModPatchingBackend.MonoMod, manifest.Patching);
+		Assert.Empty(manifest.Relationships);
 		Assert.Equal(ModAssetManagementKind.None, manifest.Assets.ManagementKind);
 		Assert.Null(manifest.Assets.Root);
-		Assert.Empty(manifest.Dependencies);
-		Assert.Empty(manifest.Order.After);
-		Assert.Empty(manifest.Order.Before);
 	}
 
 	[Fact]
@@ -91,14 +74,27 @@ public sealed class ManifestReaderTests {
 			"entry-assembly": "MyAwesomeMod.dll",
 			"code-hot-reload": "restartless",
 			"patching": "external",
-			"dependencies": {
-				"somegame.modapi": "1.0.0",
-				"jdoe.my-awesome-content-pack": "2.1.0"
-			},
-			"order": {
-				"after": [ "somegame.base" ],
-				"before": [ "jdoe.my-awesome-mod-two" ]
-			},
+			"relationships": [
+				{
+					"id": "somegame.modapi",
+					"kind": "requires-self-after",
+					"version": "1.0.0"
+				},
+				{
+					"id": "somegame.something",
+					"kind": "if-present-self-after"
+				},
+				{
+					"id": "jdoe.my-awesome-content-pack",
+					"kind": "requires-self-after",
+					"version": "2.1.0"
+				},
+				{
+					"id": "jdoe.my-awesome-mod-two",
+					"kind": "if-present-self-before",
+					"version": "1.2.3"
+				}
+			],
 			"assets": {
 				"management": "tracked",
 				"root": "Assets"
@@ -111,11 +107,27 @@ public sealed class ManifestReaderTests {
 		Assert.Equal("MyAwesomeMod.dll", manifest.EntryAssembly);
 		Assert.Equal(ModCodeHotReloadLevel.Restartless, manifest.CodeHotReload);
 		Assert.Equal(ModPatchingBackend.External, manifest.Patching);
+		Assert.Contains(new ModRelationshipManifest {
+			OwnerID = "somegame.modapi",
+			Kind = ModRelationshipKind.RequiresSelfAfter,
+			Version = new Semver(1, 0, 0),
+		}, manifest.Relationships);
+		Assert.Contains(new ModRelationshipManifest {
+			OwnerID = "somegame.something",
+			Kind = ModRelationshipKind.IfPresentSelfAfter,
+			Version = null,
+		}, manifest.Relationships);
+		Assert.Contains(new ModRelationshipManifest {
+			OwnerID = "jdoe.my-awesome-content-pack",
+			Kind = ModRelationshipKind.RequiresSelfAfter,
+			Version = new Semver(2, 1, 0),
+		}, manifest.Relationships);
+		Assert.Contains(new ModRelationshipManifest {
+			OwnerID = "jdoe.my-awesome-mod-two",
+			Kind = ModRelationshipKind.IfPresentSelfBefore,
+			Version = new Semver(1, 2, 3),
+		}, manifest.Relationships);
 		Assert.Equal(ModAssetManagementKind.Tracked, manifest.Assets.ManagementKind);
 		Assert.Equal("Assets", manifest.Assets.Root);
-		assertDep(manifest, "somegame.modapi", new Semver(1, 0, 0));
-		assertDep(manifest, "jdoe.my-awesome-content-pack", new Semver(2, 1, 0));
-		Assert.Equal(["somegame.base"], manifest.Order.After);
-		Assert.Equal(["jdoe.my-awesome-mod-two"], manifest.Order.Before);
 	}
 }

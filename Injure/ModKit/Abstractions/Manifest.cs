@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +11,17 @@ using System.Threading.Tasks;
 using Injure.Analyzers.Attributes;
 
 namespace Injure.ModKit.Abstractions;
+
+[ClosedEnum(DefaultIsInvalid = true)]
+public readonly partial struct ModRelationshipKind {
+	public enum Case {
+		RequiresSelfAfter = 1,
+		RequiresSelfBefore,
+		IfPresentSelfAfter,
+		IfPresentSelfBefore,
+		Conflicts,
+	}
+}
 
 [ClosedEnum(DefaultIsInvalid = true)]
 public readonly partial struct ModCodeHotReloadLevel {
@@ -41,13 +51,10 @@ public readonly partial struct ModPatchingBackend {
 	}
 }
 
-public readonly record struct ModOrderManifest {
-	public required IReadOnlyList<string> After { get; init; }
-	public required IReadOnlyList<string> Before { get; init; }
-	public static readonly ModOrderManifest Empty = new() {
-		After = Array.Empty<string>(),
-		Before = Array.Empty<string>(),
-	};
+public readonly record struct ModRelationshipManifest {
+	public required string OwnerID { get; init; }
+	public required ModRelationshipKind Kind { get; init; }
+	public required Semver? Version { get; init; }
 }
 
 public readonly record struct ModAssetsManifest {
@@ -59,8 +66,7 @@ public abstract record ModManifest {
 	public required string OwnerID { get; init; }
 	public required Semver Version { get; init; }
 	public required string? DisplayName { get; init; }
-	public required IReadOnlyDictionary<string, Semver> Dependencies { get; init; }
-	public required ModOrderManifest Order { get; init; }
+	public required IReadOnlyList<ModRelationshipManifest> Relationships { get; init; }
 	public required ModAssetsManifest Assets { get; init; }
 }
 
@@ -73,6 +79,7 @@ public sealed record CodeModManifest : ModManifest {
 public sealed record ContentModManifest : ModManifest {
 }
 
+// TODO this fucking sucks
 public static class ManifestReader {
 	private enum ModPackageKind {
 		Content,
@@ -80,8 +87,13 @@ public static class ManifestReader {
 	}
 
 	public static async ValueTask<ModManifest> ReadAsync(string path, CancellationToken ct) {
+		JsonDocumentOptions opts = new() {
+			AllowDuplicateProperties = false,
+			AllowTrailingCommas = true,
+			CommentHandling = JsonCommentHandling.Skip,
+		};
 		await using FileStream stream = File.OpenRead(path);
-		using JsonDocument doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+		using JsonDocument doc = await JsonDocument.ParseAsync(stream, opts, cancellationToken: ct);
 		return Parse(doc.RootElement, path);
 	}
 
@@ -94,12 +106,11 @@ public static class ManifestReader {
 		string id = new(requiredString(root, "id", sourceName));
 		Semver version = Semver.Parse(requiredString(root, "version", sourceName));
 		string? displayName = optionalString(root, "display-name");
-		IReadOnlyDictionary<string, Semver> dependencies = readDependencies(root);
-		ModOrderManifest order = readOrder(root);
+		List<ModRelationshipManifest> relationships = readRelationships(root, sourceName);
 		ModAssetsManifest assets = readAssets(root, sourceName);
 		return type switch {
-			ModPackageKind.Content => parseContent(root, id, version, displayName, dependencies, order, assets, sourceName),
-			ModPackageKind.Code => parseCode(root, id, version, displayName, dependencies, order, assets, sourceName),
+			ModPackageKind.Content => parseContent(root, id, version, displayName, relationships, assets, sourceName),
+			ModPackageKind.Code => parseCode(root, id, version, displayName, relationships, assets, sourceName),
 			_ => throw new UnreachableException(),
 		};
 	}
@@ -109,8 +120,7 @@ public static class ManifestReader {
 		string id,
 		Semver version,
 		string? displayName,
-		IReadOnlyDictionary<string, Semver> dependencies,
-		ModOrderManifest order,
+		IReadOnlyList<ModRelationshipManifest> relationships,
 		ModAssetsManifest assets,
 		string sourceName
 	) {
@@ -121,8 +131,7 @@ public static class ManifestReader {
 			OwnerID = id,
 			Version = version,
 			DisplayName = displayName,
-			Dependencies = dependencies,
-			Order = order,
+			Relationships = relationships,
 			Assets = assets,
 		};
 	}
@@ -132,8 +141,7 @@ public static class ManifestReader {
 		string id,
 		Semver version,
 		string? displayName,
-		IReadOnlyDictionary<string, Semver> dependencies,
-		ModOrderManifest order,
+		IReadOnlyList<ModRelationshipManifest> relationships,
 		ModAssetsManifest assets,
 		string sourceName
 	) {
@@ -144,13 +152,42 @@ public static class ManifestReader {
 			OwnerID = id,
 			Version = version,
 			DisplayName = displayName,
-			Dependencies = dependencies,
-			Order = order,
+			Relationships = relationships,
 			Assets = assets,
 			EntryAssembly = entryAssembly,
 			CodeHotReload = codeHotReload,
 			Patching = patching,
 		};
+	}
+
+	private static List<ModRelationshipManifest> readRelationships(JsonElement root, string sourceName) {
+		JsonElement relationships = requiredArray(root, "relationships", sourceName);
+		List<ModRelationshipManifest> list = new();
+		HashSet<(string OwnerID, ModRelationshipKind Kind)> seenExact = new();
+		foreach (JsonElement rel in relationships.EnumerateArray()) {
+			if (rel.ValueKind != JsonValueKind.Object)
+				throw new JsonException("relationships array member must be an object");
+			string ownerID = requiredString(rel, "id", sourceName);
+			ModRelationshipKind kind = ModRelationshipKind.Enum.FromTag(requiredEnum<ModRelationshipKind.Case>(rel, "kind", sourceName));
+			Semver? version = null;
+			if (kind.Tag is ModRelationshipKind.Case.RequiresSelfAfter or ModRelationshipKind.Case.RequiresSelfBefore) {
+				version = Semver.Parse(requiredString(rel, "version", sourceName));
+			} else if (kind.Tag is ModRelationshipKind.Case.IfPresentSelfAfter or ModRelationshipKind.Case.IfPresentSelfBefore) {
+				string? s = optionalString(rel, "version");
+				if (s is not null)
+					version = Semver.Parse(s);
+			} else {
+				rejectIfPresent(rel, "version", sourceName);
+			}
+			if (!seenExact.Add((ownerID, kind)))
+				throw new JsonException($"duplicate relationship '{kind}' for owner '{ownerID}'");
+			list.Add(new ModRelationshipManifest {
+				OwnerID = ownerID,
+				Kind = kind,
+				Version = version,
+			});
+		}
+		return list;
 	}
 
 	private static ModAssetsManifest readAssets(JsonElement root, string sourceName) {
@@ -169,41 +206,21 @@ public static class ManifestReader {
 		};
 	}
 
-	private static Dictionary<string, Semver> readDependencies(JsonElement root) => readDependencyMap(root, "dependencies");
-
-	private static ModOrderManifest readOrder(JsonElement root) {
-		if (!root.TryGetProperty("order", out JsonElement order))
-			return ModOrderManifest.Empty;
-		return new ModOrderManifest {
-			After = readIDArray(order, "after"),
-			Before = readIDArray(order, "before"),
-		};
-	}
-
-	private static Dictionary<string, Semver> readDependencyMap(JsonElement root, string name) {
-		Dictionary<string, Semver> map = new();
-		if (!root.TryGetProperty(name, out JsonElement obj))
-			return map;
-		foreach (JsonProperty prop in obj.EnumerateObject())
-			map.Add(prop.Name, Semver.Parse(prop.Value.GetString() ?? throw new JsonException("dependency version must be a string")));
-		return map;
-	}
-
-	private static string[] readIDArray(JsonElement root, string name) {
-		if (!root.TryGetProperty(name, out JsonElement arr))
-			return Array.Empty<string>();
-		return arr.EnumerateArray().Select(static x => x.GetString() ?? throw new JsonException("mod id must be string")).ToArray();
-	}
-
 	private static JsonElement requiredObject(JsonElement root, string name, string sourceName) {
 		if (!root.TryGetProperty(name, out JsonElement val) || val.ValueKind != JsonValueKind.Object)
-			throw new ModLoadException($"{sourceName}: required object field '{name}' missing");
+			throw new ModLoadException($"{sourceName}: required object field '{name}' is missing");
+		return val;
+	}
+
+	private static JsonElement requiredArray(JsonElement root, string name, string sourceName) {
+		if (!root.TryGetProperty(name, out JsonElement val) || val.ValueKind != JsonValueKind.Array)
+			throw new ModLoadException($"{sourceName}: required array field '{name}' is missing");
 		return val;
 	}
 
 	private static string requiredString(JsonElement root, string name, string sourceName) {
 		if (!root.TryGetProperty(name, out JsonElement val) || val.ValueKind != JsonValueKind.String)
-			throw new ModLoadException($"{sourceName}: required string field '{name}' missing");
+			throw new ModLoadException($"{sourceName}: required string field '{name}' is missing");
 		return val.GetString() ?? throw new ModLoadException($"{sourceName}: required string field '{name}' is null");
 	}
 

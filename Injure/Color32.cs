@@ -20,6 +20,8 @@ public readonly struct Color32(byte r, byte g, byte b, byte a = 255) : IEquatabl
 	public static bool operator ==(Color32 left, Color32 right) => left.Equals(right);
 	public static bool operator !=(Color32 left, Color32 right) => !left.Equals(right);
 
+	public override string ToString() => $"R={R} G={G} B={B} A={A}";
+
 	public Vector4 ToVector4() => new(R / 255f, G / 255f, B / 255f, A / 255f);
 	internal WebGPU.WGPUColor ToWebGPUColor() => new(R / 255.0, G / 255.0, B / 255.0, A / 255.0);
 	public static Color32 FromHex(string hex) {

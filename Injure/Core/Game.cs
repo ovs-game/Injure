@@ -44,10 +44,11 @@ public readonly partial struct HostEvent {
 }
 
 public interface IGame {
-	void Loading(in LoadingContext ctx);
-
 	void Init(GameServices sv);
-	void OnHostEvent(HostEvent ev);
 	void Render(Canvas cv);
 	void Shutdown();
+
+	void Loading(in LoadingContext ctx) {}
+	void OnHostEvent(HostEvent ev) {}
+	void BetweenSchedulerTicks() {}
 }

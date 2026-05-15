@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-
 using Injure.Input;
 
 namespace TestGame;
@@ -15,7 +14,7 @@ public static class Actions {
 	public static ActionProfile Profile { get => field ?? throw new InvalidOperationException("Actions.Init() not called yet"); private set; }
 
 	public static void Init() {
-		TestGame.Input.Actions.RegisterMany(TestGame.OwnerID, reg => {
+		Game.Input.Actions.RegisterMany(Game.OwnerID, reg => {
 			Move = reg.Register("move");
 			Confirm = reg.Register("confirm");
 			Pause = reg.Register("pause");

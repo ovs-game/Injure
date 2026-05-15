@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+
+		<PackageId>Injure.ModKit</PackageId>
+		<Version>0.1.0-alpha.0</Version>
+		<Authors>AtBelshftl</Authors>
+		<Description>mod loader kit from the game framework/engine colloquially known as Injure</Description>
+		<RepositoryUrl>https://github.com/ovs-game/Injure</RepositoryUrl>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="../Injure.Analyzers/Injure.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+		<ProjectReference Include="../Injure/Injure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MonoMod.RuntimeDetour" Version="25.3.4" />
+	</ItemGroup>
+</Project>

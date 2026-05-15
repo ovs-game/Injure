@@ -24,10 +24,11 @@ public readonly partial struct ModRelationshipKind {
 }
 
 [ClosedEnum(DefaultIsInvalid = true)]
+[ClosedEnumMirror(typeof(AssemblyHotReloadLevel))]
 public readonly partial struct ModCodeHotReloadLevel {
 	public enum Case {
 		None = 1,
-		Restartless,
+		SafeBoundary,
 		Live,
 	}
 }

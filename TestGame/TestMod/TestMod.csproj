@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="../../Injure/Injure.csproj" Private="false" />
+		<ProjectReference Include="../../Injure.ModKit/Injure.ModKit.csproj" Private="false" />
+		<ProjectReference Include="../TestGame/TestGame.csproj" Private="false" />
+		<ProjectReference Include="../TestGame.ModApi/TestGame.ModApi.csproj" Private="false" />
+	</ItemGroup>
+</Project>

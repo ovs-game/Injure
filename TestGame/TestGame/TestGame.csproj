@@ -10,7 +10,9 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="../Injure/Injure.csproj" />
+		<ProjectReference Include="../../Injure/Injure.csproj" />
+		<ProjectReference Include="../../Injure.ModKit/Injure.ModKit.csproj" />
+		<ProjectReference Include="../TestGame.ModApi/TestGame.ModApi.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -285,6 +285,7 @@ bootstrapCancelled:
 			last = t;
 
 			services.AtSafeBoundary();
+			game.BetweenSchedulerTicks();
 
 			sched.ApplyPending();
 			sched.RunDueTickers();

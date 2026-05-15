@@ -790,7 +790,6 @@ public sealed class AssetStore {
 		return r.AppliedCount;
 	}
 
-
 	/// <summary>
 	/// Drains this store's buffered reload failures.
 	/// </summary>
